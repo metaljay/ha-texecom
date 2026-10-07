@@ -34,13 +34,13 @@ async def async_setup_entry(
 
 
 class TexecomAreaPanel(TexecomEntity, AlarmControlPanelEntity):
-    _attr_name = None  # the area's device name, e.g. "House alarm"
+    _attr_name = None  # the area's device name, e.g. "House Alarm"
     _attr_translation_key = "area"  # state names, e.g. "Off (disarmed)"
     _entity_domain = "alarm_control_panel"
 
     def __init__(self, hass: HomeAssistant, entry: TexecomConfigEntry, panel: TexecomPanel, number: int) -> None:
         name = panel.areas[number].name
-        device = child_device_info(hass, entry, f"area_{number}", f"{nice_name(name)} alarm", f"Alarm area {number}")
+        device = child_device_info(hass, entry, f"area_{number}", f"{nice_name(name)} Alarm", f"Alarm area {number}")
         super().__init__(entry, panel, f"area_{number}", device, name)
         self.number = number
         features = AlarmControlPanelEntityFeature(0)

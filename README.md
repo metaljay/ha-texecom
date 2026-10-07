@@ -59,7 +59,7 @@ Enter the SmartCom's **IP address**, leave the **port** at **10001**, and enter 
 
 Home Assistant shows what it found. **'Away'** always arms the whole alarm. Choose which **part arm** sits behind **'Night'** and **'Home'** (or *'Not used'* to hide that button). See [Know your part arms](#part-arms) if you're unsure.
 
-Your **area** (usually one, named by your installer, e.g. *House*) becomes the **alarm**: a device called *House alarm*. The panel itself appears as *Premier Elite 24 panel*, and each zone as its own device.
+Your **area** (usually one, named by your installer, e.g. *House*) becomes the **alarm**: a device called *House Alarm*. The panel itself appears as *Premier Elite 24 panel*, and each zone as its own device.
 
 Leave **Add an Alarm dashboard to the sidebar** ticked, and click **Submit**. That's it. 🎉
 
