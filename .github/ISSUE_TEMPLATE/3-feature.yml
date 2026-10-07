@@ -1,0 +1,16 @@
+name: "💡 Idea"
+description: Something you'd like it to do.
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like?
+      description: What you'd use it for helps as much as the idea itself.
+    validations:
+      required: true
+  - type: input
+    id: panel
+    attributes:
+      label: Your panel and connection
+      placeholder: e.g. Premier Elite 48 with a ComIP

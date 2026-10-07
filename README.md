@@ -6,7 +6,7 @@ Control your Texecom **Premier Elite** alarm from **Home Assistant**, using the 
 
 [![Open your Home Assistant and add this repository to HACS](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=metaljay&repository=ha-texecom&category=integration)
 
-> **Unofficial.** Not made or supported by Texecom. Tested on a Premier Elite 24 (firmware V6.05.03) with a SmartCom. The protocol work is shared with the [Homebridge plugin fork](https://github.com/metaljay/homebridge-texecom).
+> **Unofficial.** Not made or supported by Texecom. Tested on a Premier Elite 24 (firmware V6.05.03) with a SmartCom. **Tried it on another panel? [Tell us how it went](https://github.com/metaljay/ha-texecom/issues/new?template=1-tested.yml)**, even if it all worked. The protocol work is shared with the [Homebridge plugin fork](https://github.com/metaljay/homebridge-texecom).
 
 ## ✨ What you get
 

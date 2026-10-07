@@ -1,0 +1,43 @@
+name: "🐞 Something's wrong"
+description: Something doesn't work, or shows the wrong state.
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you saw instead. Rough times help.
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      placeholder: "Integration 0.2.1, Home Assistant 2026.9, Premier Elite 24 V6.05.03"
+    validations:
+      required: true
+  - type: dropdown
+    id: connection
+    attributes:
+      label: How Home Assistant connects
+      options: [SmartCom (Texecom Connect), ComIP (Texecom Connect), Crestron over the network, Crestron over a serial cable, Other]
+    validations:
+      required: true
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: On the panel's device page, choose **Download diagnostics** and drag the file here. Codes and addresses are removed automatically.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log
+      description: |
+        For detail, add this to `configuration.yaml`, restart, reproduce the problem, then copy the `custom_components.texecom` lines from *Settings → System → Logs*:
+        ```yaml
+        logger:
+          logs:
+            custom_components.texecom: debug
+        ```
+        Please check the log for anything private before posting.
+      render: text

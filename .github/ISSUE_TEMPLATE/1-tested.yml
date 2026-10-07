@@ -1,0 +1,61 @@
+name: "✅ Tested on my panel"
+description: Tell us how it went on your panel, whether it all worked or not. This helps more than anything else right now.
+title: "Tested: Premier Elite <zones> <firmware> via <SmartCom/ComIP/Crestron>"
+labels: ["test report"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for trying it! Reports from panels other than the Elite 24 are especially useful.
+        Your **panel model and firmware** are on the panel's device page in Home Assistant (*Settings → Devices & services → Texecom*), or in the diagnostics download.
+  - type: dropdown
+    id: panel
+    attributes:
+      label: Panel
+      options: [Premier Elite 12, Premier Elite 24, Premier Elite 48, Premier Elite 64, Premier Elite 88, Premier Elite 168, Premier Elite 640, Other / not sure]
+    validations:
+      required: true
+  - type: input
+    id: firmware
+    attributes:
+      label: Firmware
+      placeholder: e.g. V6.05.03
+  - type: dropdown
+    id: connection
+    attributes:
+      label: How Home Assistant connects
+      options: [SmartCom (Texecom Connect), ComIP (Texecom Connect), Crestron over the network, Crestron over a serial cable, Other]
+    validations:
+      required: true
+  - type: input
+    id: setup
+    attributes:
+      label: Areas and part arms
+      placeholder: e.g. 1 area; Night = Part Arm 1, Home not used
+  - type: checkboxes
+    id: worked
+    attributes:
+      label: What worked
+      description: Tick what you tried and saw working. Leave the rest.
+      options:
+        - label: Setup found my zones and areas
+        - label: Zones show activity
+        - label: Arming Away from Home Assistant
+        - label: Arming Night or Home (part arm) from Home Assistant
+        - label: Disarming from Home Assistant
+        - label: Arms and disarms at the keypad show in Home Assistant
+        - label: The alarm going off shows as "Alarm!" and names the zone
+        - label: Tamper (panel lid or a detector)
+        - label: Mains failure
+        - label: The Alarm dashboard
+        - label: Apple Home through HomeKit Bridge
+  - type: textarea
+    id: notes
+    attributes:
+      label: Anything that didn't work, or looked odd
+      description: Include rough times if you can, so they can be matched to the logs.
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: On the panel's device page, choose **Download diagnostics** and drag the file here. Codes and addresses are removed automatically.
