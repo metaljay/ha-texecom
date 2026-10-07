@@ -34,7 +34,7 @@ from homeassistant.helpers.selector import (
 
 from . import layout_to_data
 from .connect.client import ConnectError, LoginRejected
-from .connect.panel import probe
+from .connect.discovery import probe
 from .const import (
     CONF_ALARM_CODE,
     CONF_AREA_COUNT,

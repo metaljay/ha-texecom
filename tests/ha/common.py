@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.texecom import layout_to_data
-from custom_components.texecom.connect import panel as connect_panel
+from custom_components.texecom.connect import discovery as connect_discovery
 from custom_components.texecom.const import DOMAIN
 
 if TYPE_CHECKING:
@@ -27,7 +27,7 @@ async def wait_for(predicate, timeout: float = 5.0) -> None:
 
 
 async def layout_of(fake: FakeConnectPanel) -> dict:
-    info, zones, areas = await connect_panel.probe("127.0.0.1", fake.port, UDL, patience=0)
+    info, zones, areas = await connect_discovery.probe("127.0.0.1", fake.port, UDL, patience=0)
     return layout_to_data(info, zones, areas)
 
 
