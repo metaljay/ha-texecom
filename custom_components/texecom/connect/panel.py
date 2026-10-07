@@ -366,6 +366,8 @@ class ConnectPanel(TexecomPanel):
                 self._refresh_areas_soon()
         if m["type"] > 21 and m["group"] in (GROUP_TAMPER_ALARM, GROUP_TAMPER_RESTORE):
             self._on_system_tamper(m)
+        if m["type"] in P.FAULT_LOG_NAMES:
+            self._on_fault(m)
         if m["type"] in (LOG_ARM_FAILED, LOG_AUTO_OPEN_CLOSE):
             if m["type"] == LOG_ARM_FAILED:
                 # One log per zone that stopped the arm (seen on a real panel:
@@ -399,6 +401,23 @@ class ConnectPanel(TexecomPanel):
         if active:
             self._log.warning("Connect: %s", name)
             self.on_event("tamper", {"source": name, "log_type": m["type"]})
+
+    def _on_fault(self, m: dict[str, Any]) -> None:
+        """Mains, battery, communication and other faults from the panel log."""
+        name = P.FAULT_LOG_NAMES[m["type"]]
+        if m["group"] in P.GROUPS_STARTING:
+            active = True
+        elif m["group"] in P.GROUPS_RESTORING:
+            active = False
+        else:
+            self._log.debug("Connect: %s with group %s (not a start or end)", name, m["group"])
+            return
+        faults: set[str] = self.extra.setdefault("faults", set())
+        if active != (name in faults):
+            (faults.add if active else faults.discard)(name)
+            self.notify()
+        self._log.warning("Connect: %s%s", name, "" if active else " cleared")
+        self.on_event("fault" if active else "fault_cleared", {"source": name, "log_type": m["type"]})
 
     def _credit_alarm_zone(self, number: int) -> None:
         """Names the zone that set the alarm off as the alarm's "changed by".

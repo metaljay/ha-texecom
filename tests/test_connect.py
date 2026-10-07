@@ -269,6 +269,19 @@ async def test_system_tampers(fake):
         await panel.stop()
 
 
+async def test_mains_fault_and_restore(fake):
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        fake.send_log(47, 9, 0, areas=0)  # AC Fail, maintenance alarm
+        await wait_for(lambda: panel.extra.get("faults") == {"AC Fail"})
+        fake.send_log(47, 10, 0, areas=0)  # restored
+        await wait_for(lambda: panel.extra.get("faults") == set())
+        assert [t for t, _d in events] == ["fault", "fault_cleared"]
+    finally:
+        await panel.stop()
+
+
 async def test_auth_failure_stops_retrying(fake):
     calls = []
     info, zones, areas = await probe("127.0.0.1", fake.port, "1234")

@@ -12,6 +12,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import TexecomConfigEntry
+from .connect.protocol import MAINS_FAULTS
 from .const import CONF_PROTOCOL, PROTOCOL_CONNECT
 from .entity import TexecomEntity, child_device_info
 from .panel import TexecomPanel
@@ -56,7 +57,11 @@ async def async_setup_entry(
     entities: list[BinarySensorEntity] = [TexecomConnectionSensor(entry, panel)]
     is_connect = entry.data[CONF_PROTOCOL] == PROTOCOL_CONNECT
     if is_connect:
-        entities.append(TexecomSystemTamperSensor(entry, panel))
+        entities += [
+            TexecomSystemTamperSensor(entry, panel),
+            TexecomProblemSensor(entry, panel),
+            TexecomMainsSensor(entry, panel),
+        ]
     for number, zone in panel.zones.items():
         # Crestron zones are only "Zone 1"… until renamed, so no room match.
         device = child_device_info(
@@ -126,6 +131,38 @@ class TexecomSystemTamperSensor(TexecomEntity, BinarySensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
         return {"sources": sorted(self.panel.extra.get("tampers", ()))}
+
+
+class TexecomProblemSensor(TexecomEntity, BinarySensorEntity):
+    """On while the panel reports a fault: mains, battery, communication..."""
+
+    _attr_device_class = BinarySensorDeviceClass.PROBLEM
+    _attr_translation_key = "problem"
+
+    def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel) -> None:
+        super().__init__(entry, panel, "problem")
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.panel.extra.get("faults"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"sources": sorted(self.panel.extra.get("faults", ()))}
+
+
+class TexecomMainsSensor(TexecomEntity, BinarySensorEntity):
+    """Mains power to the panel (off while it runs on its battery)."""
+
+    _attr_device_class = BinarySensorDeviceClass.POWER
+    _attr_translation_key = "mains"
+
+    def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel) -> None:
+        super().__init__(entry, panel, "mains")
+
+    @property
+    def is_on(self) -> bool:
+        return not (self.panel.extra.get("faults", set()) & MAINS_FAULTS)
 
 
 class TexecomConnectionSensor(TexecomEntity, BinarySensorEntity):

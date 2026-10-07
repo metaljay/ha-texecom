@@ -192,6 +192,12 @@
       },
       "system_tamper": {
         "name": "Tamper"
+      },
+      "problem": {
+        "name": "Problem"
+      },
+      "mains": {
+        "name": "Mains power"
       }
     },
     "sensor": {

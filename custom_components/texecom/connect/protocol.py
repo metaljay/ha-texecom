@@ -438,3 +438,32 @@ TAMPER_LOG_NAMES = {
     110: "PSU Tamper",
     121: "GSM Tamper",
 }
+
+# Log event types that are faults, with the panel's names. Whether a log
+# entry starts or ends a fault comes from its group.
+FAULT_LOG_NAMES = {
+    47: "AC Fail",
+    48: "Low Battery",
+    50: "Mains Over Voltage",
+    51: "Telephone Line Fault",
+    52: "Fail to Communicate",
+    65: "Expander Trouble",
+    66: "Remote Keypad Trouble",
+    96: "Expander Low Voltage",
+    97: "Supervision Fault",
+    99: "RF Device Low Battery",
+    101: "Radio Jamming",
+    104: "Zone Fault",
+    105: "Zone Masked",
+    107: "PSU AC Fail",
+    108: "PSU Battery Fail",
+    109: "PSU Low Output Fail",
+    118: "Power Unit Failure",
+    119: "Battery Charger Fault",
+    122: "Radio Config. Failure",
+}
+MAINS_FAULTS = {"AC Fail", "PSU AC Fail"}
+# Groups: 1 priority alarm, 3 alarm, 9 maintenance alarm, 11 tamper, 20 fault
+# start one; 2, 4, 10, 12 are the matching restores.
+GROUPS_STARTING = {1, 3, 9, 11, 20}
+GROUPS_RESTORING = {2, 4, 10, 12}
