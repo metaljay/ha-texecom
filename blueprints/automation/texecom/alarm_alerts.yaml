@@ -1,0 +1,126 @@
+blueprint:
+  name: "Texecom: tell me about the alarm"
+  description: >-
+    Sends a notification to your phone when the alarm goes off (naming the
+    zone that set it off) and when it couldn't arm, and if you like when the
+    panel loses or gets back its mains power, or a tamper opens.
+  domain: automation
+  author: metaljay
+  source_url: https://github.com/metaljay/ha-texecom/blob/main/blueprints/automation/texecom/alarm_alerts.yaml
+  homeassistant:
+    min_version: 2025.3.0
+  input:
+    alarm:
+      name: Alarm
+      selector:
+        entity:
+          filter:
+            - integration: texecom
+              domain: alarm_control_panel
+    notify_device:
+      name: Phone
+      description: The phone to tell. It needs the Home Assistant app.
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    went_off:
+      name: When the alarm goes off
+      default: true
+      selector:
+        boolean: {}
+    not_set:
+      name: When the alarm couldn't arm (a zone was still active)
+      default: true
+      selector:
+        boolean: {}
+    mains:
+      name: When the panel loses or gets back its mains power
+      default: true
+      selector:
+        boolean: {}
+    tamper:
+      name: When a tamper opens (the panel's lid, a detector's cover…)
+      default: true
+      selector:
+        boolean: {}
+
+mode: queued
+
+variables:
+  alarm: !input alarm
+  went_off: !input went_off
+  not_set: !input not_set
+  mains: !input mains
+  tamper: !input tamper
+  titles:
+    went_off: "🚨 Alarm!"
+    not_set: "Alarm not set"
+    mains_off: "Alarm panel on battery"
+    mains_on: "Alarm panel mains back"
+    tamper: "Alarm tamper"
+
+triggers:
+  - trigger: state
+    entity_id: !input alarm
+    to: triggered
+    id: went_off
+  - trigger: event
+    event_type: texecom_event
+    event_data:
+      type: arm_failed
+    id: not_set
+  - trigger: event
+    event_type: texecom_event
+    event_data:
+      type: fault
+    id: mains_off
+  - trigger: event
+    event_type: texecom_event
+    event_data:
+      type: fault_cleared
+    id: mains_on
+  - trigger: event
+    event_type: texecom_event
+    event_data:
+      type: tamper
+    id: tamper
+
+conditions:
+  # Events from this alarm's panel only, and only the alerts asked for.
+  - condition: template
+    value_template: >-
+      {% set mine = trigger.platform != 'event' or trigger.event.data.entry_id == config_entry_id(alarm) %}
+      {% set is_mains = trigger.platform == 'event' and trigger.event.data.source in ['AC Fail', 'PSU AC Fail'] %}
+      {{ mine and (
+           (trigger.id == 'went_off' and went_off)
+           or (trigger.id == 'not_set' and not_set)
+           or (trigger.id in ['mains_off', 'mains_on'] and mains and is_mains)
+           or (trigger.id == 'tamper' and tamper)
+         ) }}
+
+actions:
+  - if:
+      - condition: trigger
+        id: went_off
+    then:
+      # The zone that set it off follows the alarm by a moment.
+      - delay:
+          seconds: 3
+  - domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: "{{ titles[trigger.id] }}"
+    message: >-
+      {% if trigger.id == 'went_off' %}
+        {% set by = state_attr(alarm, 'changed_by') %}
+        {{ state_attr(alarm, 'friendly_name') }} is going off{{ ': set off by ' ~ by if by else '' }}.
+      {% elif trigger.id == 'not_set' %}
+        {{ trigger.event.data.zone_name or 'A zone' }} was still active when the exit time ended, so the alarm didn't arm.
+      {% elif trigger.id == 'mains_off' %}
+        The alarm panel has lost its mains power and is running on its battery.
+      {% elif trigger.id == 'mains_on' %}
+        The alarm panel has its mains power back.
+      {% else %}
+        The alarm panel reports a tamper: {{ trigger.event.data.source }}.
+      {% endif %}
