@@ -35,6 +35,9 @@ ARM_MODES = ("away", "home", "night")
 # visible; the panel connection sensor shows the real link state throughout.
 OFFLINE_GRACE = 180.0
 
+# Fault names (in extra["faults"]) that mean the panel has no mains power.
+MAINS_FAULTS = {"AC Fail", "PSU AC Fail"}
+
 
 # Kept in capitals when a panel name is title-cased ("HALL PIR" -> "Hall PIR").
 ACRONYMS = {"PIR", "PA", "CO", "CO2", "GSM", "UPS", "LED", "AC", "DC", "CCTV", "WC", "PSU", "UDL", "RF", "IR", "ATS"}

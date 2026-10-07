@@ -485,7 +485,6 @@ FAULT_LOG_NAMES = {
     119: "Battery Charger Fault",
     122: "Radio Config. Failure",
 }
-MAINS_FAULTS = {"AC Fail", "PSU AC Fail"}
 ZONE_FAULT_LOGS = {104, 105}  # Zone Fault, Zone Masked: the zone is in `parameter`
 # Groups: 1 priority alarm, 3 alarm, 9 maintenance alarm, 11 tamper, 20 fault
 # start one; 2, 4, 10, 12 are the matching restores.

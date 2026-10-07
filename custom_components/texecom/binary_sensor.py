@@ -12,10 +12,9 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import TexecomConfigEntry
-from .connect.protocol import MAINS_FAULTS
 from .const import CONF_PROTOCOL, PROTOCOL_CONNECT
 from .entity import TexecomEntity, child_device_info
-from .panel import TexecomPanel
+from .panel import MAINS_FAULTS, TexecomPanel
 
 # Texecom zone types (as reported over Connect).
 ZONE_TYPE_FIRE = 9
