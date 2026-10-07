@@ -59,6 +59,8 @@ class FakeConnectPanel:
         self.port = 0
         self._exit_timer: asyncio.TimerHandle | None = None
         self.on_battery = False
+        self.power_override: bytes | None = None  # raw GET_SYSTEM_POWER reply
+        self.clock_raw: bytes | None = None  # raw GET_DATE_TIME reply (e.g. an impossible date)
 
     async def start(self, port: int = 0, host: str = "127.0.0.1") -> int:
         self.server = await asyncio.start_server(self._on_client, host, port)
@@ -145,12 +147,15 @@ class FakeConnectPanel:
             reply(ack if args.decode("latin1") == self.udl else bytes([P.NAK]))
         elif cmd == P.CMD_SET_EVENT_MESSAGES:
             reply(ack)
+        elif cmd == P.CMD_GET_DATE_TIME and self.clock_raw is not None:
+            reply(self.clock_raw)
         elif cmd == P.CMD_GET_DATE_TIME:
             t = datetime.now() + self.clock_offset
             reply(P.encode_date_time(t.year, t.month, t.day, t.hour, t.minute, t.second))
         elif cmd == P.CMD_SET_DATE_TIME:
             self.clock_set_to = bytes(args)
             self.clock_offset = timedelta()
+            self.clock_raw = None
             reply(ack)
         elif cmd == P.CMD_GET_PANEL_IDENTIFICATION:
             reply(b"Elite 24     V6.05.03LS1".ljust(32))
@@ -191,7 +196,10 @@ class FakeConnectPanel:
         elif cmd == P.CMD_GET_SYSTEM_POWER:
             # ref, system V, battery V, system I, battery I (as a real panel:
             # on battery both currents read 0 and the voltage drops)
-            reply(bytes([100, 92, 94, 0, 0]) if self.on_battery else bytes([100, 101, 99, 30, 2]))
+            if self.power_override is not None:
+                reply(self.power_override)
+            else:
+                reply(bytes([100, 92, 94, 0, 0]) if self.on_battery else bytes([100, 101, 99, 30, 2]))
         elif cmd == P.CMD_ARM_AREA:
             arm_type = args[0]
             reply(ack)

@@ -18,6 +18,7 @@ import re
 import struct
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 
 START = 0x74  # 't'
@@ -372,12 +373,24 @@ def decode_system_power(payload: bytes) -> SystemPower | None:
     )
 
 
+class InvalidClock(ValueError):
+    """The panel's clock holds an impossible date (e.g. after a power loss)."""
+
+
 def decode_date_time(payload: bytes) -> tuple[int, int, int, int, int, int] | None:
-    """(year, month, day, hours, minutes, seconds) of the panel clock."""
+    """(year, month, day, hours, minutes, seconds) of the panel clock; None
+    for a short reply (e.g. a NAK). Raises InvalidClock for an impossible date."""
     if len(payload) < 6:
         return None
     day, month, year, hours, minutes, seconds = payload[:6]
-    return (2000 + year, month, day, hours, minutes, seconds)
+    parts = (2000 + year, month, day, hours, minutes, seconds)
+    try:
+        datetime(*parts)
+    except ValueError as err:
+        raise InvalidClock(
+            f"panel clock reads {day:02}/{month:02}/{year:02} {hours:02}:{minutes:02}:{seconds:02}"
+        ) from err
+    return parts
 
 
 def encode_date_time(year: int, month: int, day: int, hours: int, minutes: int, seconds: int) -> bytes:
@@ -473,6 +486,7 @@ FAULT_LOG_NAMES = {
     122: "Radio Config. Failure",
 }
 MAINS_FAULTS = {"AC Fail", "PSU AC Fail"}
+ZONE_FAULT_LOGS = {104, 105}  # Zone Fault, Zone Masked: the zone is in `parameter`
 # Groups: 1 priority alarm, 3 alarm, 9 maintenance alarm, 11 tamper, 20 fault
 # start one; 2, 4, 10, 12 are the matching restores.
 GROUPS_STARTING = {1, 3, 9, 11, 20}

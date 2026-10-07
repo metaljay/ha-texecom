@@ -17,12 +17,10 @@ from homeassistant.helpers.entity import Entity
 from homeassistant.util import slugify
 
 from .const import CONF_PROTOCOL, DOMAIN, PROTOCOL_CONNECT
-from .panel import TexecomPanel
-
-
-def nice_name(name: str) -> str:
-    """Panels store names in capitals ("HOUSE"); show them in title case."""
-    return name.title() if name.isupper() else name
+from .panel import (
+    TexecomPanel,
+    nice_name,  # noqa: F401  (re-exported for the platforms)
+)
 
 
 def panel_device_info(entry: ConfigEntry, panel: TexecomPanel) -> DeviceInfo:
@@ -78,7 +76,9 @@ class TexecomEntity(Entity):
 
     @property
     def available(self) -> bool:
-        return self.panel.connected
+        # Stays available through short drops (e.g. while the SmartCom reports
+        # an alarm), showing the last known state.
+        return self.panel.recently_connected
 
     async def async_added_to_hass(self) -> None:
         self.async_on_remove(self.panel.add_listener(self.async_write_ha_state))

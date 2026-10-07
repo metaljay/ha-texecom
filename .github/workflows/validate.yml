@@ -23,15 +23,37 @@ jobs:
       - uses: actions/checkout@v4
       - uses: home-assistant/actions/hassfest@master
 
-  tests:
-    name: Tests and lint
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install pytest pytest-asyncio ruff
+      - run: pip install ruff
       - run: ruff check .
       - run: ruff format --check .
-      - run: pytest -q
+
+  driver-tests:
+    name: Driver tests (no Home Assistant)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install pytest pytest-asyncio
+      - run: pytest -q tests --ignore=tests/ha
+
+  ha-tests:
+    name: Home Assistant tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+      # Pinned to the Home Assistant release it was tested on (2026.9.4).
+      - run: pip install "pytest-homeassistant-custom-component==0.13.367"
+      - run: pytest -q tests/ha

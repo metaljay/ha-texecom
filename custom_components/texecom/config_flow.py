@@ -11,6 +11,7 @@ from typing import Any
 import voluptuous as vol
 from homeassistant.config_entries import (
     ConfigEntry,
+    ConfigEntryState,
     ConfigFlow,
     ConfigFlowResult,
     OptionsFlow,
@@ -64,6 +65,7 @@ from .const import (
 )
 from .dashboard import async_create_dashboard
 from .entity import nice_name
+from .panel import PanelError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -77,6 +79,9 @@ KEYPAD_MODE_SELECTOR = SelectSelector(
 )
 UDL_SELECTOR = TextSelector(TextSelectorConfig(type=TextSelectorType.PASSWORD))
 PORT_SELECTOR = NumberSelector(NumberSelectorConfig(min=1, max=65535, mode=NumberSelectorMode.BOX))
+
+
+CRESTRON_REPLY_TIMEOUT = 5.0  # seconds to wait for the panel to answer ASTATUS
 
 
 def _udl_valid(udl: str) -> bool:
@@ -107,7 +112,7 @@ async def _validate_crestron_network(host: str, port: int) -> str | None:
         writer.write(b"ASTATUS\r\n")
         data = b""
         loop = asyncio.get_running_loop()
-        deadline = loop.time() + 5
+        deadline = loop.time() + CRESTRON_REPLY_TIMEOUT
         while b'"' not in data and loop.time() < deadline:
             with contextlib.suppress(TimeoutError):
                 data += await asyncio.wait_for(reader.read(256), max(0.1, deadline - loop.time()))
@@ -119,6 +124,19 @@ async def _validate_crestron_network(host: str, port: int) -> str | None:
         writer.close()
         with contextlib.suppress(Exception):
             await writer.wait_closed()
+
+
+async def _validate_serial(device: str, baud_rate: int) -> str | None:
+    """Checks the serial device opens (its owner or path is the usual problem)."""
+    try:
+        from serial_asyncio_fast import open_serial_connection
+
+        _reader, writer = await asyncio.wait_for(open_serial_connection(url=device, baudrate=baud_rate), 10)
+    except (OSError, TimeoutError, ImportError, ValueError) as err:
+        _LOGGER.debug("Opening %s failed: %s", device, err)
+        return "cannot_open_serial"
+    writer.close()
+    return None
 
 
 def _arm_modes_schema(defaults: Mapping[str, Any], crestron: bool) -> vol.Schema:
@@ -261,6 +279,8 @@ class TexecomConfigFlow(ConfigFlow, domain=DOMAIN):
             udl = (user_input.get(CONF_UDL) or "").strip()
             if udl and not _udl_valid(udl):
                 errors[CONF_UDL] = "invalid_udl"
+            elif error := await _validate_serial(device, int(user_input[CONF_BAUD_RATE])):
+                errors["base"] = error
             else:
                 self._data = {
                     CONF_PROTOCOL: PROTOCOL_CRESTRON,
@@ -351,21 +371,36 @@ class TexecomConfigFlow(ConfigFlow, domain=DOMAIN):
             updates: dict[str, Any] = {CONF_UDL: udl or None}
             if is_serial:
                 updates[CONF_SERIAL_DEVICE] = user_input[CONF_SERIAL_DEVICE].strip()
+                unique_id = f"serial:{updates[CONF_SERIAL_DEVICE]}"
             else:
                 updates[CONF_HOST] = user_input[CONF_HOST].strip()
                 updates[CONF_PORT] = int(user_input[CONF_PORT])
+                unique_id = f"{updates[CONF_HOST]}:{updates[CONF_PORT]}"
+            others = [e for e in self._async_current_entries(include_ignore=False) if e.entry_id != entry.entry_id]
+            if any(e.unique_id == unique_id for e in others):
+                return self.async_abort(reason="already_configured")
             if (udl or is_connect) and not _udl_valid(udl):
                 errors[CONF_UDL] = "invalid_udl"
-            elif is_connect:
-                layout, error = await _validate_connect(updates[CONF_HOST], updates[CONF_PORT], udl)
-                if error:
+            else:
+                # The panel allows one session: pause ours while checking.
+                await self._pause(entry)
+                if is_connect:
+                    layout, error = await _validate_connect(updates[CONF_HOST], updates[CONF_PORT], udl)
+                    if error:
+                        errors["base"] = error
+                    else:
+                        updates.update(layout)
+                elif is_serial:
+                    if error := await _validate_serial(
+                        updates[CONF_SERIAL_DEVICE], data.get(CONF_BAUD_RATE, DEFAULT_BAUD_RATE)
+                    ):
+                        errors["base"] = error
+                elif error := await _validate_crestron_network(updates[CONF_HOST], updates[CONF_PORT]):
                     errors["base"] = error
-                else:
-                    updates.update(layout)
-            elif not is_serial and (error := await _validate_crestron_network(updates[CONF_HOST], updates[CONF_PORT])):
-                errors["base"] = error
+                if errors:
+                    await self.hass.config_entries.async_reload(entry.entry_id)  # carry on as before
             if not errors:
-                return self.async_update_reload_and_abort(entry, data_updates=updates)
+                return self.async_update_reload_and_abort(entry, unique_id=unique_id, data_updates=updates)
         defaults = {**data, **(user_input or {})}
         fields: dict[Any, Any] = {}
         if is_serial:
@@ -375,7 +410,17 @@ class TexecomConfigFlow(ConfigFlow, domain=DOMAIN):
             fields[vol.Required(CONF_PORT, default=defaults.get(CONF_PORT))] = PORT_SELECTOR
         udl_key = vol.Required(CONF_UDL) if is_connect else vol.Optional(CONF_UDL)
         fields[udl_key] = UDL_SELECTOR
-        return self.async_show_form(step_id="reconfigure", data_schema=vol.Schema(fields), errors=errors)
+        return self.async_show_form(
+            step_id="reconfigure_connect" if is_connect else "reconfigure",
+            data_schema=vol.Schema(fields),
+            errors=errors,
+        )
+
+    async_step_reconfigure_connect = async_step_reconfigure
+
+    async def _pause(self, entry: ConfigEntry) -> None:
+        if entry.state is ConfigEntryState.LOADED:
+            await self.hass.config_entries.async_unload(entry.entry_id)
 
 
 class TexecomOptionsFlow(OptionsFlow):
@@ -396,13 +441,16 @@ class TexecomOptionsFlow(OptionsFlow):
                 if is_connect:
                     options[CONF_TIME_SYNC] = bool(user_input.get(CONF_TIME_SYNC))
                     if user_input.get(CONF_REDISCOVER):
-                        layout, error = await _validate_connect(
-                            entry.data[CONF_HOST], entry.data[CONF_PORT], entry.data[CONF_UDL]
-                        )
-                        if error:
+                        # Over the open session: the panel allows only one.
+                        try:
+                            info, zones, areas = await entry.runtime_data.async_rediscover()
+                        except (PanelError, AttributeError) as err:
+                            _LOGGER.debug("Re-reading the panel failed: %s", err)
                             errors["base"] = "rediscover_failed"
                         else:
-                            self.hass.config_entries.async_update_entry(entry, data={**entry.data, **layout})
+                            self.hass.config_entries.async_update_entry(
+                                entry, data={**entry.data, **layout_to_data(info, zones, areas)}
+                            )
                             self.hass.config_entries.async_schedule_reload(entry.entry_id)
                 else:
                     options[CONF_STATUS_POLL] = int(user_input[CONF_STATUS_POLL])

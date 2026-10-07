@@ -5,16 +5,20 @@ from __future__ import annotations
 
 import contextlib
 import logging
+import time
 from dataclasses import asdict
+from datetime import timedelta
 from typing import Any
 from zoneinfo import ZoneInfo
 
+from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.event import async_track_time_interval
 
 from .connect.panel import ConnectPanel
 from .const import (
@@ -55,8 +59,14 @@ PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENS
 type TexecomConfigEntry = ConfigEntry[TexecomPanel]
 
 
-def describe_drift(drift: int) -> str:
-    """E.g. "about 3 years behind", "12 minutes ahead"."""
+OFFLINE_ISSUE_AFTER = 15 * 60  # seconds without a connection before Repairs says so
+ARM_FAILED_WINDOW = 60.0  # zones reported within this of each other are one failed arm
+
+
+def describe_drift(drift: int | None) -> str:
+    """E.g. "about 3 years behind", "12 minutes ahead"; None: an impossible date."""
+    if drift is None:
+        return "not set (it holds an impossible date)"
     seconds = abs(drift)
     for unit, size in (("year", 365 * 86400), ("day", 86400), ("hour", 3600), ("minute", 60)):
         if seconds >= size:
@@ -88,9 +98,31 @@ def create_panel(hass: HomeAssistant, entry: ConfigEntry) -> TexecomPanel:
     data, options = entry.data, entry.options
     part_arms = {"home": options.get(CONF_HOME_PART_ARM, 0), "night": options.get(CONF_NIGHT_PART_ARM, 0)}
 
+    failed_zones: list[str] = []
+    failed_at = [0.0]
+
     @callback
     def fire(kind: str, details: dict[str, Any]) -> None:
         hass.bus.async_fire(EVENT, {"type": kind, "entry_id": entry.entry_id, **details})
+        if kind == "arm_failed":
+            # The panel logs one entry per zone that stopped the arm; gather
+            # them into one notification.
+            now = time.monotonic()
+            if now - failed_at[0] > ARM_FAILED_WINDOW:
+                failed_zones.clear()
+            failed_at[0] = now
+            name = details.get("zone_name") or f"zone {details.get('zone')}"
+            if name not in failed_zones:
+                failed_zones.append(name)
+            persistent_notification.async_create(
+                hass,
+                f"The panel didn't arm: **{', '.join(failed_zones)}** "
+                f"{'was' if len(failed_zones) == 1 else 'were'} active when the exit time ended "
+                '(the panel sounds its "fail to set" warning). Close the door or keep out of the '
+                "sensor's view, then arm again.",
+                title="Alarm not set",
+                notification_id=f"{DOMAIN}_arm_failed_{entry.entry_id}",
+            )
 
     if data[CONF_PROTOCOL] == PROTOCOL_CONNECT:
 
@@ -105,9 +137,9 @@ def create_panel(hass: HomeAssistant, entry: ConfigEntry) -> TexecomPanel:
             entry.async_start_reauth(hass)
 
         @callback
-        def clock_drift(drift: int) -> None:
+        def clock_drift(drift: int | None) -> None:
             issue_id = f"panel_clock_{entry.entry_id}"
-            if abs(drift) <= CLOCK_DRIFT_LIMIT:
+            if drift is not None and abs(drift) <= CLOCK_DRIFT_LIMIT:
                 ir.async_delete_issue(hass, DOMAIN, issue_id)
                 return
             ir.async_create_issue(
@@ -165,6 +197,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> b
     await panel.start()
     if entry.options.get(CONF_TIME_SYNC):
         ir.async_delete_issue(hass, DOMAIN, f"panel_clock_{entry.entry_id}")
+    entry.async_on_unload(_watch_connection(hass, entry, panel))
+
+    @callback
+    def armed_now() -> None:
+        if any(area.state.startswith("armed") for area in panel.areas.values()):
+            persistent_notification.async_dismiss(hass, f"{DOMAIN}_arm_failed_{entry.entry_id}")
+
+    entry.async_on_unload(panel.add_listener(armed_now))
     if entry.data.get(CONF_CREATE_DASHBOARD):
         # Asked for at the end of setup; done once the entities exist.
         with contextlib.suppress(HomeAssistantError):
@@ -181,6 +221,49 @@ async def async_setup_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> b
     return True
 
 
+def _watch_connection(hass: HomeAssistant, entry: ConfigEntry, panel: TexecomPanel):
+    """Raises a Repairs notice when the panel has been unreachable for a while
+    (e.g. the SmartCom's address changed), and clears it once connected."""
+    issue_id = f"panel_offline_{entry.entry_id}"
+    address = entry.data.get(CONF_SERIAL_DEVICE) or f"{entry.data.get(CONF_HOST)}:{entry.data.get(CONF_PORT)}"
+
+    @callback
+    def check(_now=None) -> None:
+        since = panel.disconnected_since
+        if panel.connected or since is None:
+            ir.async_delete_issue(hass, DOMAIN, issue_id)
+            return
+        minutes = (time.monotonic() - since) / 60
+        if minutes * 60 < OFFLINE_ISSUE_AFTER:
+            return
+        ir.async_create_issue(
+            hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key="panel_offline",
+            translation_placeholders={
+                "name": entry.title,
+                "address": address,
+                "minutes": str(round(minutes)),
+                "error": getattr(panel, "last_error", None) or "no reply",
+            },
+        )
+
+    remove_timer = async_track_time_interval(hass, check, timedelta(minutes=1))
+    remove_listener = panel.add_listener(lambda: panel.connected and check())
+
+    def remove() -> None:
+        remove_timer()
+        remove_listener()
+        ir.async_delete_issue(hass, DOMAIN, issue_id)
+
+    return remove
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> bool:
-    await entry.runtime_data.stop()
-    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
+    if unloaded:
+        await entry.runtime_data.stop()
+    return unloaded

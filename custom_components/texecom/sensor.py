@@ -58,7 +58,7 @@ class TexecomPowerSensor(TexecomEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        return self.panel.connected and "power" in self.panel.extra
+        return self.panel.recently_connected and "power" in self.panel.extra
 
     @property
     def native_value(self) -> float | None:
@@ -78,7 +78,7 @@ class TexecomDisplaySensor(TexecomEntity, SensorEntity):
 
     @property
     def available(self) -> bool:
-        return self.panel.connected and "display" in self.panel.extra
+        return self.panel.recently_connected and "display" in self.panel.extra
 
     @property
     def native_value(self) -> str | None:

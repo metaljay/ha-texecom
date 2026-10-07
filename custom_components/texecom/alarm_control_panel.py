@@ -44,8 +44,9 @@ class TexecomAreaPanel(TexecomEntity, AlarmControlPanelEntity):
         super().__init__(entry, panel, f"area_{number}", device, name)
         self.number = number
         features = AlarmControlPanelEntityFeature(0)
-        for mode in panel.offered_modes:
-            features |= FEATURE_FOR_MODE[mode]
+        if panel.can_control:  # without the UDL code (Crestron), state only
+            for mode in panel.offered_modes:
+                features |= FEATURE_FOR_MODE[mode]
         self._attr_supported_features = features
         self._code: str | None = entry.options.get(CONF_ALARM_CODE) or None
         self._attr_code_format = CodeFormat.NUMBER if self._code else None

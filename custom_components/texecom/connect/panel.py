@@ -21,6 +21,7 @@ from ..panel import (
     PanelInfo,
     PanelZone,
     TexecomPanel,
+    nice_name,
 )
 from . import protocol as P
 from .client import ConnectClient, ConnectError, HostLog, LoginRejected, PanelBusyError, Timing, Unreachable
@@ -30,6 +31,7 @@ _LOGGER = logging.getLogger(__name__)
 RECONNECT_MIN = 5.0
 RECONNECT_MAX = 30.0
 MAINS_VOLTAGE = 13.3  # below this with no current flowing, the panel is on battery
+BATTERY_ONLY_VOLTAGE = 12.9  # the same, before the panel has ever reported current (mains gives ~13.6 V)
 POWER_EVERY_N_IDLE = 1  # voltages and currents every keep-alive (~30 s)
 
 # Log event types the driver reacts to (numbering as in texecom2mqtt).
@@ -48,6 +50,11 @@ ZONE_ALARM_REPEAT = 30.0
 SWITCH_GRACE = 10.0  # longest a mode switch may sit between "disarmed" and the new exit delay
 
 
+def default_area_name(number: int) -> str:
+    """Area A, B... as on the keypad; numbers beyond Z."""
+    return f"Area {chr(64 + number)}" if number <= 26 else f"Area {number}"
+
+
 async def discover(client: ConnectClient) -> tuple[PanelInfo, list[PanelZone], list[PanelArea]]:
     """Reads panel identity, zones in use (name, type, areas) and the areas
     that contain them (like texecom2mqtt, empty areas are left out)."""
@@ -64,12 +71,15 @@ async def discover(client: ConnectClient) -> tuple[PanelInfo, list[PanelZone], l
     areas: list[PanelArea] = []
     for number in sorted({a for z in zones for a in z.areas}):
         details = await client.area_details(number)
-        areas.append(PanelArea(number, (details and details.name) or f"Area {chr(64 + number)}"))
+        areas.append(PanelArea(number, (details and details.name) or default_area_name(number)))
     return info, zones, areas
 
 
+PROBE_PATIENCE = 75.0  # seconds a SmartCom may take to free its session
+
+
 async def probe(
-    host: str, port: int, udl: str, patience: float = 75.0
+    host: str, port: int, udl: str, patience: float | None = None
 ) -> tuple[PanelInfo, list[PanelZone], list[PanelArea]]:
     """One-off login and discovery (used when setting up).
 
@@ -78,7 +88,7 @@ async def probe(
     seconds unless nothing answers at all or the UDL code is wrong.
     """
     loop = asyncio.get_running_loop()
-    deadline = loop.time() + patience
+    deadline = loop.time() + (PROBE_PATIENCE if patience is None else patience)
     while True:
         client = ConnectClient(host, port, udl)
         try:
@@ -113,9 +123,9 @@ class ConnectPanel(TexecomPanel):
         on_event: Callable[[str, dict[str, Any]], None] | None = None,
         on_layout_changed: Callable[[PanelInfo, list[PanelZone], list[PanelArea]], None] | None = None,
         on_auth_failed: Callable[[], None] | None = None,
-        on_clock_drift: Callable[[int], None] | None = None,
+        on_clock_drift: Callable[[int | None], None] | None = None,
         timing: Timing | None = None,
-        reconnect_min: float = RECONNECT_MIN,
+        reconnect_min: float | None = None,
     ) -> None:
         super().__init__(part_arms)
         self.host, self.port, self.udl = host, port, str(udl)
@@ -131,7 +141,7 @@ class ConnectPanel(TexecomPanel):
         # Told the clock drift (seconds) once a session, when not syncing it.
         self.on_clock_drift = on_clock_drift
         self.timing = timing
-        self.reconnect_min = reconnect_min
+        self.reconnect_min = RECONNECT_MIN if reconnect_min is None else reconnect_min
         self.client: ConnectClient | None = None
         self._task: asyncio.Task | None = None
         self._tasks: set[asyncio.Task] = set()
@@ -142,6 +152,7 @@ class ConnectPanel(TexecomPanel):
         self._recent_alarms: dict[tuple[int, bool], float] = {}
         self._alarm_zone: tuple[str, float] | None = None
         self._switching: dict[int, float] = {}
+        self._seen_current = False
         self._idle_count = 0
         self._refresh_handle: asyncio.TimerHandle | None = None
         self.last_error: str | None = None
@@ -170,6 +181,7 @@ class ConnectPanel(TexecomPanel):
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await task
         self.set_connected(False)
+        self.cancel_timers()
 
     def _spawn(self, coro) -> None:
         task = asyncio.get_running_loop().create_task(coro)
@@ -178,6 +190,7 @@ class ConnectPanel(TexecomPanel):
 
     async def _run(self) -> None:
         delay = self.reconnect_min
+        failures = 0
         while not self._stopped:
             self._closed_event.clear()
             client = ConnectClient(
@@ -197,6 +210,7 @@ class ConnectPanel(TexecomPanel):
                 self._log.info("Connect: logged in to %s:%s", self.host, self.port)
                 self.last_error = None
                 delay = self.reconnect_min
+                failures = 0
                 self.set_connected(True)
                 sync_task = None
                 if self.time_sync_seconds > 0:
@@ -216,13 +230,19 @@ class ConnectPanel(TexecomPanel):
                     self._stopped = True  # wait for a new code rather than retry
             except Exception as err:  # noqa: BLE001 - any failure means reconnect
                 self.last_error = str(err)
-                self._log.warning("Connect: %s", err)
+                # A SmartCom is often busy for a minute (e.g. reporting an
+                # alarm): one warning, then quieter until it's back.
+                failures += 1
+                if failures == 1:
+                    self._log.warning("Connect: %s; retrying", err)
+                else:
+                    self._log.debug("Connect: still unavailable (%s)", err)
             finally:
                 await client.close()
                 self.set_connected(False)
             if self._stopped:
                 break
-            self._log.info("Connect: reconnecting in %.0f s", delay)
+            self._log.debug("Connect: reconnecting in %.0f s", delay)
             await asyncio.sleep(delay)
             delay = min(delay * 2, max(RECONNECT_MAX, self.reconnect_min))
 
@@ -241,10 +261,16 @@ class ConnectPanel(TexecomPanel):
 
     async def _check_clock(self) -> None:
         """A full power-down resets the panel clock (seen on a real panel: to
-        31 Oct 2023). With clock sync off, report how far out it is."""
+        31 Oct 2023). With clock sync off, report how far out it is (None:
+        the clock holds an impossible date)."""
         if self.time_sync_seconds > 0 or not self.on_clock_drift or not self.client:
             return
-        clock = await self.client.date_time()
+        try:
+            clock = await self.client.date_time()
+        except P.InvalidClock as err:
+            self._log.warning("Connect: %s", err)
+            self.on_clock_drift(None)
+            return
         if clock:
             now = datetime.now(self.time_zone).replace(tzinfo=None, microsecond=0)
             self.on_clock_drift(int((datetime(*clock) - now).total_seconds()))
@@ -300,6 +326,7 @@ class ConnectPanel(TexecomPanel):
                 self._log.debug("Connect: area %s: disarmed while switching mode; still arming", number)
                 return
             self._switching.pop(number, None)
+            self._alarm_zone = None  # the next alarm names its own zone
             self.set_area(number, DISARMED, None, changed_by)
         elif state == "in exit":
             if self._switching.pop(number, None) is not None:
@@ -347,6 +374,10 @@ class ConnectPanel(TexecomPanel):
                 self._refresh_areas_soon()  # confirm which part arm from the flags
             else:
                 self._apply_area(m["area"], m["state"], None, self._recent_user())
+            if m["state"] in ("disarmed", "armed", "part armed"):
+                # A code (or a request from Home Assistant) explains one arm
+                # or disarm, not whatever happens next.
+                self._last_user = None
         elif kind == "user":
             self._last_user = (f"User {m['user']}", time.monotonic())
             self.on_event("user", {"user": m["user"], "method": m["method"]})
@@ -408,15 +439,16 @@ class ConnectPanel(TexecomPanel):
         active = m["group"] == GROUP_TAMPER_ALARM
         name = P.TAMPER_LOG_NAMES.get(m["type"], f"Tamper (log type {m['type']})")
         tampers: set[str] = self.extra.setdefault("tampers", set())
-        if active and name not in tampers:
-            tampers.add(name)
-            self.notify()
-        elif not active and name in tampers:
-            tampers.discard(name)
-            self.notify()
+        if active == (name in tampers):
+            return  # the panel logs some events twice (again once reported)
+        (tampers.add if active else tampers.discard)(name)
+        self.notify()
         if active:
             self._log.warning("Connect: %s", name)
             self.on_event("tamper", {"source": name, "log_type": m["type"]})
+        else:
+            self._log.info("Connect: %s cleared", name)
+            self.on_event("tamper_cleared", {"source": name, "log_type": m["type"]})
 
     def _mains_from_power(self, power: P.SystemPower) -> None:
         """Mains on or off from the power readings. Seen on a real panel: on
@@ -424,7 +456,13 @@ class ConnectPanel(TexecomPanel):
         mains, ~300 mA flows at ~13.6 V. The panel logs the mains failing at
         once but didn't log it coming back, so this clears (or confirms) it,
         and gives the right answer after a restart."""
-        on_battery = power.panel_current == 0 and power.panel_voltage < MAINS_VOLTAGE
+        if power.panel_current > 0:
+            self._seen_current = True
+        # Only trust "no current" from a panel that has reported current
+        # before; otherwise (a panel that always reads 0 mA, or a restart
+        # while on battery) only a clearly low voltage counts.
+        threshold = MAINS_VOLTAGE if self._seen_current else BATTERY_ONLY_VOLTAGE
+        on_battery = power.panel_current == 0 and power.panel_voltage < threshold
         mains_ok = power.panel_current > 0 or power.panel_voltage >= MAINS_VOLTAGE
         faults: set[str] = self.extra.setdefault("faults", set())
         if on_battery and "AC Fail" not in faults:
@@ -440,6 +478,8 @@ class ConnectPanel(TexecomPanel):
     def _on_fault(self, m: dict[str, Any]) -> None:
         """Mains, battery, communication and other faults from the panel log."""
         name = P.FAULT_LOG_NAMES[m["type"]]
+        if m["type"] in P.ZONE_FAULT_LOGS and (zone := self.zones.get(m["parameter"])):
+            name = f"{name}: {nice_name(zone.name)}"
         if m["group"] in P.GROUPS_STARTING:
             active = True
         elif m["group"] in P.GROUPS_RESTORING:
@@ -448,9 +488,10 @@ class ConnectPanel(TexecomPanel):
             self._log.debug("Connect: %s with group %s (not a start or end)", name, m["group"])
             return
         faults: set[str] = self.extra.setdefault("faults", set())
-        if active != (name in faults):
-            (faults.add if active else faults.discard)(name)
-            self.notify()
+        if active == (name in faults):
+            return  # already known (logged twice, or seen in the power readings)
+        (faults.add if active else faults.discard)(name)
+        self.notify()
         self._log.warning("Connect: %s%s", name, "" if active else " cleared")
         self.on_event("fault" if active else "fault_cleared", {"source": name, "log_type": m["type"]})
 
@@ -464,7 +505,12 @@ class ConnectPanel(TexecomPanel):
         zone = self.zones.get(number)
         if not zone:
             return
-        name = zone.name.title() if zone.name.isupper() else zone.name
+        # The alarmed bit stays set (alarm memory) after the disarm, so a zone
+        # in a disarmed area doesn't explain a later alarm.
+        zone_areas = [self.areas[a] for a in zone.areas if a in self.areas] or list(self.areas.values())
+        if all(a.state == DISARMED for a in zone_areas):
+            return
+        name = nice_name(zone.name)
         now = time.monotonic()
         if self._alarm_zone and self._alarm_zone[0] != name and now - self._alarm_zone[1] < USER_CHANGE_WINDOW:
             return  # the first zone in an alarm is the one that set it off
@@ -490,6 +536,15 @@ class ConnectPanel(TexecomPanel):
         except ConnectError as err:
             self._log.debug("Connect: area refresh skipped: %s", err)
 
+    async def async_rediscover(self) -> tuple[PanelInfo, list[PanelZone], list[PanelArea]]:
+        """Reads zones and areas again over the open session (a SmartCom
+        allows only one, so a separate login would fail). Raises PanelError."""
+        client = self._ready_client()
+        try:
+            return await discover(client)
+        except ConnectError as err:
+            raise PanelError(f"couldn't read the panel: {err}") from err
+
     async def _rediscover(self) -> None:
         if not self.client:
             return
@@ -512,8 +567,8 @@ class ConnectPanel(TexecomPanel):
         while True:
             try:
                 await self.sync_clock()
-            except ConnectError as err:
-                self._log.debug("Connect: clock check failed: %s", err)
+            except (ConnectError, PanelError) as err:
+                self._log.warning("Connect: clock check failed: %s", err)
             await asyncio.sleep(self.time_sync_seconds)
 
     async def sync_clock(self, now: datetime | None = None) -> bool:
@@ -524,16 +579,22 @@ class ConnectPanel(TexecomPanel):
         hour out (a bug found in the Homebridge plugin).
         """
         assert self.client
-        panel = await self.client.date_time()
-        if not panel:
-            return False
         now = now or datetime.now(self.time_zone)
         want = (now.year, now.month, now.day, now.hour, now.minute, now.second)
-        drift = (datetime(*panel) - datetime(*want)).total_seconds()
-        if abs(drift) <= 60:
-            self._log.debug("Connect: panel clock within %.0f s", abs(drift))
-            return False
-        self._log.info("Connect: panel clock is %.0f s %s; setting it", abs(drift), "ahead" if drift > 0 else "behind")
+        try:
+            panel = await self.client.date_time()
+        except P.InvalidClock as err:
+            self._log.info("Connect: %s; setting it", err)
+        else:
+            if not panel:
+                return False
+            drift = (datetime(*panel) - datetime(*want)).total_seconds()
+            if abs(drift) <= 60:
+                self._log.debug("Connect: panel clock within %.0f s", abs(drift))
+                return False
+            self._log.info(
+                "Connect: panel clock is %.0f s %s; setting it", abs(drift), "ahead" if drift > 0 else "behind"
+            )
         if not await self.client.set_date_time(want):
             raise PanelError("the panel refused the new time")
         return True
@@ -598,7 +659,7 @@ class ConnectPanel(TexecomPanel):
         if self.connected and self.client:
             try:
                 clock = await self.client.date_time()
-            except ConnectError as err:
+            except (ConnectError, P.InvalidClock) as err:
                 result["panel_clock"] = f"unreadable: {err}"
             else:
                 if clock:

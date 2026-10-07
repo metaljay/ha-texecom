@@ -62,9 +62,9 @@ class CrestronPanel(TexecomPanel):
         keypad_arm_mode: str = "away",
         status_poll: float = 60.0,
         on_event: Callable[[str, dict[str, Any]], None] | None = None,
-        reconnect_min: float = RECONNECT_MIN,
-        event_coalesce: float = EVENT_COALESCE,
-        blackout: float = POST_LOGOUT_BLACKOUT,
+        reconnect_min: float | None = None,
+        event_coalesce: float | None = None,
+        blackout: float | None = None,
     ) -> None:
         super().__init__(part_arms)
         self.zones = {z.number: z for z in zones}
@@ -75,9 +75,9 @@ class CrestronPanel(TexecomPanel):
         self.keypad_arm_mode = keypad_arm_mode if keypad_arm_mode in ARMED_STATE_FOR_MODE else "away"
         self.status_poll = status_poll
         self.on_event = on_event or (lambda _t, _d: None)
-        self.reconnect_min = reconnect_min
-        self.event_coalesce = event_coalesce
-        self.blackout = blackout
+        self.reconnect_min = RECONNECT_MIN if reconnect_min is None else reconnect_min
+        self.event_coalesce = EVENT_COALESCE if event_coalesce is None else event_coalesce
+        self.blackout = POST_LOGOUT_BLACKOUT if blackout is None else blackout
         self._writer: asyncio.StreamWriter | None = None
         self._task: asyncio.Task | None = None
         self._stopped = False
@@ -91,6 +91,10 @@ class CrestronPanel(TexecomPanel):
         self._deferred: dict[int, asyncio.TimerHandle] = {}
         self._arming_since: dict[int, float] = {}
         self.last_error: str | None = None
+
+    @property
+    def can_control(self) -> bool:
+        return bool(self.udl)
 
     @property
     def description(self) -> str:
@@ -111,6 +115,7 @@ class CrestronPanel(TexecomPanel):
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self._task
         self.set_connected(False)
+        self.cancel_timers()
 
     async def _open(self) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
         if self.serial_device:

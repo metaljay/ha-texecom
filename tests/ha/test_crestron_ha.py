@@ -1,0 +1,91 @@
+"""Crestron through Home Assistant: entities, keypad events and arming."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+import pytest
+from pytest_homeassistant_custom_component.common import MockConfigEntry
+
+from custom_components.texecom.const import DOMAIN
+from custom_components.texecom.crestron import protocol as CP
+
+from .common import UDL, wait_for
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from test_crestron import FakeCrestronPort  # noqa: E402
+
+ALARM = "alarm_control_panel.texecom_area_a"
+
+
+@pytest.fixture
+async def port(socket_enabled):
+    fake = FakeCrestronPort()
+    number = await fake.start()
+    yield fake, number
+    await fake.close()
+
+
+async def setup_crestron(hass, number: int, udl: str | None = UDL):
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Texecom Premier Elite",
+        unique_id=f"127.0.0.1:{number}",
+        data={
+            "protocol": "crestron",
+            "connection": "network",
+            "host": "127.0.0.1",
+            "port": number,
+            "udl": udl,
+            "zone_count": 3,
+            "area_count": 1,
+        },
+        options={"night_part_arm": 1, "home_part_arm": 0, "keypad_arm_mode": "away", "status_poll": 60},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await wait_for(lambda: hass.states.get(ALARM) and hass.states.get(ALARM).state == "disarmed")
+    return entry
+
+
+async def test_crestron_entities_and_keypad_events(hass, port):
+    fake, number = port
+    entry = await setup_crestron(hass, number)
+    assert hass.states.get(ALARM).attributes["friendly_name"] == "Area A Alarm"
+    assert hass.states.get("binary_sensor.texecom_zone_1").state == "off"
+    assert hass.states.get("binary_sensor.texecom_tamper") is None  # Connect only
+
+    fake.send('"Z0021')
+    await wait_for(lambda: hass.states.get("binary_sensor.texecom_zone_2").state == "on")
+    fake.send('"A0013')  # armed at the keypad by user 3
+    await wait_for(lambda: hass.states.get(ALARM).state == "armed_away")
+    assert hass.states.get(ALARM).attributes["changed_by"] == "User 3"
+    fake.send('"D0013')
+    await wait_for(lambda: hass.states.get(ALARM).state == "disarmed")
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_crestron_night_uses_the_binary_part_arm(hass, port):
+    fake, number = port
+    entry = await setup_crestron(hass, number)
+    entry.runtime_data.blackout = 0.1
+    await hass.services.async_call("alarm_control_panel", "alarm_arm_night", {"entity_id": ALARM}, blocking=True)
+    await wait_for(lambda: fake.received[-1:] == [CP.WINTEX_LOGOUT])
+    assert fake.received[-3:] == [b"W" + UDL.encode(), CP.part_arm_frame(1, 1), CP.WINTEX_LOGOUT]
+    assert hass.states.get(ALARM).state == "arming"
+    fake.send('"A0010')  # the held-back event
+    await wait_for(lambda: hass.states.get(ALARM).state == "armed_night")
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_crestron_without_udl_is_sensors_only(hass, port):
+    from homeassistant.exceptions import HomeAssistantError
+
+    _fake, number = port
+    entry = await setup_crestron(hass, number, udl=None)
+    assert hass.states.get(ALARM).attributes["supported_features"] == 0  # no arm buttons
+    with pytest.raises(HomeAssistantError):
+        await hass.services.async_call("alarm_control_panel", "alarm_arm_away", {"entity_id": ALARM}, blocking=True)
+    assert await hass.config_entries.async_unload(entry.entry_id)

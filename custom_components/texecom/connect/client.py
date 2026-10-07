@@ -6,7 +6,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from . import protocol as P
@@ -49,10 +49,11 @@ class PanelBusyError(ConnectError):
 
 @dataclass
 class Timing:
-    command_timeout: float = COMMAND_TIMEOUT
-    command_attempts: int = COMMAND_ATTEMPTS
-    keepalive: float = KEEPALIVE
-    login_delay: float = LOGIN_DELAY
+    # Defaults are read when a Timing is made, so tests can shorten them.
+    command_timeout: float = field(default_factory=lambda: COMMAND_TIMEOUT)
+    command_attempts: int = field(default_factory=lambda: COMMAND_ATTEMPTS)
+    keepalive: float = field(default_factory=lambda: KEEPALIVE)
+    login_delay: float = field(default_factory=lambda: LOGIN_DELAY)
 
 
 class ConnectClient:
@@ -148,7 +149,7 @@ class ConnectClient:
         if self._closed:
             return
         self._closed = True
-        self._log.warning("Connect: %s", reason)
+        self._log.info("Connect: session ended: %s", reason)
         asyncio.get_running_loop().create_task(self._teardown(reason))
         self.on_close(reason)
 

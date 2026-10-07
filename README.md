@@ -180,8 +180,8 @@ The integration also fires a `texecom_event` for things that aren't states:
 | `zone_alarm` | A zone set the alarm off (Connect) | `zone`, `zone_name`, `tamper` |
 | `user` | Someone entered a code or tag at a keypad | `user`, `method` |
 | `fault` / `fault_cleared` | A fault such as *AC Fail* (mains off), *Low Battery* or *Fail to Communicate* | `source`, `log_type` |
-| `tamper` | A tamper that isn't a zone (Connect), e.g. *Panel Box Tamper* (the lid) or *Auxiliary Tamper* (a detector on the shared tamper circuit) | `source`, `log_type` |
-| `arm_failed` | Arming failed because a zone was active when the exit time ended (one event per zone). The panel sounds its "fail to set" warning | `zone`, `zone_name`, `areas` |
+| `tamper` / `tamper_cleared` | A tamper that isn't a zone (Connect), e.g. *Panel Box Tamper* (the lid) or *Auxiliary Tamper* (a detector on the shared tamper circuit), and when it's put right | `source`, `log_type` |
+| `arm_failed` | Arming failed because a zone was active when the exit time ended (one event per zone). The panel sounds its "fail to set" warning, and Home Assistant shows an **Alarm not set** notification naming the zones (it clears once the alarm arms) | `zone`, `zone_name`, `areas` |
 
 <details>
 <summary>Example: tell everyone which zone set the alarm off</summary>
@@ -203,8 +203,8 @@ actions:
 
 ## 💡 Good to know
 
-- 🚨 **When the alarm goes off**, the panel briefly drops the connection to send its own alarm report through the SmartCom. Home Assistant reconnects and catches up within seconds. If your SmartCom also reports to a monitoring centre, consider a second module (a ComIP) for Home Assistant.
-- 🔁 **Reconnects by itself** after a power cut, a router restart or a dropped connection, and reads the panel's state again so nothing is missed. After Home Assistant restarts, the SmartCom can take about a minute to accept it again.
+- 🚨 **When the alarm goes off**, the panel drops the connection for about a minute to send its own alarm report through the SmartCom. The alarm and zones **keep showing their last state** (e.g. *Alarm!*) meanwhile, so dashboards and the Home app don't go blank; **Panel connection** shows the link itself. Home Assistant reconnects and catches up by itself. If your SmartCom also reports to a monitoring centre, consider a second module (a ComIP) for Home Assistant.
+- 🔁 **Reconnects by itself** after a power cut, a router restart or a dropped connection, and reads the panel's state again so nothing is missed. After Home Assistant restarts, the SmartCom can take about a minute to accept it again. If the panel stays unreachable for 15 minutes, **Repairs** says so (and clears itself once it's back).
 - 🔐 **The UDL code is stored in Home Assistant** (like any integration password). Anyone with admin access to your Home Assistant can arm and disarm, so keep that access tight, and consider the optional alarm code.
 - 🔌 **Mains and faults**: **Mains power** turns off as soon as the panel reports a mains failure, and **Problem** lists any fault it reports. The panel reports a mains failure straight away; see [Known limits](#known-limits) for when the mains comes back.
 - 🔧 **Tampers**: the panel's **Tamper** sensor turns on while its lid, a keypad, the bell box or a detector is open, and says which. Most installs wire every detector's tamper to one shared circuit, so the panel (and Home Assistant) can't say *which* detector; it shows as *Auxiliary Tamper*. Each zone also has a hidden **Tamper** sensor, which only works if that zone's tamper is wired to the zone itself.
@@ -217,7 +217,9 @@ actions:
 |---|---|
 | "Couldn't connect" while setting up | Check the address and that the port is 10001. If the Texecom app, Homebridge or texecom2mqtt was connected a moment ago, wait a minute and try again |
 | "The panel refused the UDL code" | Try 1234; if that fails, ask your installer |
-| Everything shows as unavailable | Look at **Panel connection** on the panel's device page, and at **Settings → System → Logs** for "Connect:" lines |
+| Everything shows as unavailable | The panel has been unreachable for over 3 minutes. Look at **Panel connection** on the panel's device page, **Settings → Repairs**, and **Settings → System → Logs** for "Connect" lines |
+| The SmartCom's address changed | **Settings → Devices & services → Texecom → ⋮ → Reconfigure**, and enter the new one. Reserve the address in your router so it doesn't happen again |
+| "Alarm not set" | A zone was active when the exit time ended (a door open, or someone in view of a sensor). The notification names it |
 | A zone shows the wrong icon or wording | Open it, then **Settings → Show as** |
 | Home or Night is missing from the alarm | It's set to *Not used*: change it in **Configure** |
 
@@ -280,7 +282,7 @@ views:
 Found while testing on a real Premier Elite 24 (V6.05.03):
 
 - **One connection at a time.** The SmartCom serves Home Assistant *or* the Texecom app (or Homebridge, texecom2mqtt). It also refuses a new connection for about a minute after the last one closed, so after Home Assistant restarts the alarm can take a minute to come back.
-- **During an alarm** the SmartCom drops Home Assistant for about a minute to send its own report. Home Assistant reconnects and catches up by itself.
+- **During an alarm** the SmartCom drops Home Assistant for about a minute to send its own report. Entities keep their last state for up to 3 minutes; Home Assistant reconnects and catches up by itself.
 - **Mains coming back** isn't reported by the panel, only the failure. Home Assistant reads the panel's power every 30 seconds instead, so *Mains power* turns back on within half a minute.
 - **Which detector was tampered with** usually isn't known: most installs wire every detector's tamper switch to one shared circuit, which the panel reports as *Auxiliary Tamper*.
 - **Keypad lights** (e.g. the spanner) aren't sent; the *Keypad display* sensor shows the screen text instead.
@@ -303,7 +305,7 @@ How it differs from Texecom Connect:
 - An arm from the keypad doesn't say whether it was full or part: choose how it shows (**When armed at the keypad, show as**).
 - Part arms work for area 1 only.
 - After arming or disarming from Home Assistant, the panel holds back its other updates for about 30 seconds. Nothing is lost, but sensors update late.
-- The UDL code is only needed for arming and disarming; without it you get sensors only.
+- The UDL code is only needed for arming and disarming; without it you get sensors, and the alarm shows its state without arm buttons.
 
 To set a COM port to Crestron at the keypad: engineer code → *UDL/Digi Options* → 8 *Com Port Setup* → choose the port → *No* to edit → 8 *Crestron System* → *Yes* to save.
 
@@ -316,6 +318,27 @@ To set a COM port to Crestron at the keypad: engineer code → *UDL/Digi Options
 - Nothing needs copying across: zones, names and areas come from the panel. Choose Night and Home part arms as you had them.
 - For the Home app, expose the alarm through Home Assistant's HomeKit Bridge. It appears as a new accessory, so set its room and notifications again.
 - If you armed and disarmed from Apple Home automations (for example a dummy switch that follows who's home), move the arming into Home Assistant (see [Arm automatically when everyone leaves](#automations)) and delete the Apple Home ones, so the two don't fight.
+
+</details>
+
+<details>
+<summary><b>🧑‍💻 Development</b></summary>
+
+The protocol code (`custom_components/texecom/connect`, `crestron` and `panel.py`) doesn't import Home Assistant, and has its own tests against simulated panels:
+
+```bash
+pip install pytest pytest-asyncio
+pytest tests --ignore=tests/ha
+```
+
+The Home Assistant tests run the integration inside a real Home Assistant (setup screens, options, reauth and reconfigure, entities, services, events, Repairs, diagnostics and the dashboard), against the same simulated panel. They need Python 3.14:
+
+```bash
+pip install "pytest-homeassistant-custom-component==0.13.367"   # Home Assistant 2026.9.4
+pytest tests/ha
+```
+
+`python tests/fake_connect_panel.py 10001 --demo` runs a simulated panel you can point a test Home Assistant at.
 
 </details>
 

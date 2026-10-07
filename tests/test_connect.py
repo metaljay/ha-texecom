@@ -358,3 +358,11 @@ async def test_clock_sync_uses_the_configured_time_zone(fake):
         assert await panel.sync_clock(datetime.now(tz)) is False
     finally:
         await panel.stop()
+
+
+def test_nice_names_keep_acronyms():
+    from custom_components.texecom.panel import nice_name
+
+    assert nice_name("HALL PIR") == "Hall PIR"
+    assert nice_name("HOUSE") == "House"
+    assert nice_name("Front Door") == "Front Door"  # already mixed case: left alone

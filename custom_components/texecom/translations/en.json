@@ -91,17 +91,30 @@
       },
       "reauth_confirm": {
         "title": "The panel refused the UDL code",
-        "description": "Enter the panel's current UDL code.",
+        "description": "Enter the panel's current UDL code (your installer can tell you if it was changed). Checking it can take up to a minute.",
         "data": {
           "udl": "UDL code"
         }
       },
       "reconfigure": {
-        "title": "Change connection",
+        "title": "Change the connection",
+        "description": "Home Assistant pauses its connection to the panel while it checks the new details.",
         "data": {
           "host": "IP address",
           "port": "Port",
           "serial_device": "Serial device",
+          "udl": "UDL code"
+        },
+        "data_description": {
+          "udl": "Needed to arm and disarm from Home Assistant. Leave empty for sensors only."
+        }
+      },
+      "reconfigure_connect": {
+        "title": "Change the connection",
+        "description": "For example after the SmartCom's address changed, or a new UDL code. Home Assistant pauses its connection to the panel while it checks: this can take up to a minute.",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
           "udl": "UDL code"
         }
       }
@@ -112,7 +125,8 @@
       "invalid_udl": "The UDL code is 4 to 8 digits.",
       "no_zones": "Connected, but the panel reported no zones in use.",
       "no_reply": "Connected, but the panel didn't answer. Check the COM port is set to Crestron System and the speed matches.",
-      "same_part_arm": "Night and Home can't use the same part arm."
+      "same_part_arm": "Night and Home can't use the same part arm.",
+      "cannot_open_serial": "Couldn't open that serial device. Check the path (a /dev/serial/by-id/… path survives restarts) and that nothing else is using it."
     },
     "abort": {
       "already_configured": "This panel is already set up.",
@@ -161,7 +175,7 @@
     "error": {
       "same_part_arm": "Night and Home can't use the same part arm.",
       "invalid_code_format": "Use digits only.",
-      "rediscover_failed": "Couldn't read the panel. Try again in a minute.",
+      "rediscover_failed": "Couldn't read the panel just now (it may be busy, e.g. reporting an alarm). Try again in a minute.",
       "dashboard_failed": "Couldn't create the dashboard on this version of Home Assistant. The README has a version you can paste in."
     }
   },
@@ -253,6 +267,10 @@
           }
         }
       }
+    },
+    "panel_offline": {
+      "title": "Can't reach {name}",
+      "description": "Home Assistant hasn't been able to connect to the alarm panel at **{address}** for {minutes} minutes ({error}).\n\nCheck that the SmartCom (or adapter) is powered and on the network, and that its address hasn't changed: reserve it in your router. If it moved, use **Reconfigure** on the Texecom integration. Also check nothing else is connected to it (the Texecom app, Homebridge, texecom2mqtt).\n\nThis notice clears itself once the panel is back."
     }
   }
 }
