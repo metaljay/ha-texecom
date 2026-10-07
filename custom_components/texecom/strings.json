@@ -281,7 +281,7 @@
         "step": {
           "confirm": {
             "title": "Set the panel's clock",
-            "description": "The panel's clock is {drift}, usually because it lost all power (mains and battery). Its event log, and any timed arming your installer set up, use that clock.\\n\\nClick **Submit** to turn on **Keep the panel clock right**: Home Assistant sets the clock now, using its own time zone, and checks it once a day."
+            "description": "The panel's clock is {drift}, usually because it lost all power (mains and battery). Its event log, and any timed arming your installer set up, use that clock.\n\nClick **Submit** to turn on **Keep the panel clock right**: Home Assistant sets the clock now, using its own time zone, and checks it once a day."
           }
         }
       }
