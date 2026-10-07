@@ -87,6 +87,7 @@ class ConnectClient:
         self._writer: asyncio.StreamWriter | None = None
         self._read_task: asyncio.Task | None = None
         self._keepalive_task: asyncio.Task | None = None
+        self._teardown_task: asyncio.Task | None = None
         self._lock = asyncio.Lock()
         self._sequence = 0
         self._pending: tuple[int, int, asyncio.Future[bytes]] | None = None
@@ -159,7 +160,9 @@ class ConnectClient:
             return
         self._closed = True
         self._log.info("Connect: session ended: %s", reason)
-        asyncio.get_running_loop().create_task(self._teardown(reason))
+        # Kept: asyncio holds tasks weakly, and a socket left open stops the
+        # panel (one session at a time) from accepting the next login.
+        self._teardown_task = asyncio.get_running_loop().create_task(self._teardown(reason))
         self.on_close(reason)
 
     async def _read_loop(self) -> None:
