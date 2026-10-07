@@ -1,26 +1,40 @@
-"""The integration's options: the arm modes, an optional Home Assistant alarm
-code, clock sync (Connect) or how often to check the panel (Crestron),
-reading zones and areas again, and rebuilding the Alarm dashboard."""
+"""The integration's options, as a short menu:
+
+- the Night and Home buttons (and, over Crestron, how a keypad arm shows)
+- an optional Home Assistant alarm code
+- keeping the panel clock right (Connect), or how often to check the panel
+  (Crestron)
+- reading zones and areas again (Connect), and rebuilding the Alarm dashboard
+
+Saving an option the panel driver uses reconnects to the panel (see
+__init__.py); the others apply straight away."""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Any
 
 import voluptuous as vol
 from homeassistant.config_entries import ConfigFlowResult, OptionsFlow
 from homeassistant.exceptions import HomeAssistantError
-from homeassistant.helpers.selector import BooleanSelector, NumberSelector, NumberSelectorConfig, NumberSelectorMode
+from homeassistant.helpers.selector import (
+    BooleanSelector,
+    NumberSelector,
+    NumberSelectorConfig,
+    NumberSelectorMode,
+)
 
 from ..const import (
     CONF_ALARM_CODE,
     CONF_CODE_ARM_REQUIRED,
-    CONF_CREATE_DASHBOARD,
     CONF_PROTOCOL,
-    CONF_REDISCOVER,
     CONF_STATUS_POLL,
     CONF_TIME_SYNC,
     DEFAULT_STATUS_POLL,
+    HELP_DASHBOARD,
+    HELP_OPTIONS,
+    HELP_PART_ARMS,
     PROTOCOL_CONNECT,
 )
 from ..dashboard import async_create_dashboard
@@ -32,70 +46,127 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class TexecomOptionsFlow(OptionsFlow):
+    _read_task: asyncio.Task | None = None  # reading zones and areas again
+    _read_result: tuple[int, int] | None = None  # (zones, areas) read, or None if it failed
+
+    @property
+    def _is_connect(self) -> bool:
+        return self.config_entry.data[CONF_PROTOCOL] == PROTOCOL_CONNECT
+
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        entry = self.config_entry
-        is_connect = entry.data[CONF_PROTOCOL] == PROTOCOL_CONNECT
+        menu = ["arm_modes", "alarm_code"]
+        menu += ["clock", "rediscover"] if self._is_connect else ["status_poll"]
+        menu.append("dashboard")
+        return self.async_show_menu(step_id="init", menu_options=menu, description_placeholders={"help": HELP_OPTIONS})
+
+    # ─── Settings ───────────────────────────────────────────────────────────
+
+    async def async_step_arm_modes(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        crestron = not self._is_connect
         errors: dict[str, str] = {}
-        reload_for_layout = False
         if user_input is not None:
-            code = (user_input.get(CONF_ALARM_CODE) or "").strip()
             if error := arm_modes_error(user_input):
                 errors["base"] = error
-            elif code and not code.isdigit():
-                errors[CONF_ALARM_CODE] = "invalid_code_format"
             else:
-                options = arm_mode_options(user_input)
-                options[CONF_ALARM_CODE] = code or None
-                options[CONF_CODE_ARM_REQUIRED] = bool(user_input.get(CONF_CODE_ARM_REQUIRED))
-                if is_connect:
-                    options[CONF_TIME_SYNC] = bool(user_input.get(CONF_TIME_SYNC))
-                    if user_input.get(CONF_REDISCOVER):
-                        # Over the open session: the panel allows only one.
-                        try:
-                            info, zones, areas = await entry.runtime_data.async_rediscover()
-                        except (PanelError, AttributeError) as err:
-                            _LOGGER.debug("Re-reading the panel failed: %s", err)
-                            errors["base"] = "rediscover_failed"
-                        else:
-                            self.hass.config_entries.async_update_entry(
-                                entry, data={**entry.data, **layout_to_data(info, zones, areas)}
-                            )
-                            reload_for_layout = True
-                else:
-                    options[CONF_STATUS_POLL] = int(user_input[CONF_STATUS_POLL])
-                if not errors and user_input.get(CONF_CREATE_DASHBOARD):
-                    try:
-                        await async_create_dashboard(self.hass, entry)
-                    except HomeAssistantError:
-                        errors["base"] = "dashboard_failed"
-                if not errors:
-                    if reload_for_layout and options == dict(entry.options):
-                        # Changed options reload the entry anyway; two reloads
-                        # in a row would log in twice, which a SmartCom refuses.
-                        self.hass.config_entries.async_schedule_reload(entry.entry_id)
-                    return self.async_create_entry(data=options)
-
-        current = {**entry.options, **(user_input or {})}
-        schema = arm_modes_schema(current, crestron=not is_connect).schema
-        schema = {
-            **schema,
-            vol.Optional(CONF_ALARM_CODE, description={"suggested_value": current.get(CONF_ALARM_CODE)}): UDL_SELECTOR,
-            vol.Required(CONF_CODE_ARM_REQUIRED, default=current.get(CONF_CODE_ARM_REQUIRED, False)): BooleanSelector(),
-            vol.Required(CONF_CREATE_DASHBOARD, default=False): BooleanSelector(),
-        }
-        if is_connect:
-            schema[vol.Required(CONF_TIME_SYNC, default=current.get(CONF_TIME_SYNC, False))] = BooleanSelector()
-            schema[vol.Required(CONF_REDISCOVER, default=False)] = BooleanSelector()
-        else:
-            schema[vol.Required(CONF_STATUS_POLL, default=current.get(CONF_STATUS_POLL, DEFAULT_STATUS_POLL))] = (
-                NumberSelector(
-                    NumberSelectorConfig(min=0, max=600, step=10, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
-                )
-            )
+                return self._save(arm_mode_options(user_input))
+        current = {**self.config_entry.options, **(user_input or {})}
         return self.async_show_form(
-            step_id="init" if is_connect else "init_crestron",
-            data_schema=vol.Schema(schema),
+            step_id="arm_modes_crestron" if crestron else "arm_modes",
+            data_schema=arm_modes_schema(current, crestron),
             errors=errors,
+            description_placeholders={"help": HELP_PART_ARMS},
         )
 
-    async_step_init_crestron = async_step_init
+    async_step_arm_modes_crestron = async_step_arm_modes
+
+    async def async_step_alarm_code(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            code = (user_input.get(CONF_ALARM_CODE) or "").strip()
+            if code and not code.isdigit():
+                errors[CONF_ALARM_CODE] = "invalid_code_format"
+            else:
+                return self._save(
+                    {
+                        CONF_ALARM_CODE: code or None,
+                        CONF_CODE_ARM_REQUIRED: bool(user_input.get(CONF_CODE_ARM_REQUIRED)),
+                    }
+                )
+        current = {**self.config_entry.options, **(user_input or {})}
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_ALARM_CODE, description={"suggested_value": current.get(CONF_ALARM_CODE)}): (
+                    UDL_SELECTOR
+                ),
+                vol.Required(CONF_CODE_ARM_REQUIRED, default=current.get(CONF_CODE_ARM_REQUIRED, False)): (
+                    BooleanSelector()
+                ),
+            }
+        )
+        return self.async_show_form(step_id="alarm_code", data_schema=schema, errors=errors)
+
+    async def async_step_clock(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            return self._save({CONF_TIME_SYNC: bool(user_input.get(CONF_TIME_SYNC))})
+        default = self.config_entry.options.get(CONF_TIME_SYNC, False)
+        schema = vol.Schema({vol.Required(CONF_TIME_SYNC, default=default): BooleanSelector()})
+        return self.async_show_form(step_id="clock", data_schema=schema)
+
+    async def async_step_status_poll(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            return self._save({CONF_STATUS_POLL: int(user_input[CONF_STATUS_POLL])})
+        default = self.config_entry.options.get(CONF_STATUS_POLL, DEFAULT_STATUS_POLL)
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_STATUS_POLL, default=default): NumberSelector(
+                    NumberSelectorConfig(min=0, max=600, step=10, mode=NumberSelectorMode.BOX, unit_of_measurement="s")
+                )
+            }
+        )
+        return self.async_show_form(step_id="status_poll", data_schema=schema)
+
+    def _save(self, changes: dict[str, Any]) -> ConfigFlowResult:
+        return self.async_create_entry(data={**self.config_entry.options, **changes})
+
+    # ─── Actions ────────────────────────────────────────────────────────────
+
+    async def async_step_rediscover(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Reads zones and areas again over the open session (the panel allows
+        only one), with a progress screen meanwhile."""
+        if self._read_task is None:
+            self._read_task = self.hass.async_create_task(self._read_layout())
+        if not self._read_task.done():
+            return self.async_show_progress(
+                step_id="rediscover", progress_action="reading", progress_task=self._read_task
+            )
+        self._read_result, self._read_task = self._read_task.result(), None
+        return self.async_show_progress_done(next_step_id="rediscover_result")
+
+    async def async_step_rediscover_result(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if self._read_result is None:
+            return self.async_abort(reason="rediscover_failed")
+        zones, areas = self._read_result
+        return self.async_abort(
+            reason="rediscovered", description_placeholders={"zones": str(zones), "areas": str(areas)}
+        )
+
+    async def _read_layout(self) -> tuple[int, int] | None:
+        entry = self.config_entry
+        try:
+            info, zones, areas = await entry.runtime_data.async_rediscover()
+        except (PanelError, AttributeError) as err:
+            _LOGGER.debug("Re-reading the panel failed: %s", err)
+            return None
+        self.hass.config_entries.async_update_entry(entry, data={**entry.data, **layout_to_data(info, zones, areas)})
+        # A change to the stored data doesn't reload by itself; new zones need one.
+        self.hass.config_entries.async_schedule_reload(entry.entry_id)
+        return len(zones), len(areas)
+
+    async def async_step_dashboard(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is None:  # asks first: it replaces any changes made to the dashboard
+            return self.async_show_form(step_id="dashboard", data_schema=vol.Schema({}))
+        try:
+            await async_create_dashboard(self.hass, self.config_entry)
+        except HomeAssistantError:
+            return self.async_abort(reason="dashboard_failed", description_placeholders={"help": HELP_DASHBOARD})
+        return self.async_abort(reason="dashboard_created")

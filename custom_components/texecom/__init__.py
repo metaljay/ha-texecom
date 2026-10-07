@@ -2,7 +2,9 @@
 (SmartCom/ComIP) or a COM port set to Crestron.
 
 Setting up and unloading a config entry. The panel driver is built in
-factory.py; the notices it raises are in notifications.py and issues.py."""
+factory.py; the notices it raises are in notifications.py and issues.py.
+Changing an option the driver uses reloads the entry; the others apply at
+once."""
 
 from __future__ import annotations
 
@@ -14,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_CREATE_DASHBOARD, CONF_TIME_SYNC
+from .const import CONF_CREATE_DASHBOARD, CONF_TIME_SYNC, DRIVER_OPTIONS
 from .dashboard import async_create_dashboard
 from .entity import panel_device_info
 from .factory import create_panel
@@ -45,11 +47,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> b
             await async_create_dashboard(hass, entry)
         data = {k: v for k, v in entry.data.items() if k != CONF_CREATE_DASHBOARD}
         hass.config_entries.async_update_entry(entry, data=data)
-    options = dict(entry.options)
+    driver_options = {key: entry.options.get(key) for key in DRIVER_OPTIONS}
 
     async def options_updated(hass: HomeAssistant, entry: TexecomConfigEntry) -> None:
-        if dict(entry.options) != options:  # data-only updates don't need a reload
+        # Reconnecting costs up to a minute (the SmartCom is slow to let a new
+        # session in), so only when the driver uses what changed. Codes, names
+        # and notifications apply straight away.
+        if {key: entry.options.get(key) for key in DRIVER_OPTIONS} != driver_options:
             await hass.config_entries.async_reload(entry.entry_id)
+        else:
+            panel.notify()
 
     entry.async_on_unload(entry.add_update_listener(options_updated))
     return True

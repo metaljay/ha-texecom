@@ -40,6 +40,10 @@ DEFAULT_STATUS_POLL = 60
 TIME_SYNC_HOURS = 24
 CLOCK_DRIFT_LIMIT = 300  # seconds; more than this raises a Repairs notice (clock sync off)
 
+# Options a running panel driver depends on: changing one reconnects to the
+# panel. Others (codes, names, notifications) apply straight away.
+DRIVER_OPTIONS = (CONF_HOME_PART_ARM, CONF_NIGHT_PART_ARM, CONF_KEYPAD_ARM_MODE, CONF_TIME_SYNC, CONF_STATUS_POLL)
+
 # Help pages linked from the screens (links can't be written into strings.json).
 DOCS_URL = "https://github.com/metaljay/ha-texecom/blob/main/docs/user/"
 HELP_SETUP = DOCS_URL + "setup.md"

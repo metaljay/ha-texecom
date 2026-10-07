@@ -43,14 +43,26 @@ class TexecomAreaPanel(TexecomEntity, AlarmControlPanelEntity):
         device = child_device_info(hass, entry, f"area_{number}", f"{nice_name(name)} Alarm", f"Alarm area {number}")
         super().__init__(entry, panel, f"area_{number}", device, name)
         self.number = number
+        self._entry = entry
         features = AlarmControlPanelEntityFeature(0)
         if panel.can_control:  # without the UDL code (Crestron), state only
             for mode in panel.offered_modes:
                 features |= FEATURE_FOR_MODE[mode]
         self._attr_supported_features = features
-        self._code: str | None = entry.options.get(CONF_ALARM_CODE) or None
-        self._attr_code_format = CodeFormat.NUMBER if self._code else None
-        self._attr_code_arm_required = bool(self._code) and entry.options.get(CONF_CODE_ARM_REQUIRED, False)
+
+    # The code options are read each time, so changing them in Options takes
+    # effect without reconnecting to the panel.
+    @property
+    def _code(self) -> str | None:
+        return self._entry.options.get(CONF_ALARM_CODE) or None
+
+    @property
+    def code_format(self) -> CodeFormat | None:
+        return CodeFormat.NUMBER if self._code else None
+
+    @property
+    def code_arm_required(self) -> bool:
+        return bool(self._code) and self._entry.options.get(CONF_CODE_ARM_REQUIRED, False)
 
     @property
     def alarm_state(self) -> AlarmControlPanelState | None:
@@ -67,7 +79,7 @@ class TexecomAreaPanel(TexecomEntity, AlarmControlPanelEntity):
         return {"area_number": self.number, "part_arm": area.part_arm}
 
     def _check_code(self, code: str | None, arming: bool) -> None:
-        if not self._code or (arming and not self._attr_code_arm_required):
+        if not self._code or (arming and not self.code_arm_required):
             return
         if code != self._code:
             raise ServiceValidationError(translation_domain=DOMAIN, translation_key="invalid_code")

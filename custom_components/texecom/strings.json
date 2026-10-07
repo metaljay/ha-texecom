@@ -150,45 +150,78 @@
     "step": {
       "init": {
         "title": "Texecom options",
-        "data": {
-          "night_part_arm": "'Night' uses",
-          "home_part_arm": "'Home' uses",
-          "alarm_code": "Home Assistant alarm code (optional)",
-          "code_arm_required": "Ask for the code when arming too",
-          "time_sync": "Keep the panel clock right",
+        "description": "What would you like to change? See [what each option does]({help}).",
+        "menu_options": {
+          "arm_modes": "Night and Home buttons",
+          "alarm_code": "Home Assistant alarm code",
+          "clock": "Panel clock",
+          "status_poll": "Checking the panel",
           "rediscover": "Read zones and areas from the panel again",
-          "create_dashboard": "Create or refresh the Alarm dashboard"
-        },
-        "data_description": {
-          "alarm_code": "A code Home Assistant asks for before disarming. It's checked by Home Assistant, not the panel. Leave empty for no code.",
-          "time_sync": "Checks the panel clock once a day, using Home Assistant's time zone, and corrects it if it's more than a minute out.",
-          "rediscover": "After your installer changes zones or names. (This also happens by itself when engineer programming ends.)",
-          "create_dashboard": "Rebuilds the Alarm dashboard from the current zones (any changes you made to it are replaced)."
+          "dashboard": "Create or refresh the Alarm dashboard"
         }
       },
-      "init_crestron": {
-        "title": "Texecom options",
+      "arm_modes": {
+        "title": "Night and Home buttons",
+        "description": "**'Away'** always arms the whole alarm. Choose the part arm behind **'Night'** and **'Home'**, or *'Not used'* to hide that button. Unsure? See [part arms explained]({help}).\n\nSaving reconnects to the panel, which can take up to a minute.",
+        "data": {
+          "night_part_arm": "'Night' uses",
+          "home_part_arm": "'Home' uses"
+        }
+      },
+      "arm_modes_crestron": {
+        "title": "Arm buttons",
+        "description": "**'Away'** always arms the whole alarm. Choose the part arm behind **'Night'** and **'Home'**, or *'Not used'* to hide that button. Over Crestron, part arms work for area 1 only. Unsure? See [part arms explained]({help}).\n\nCrestron doesn't say whether the panel was fully or part armed when it's set at the keypad: choose how that should show.",
         "data": {
           "night_part_arm": "'Night' uses",
           "home_part_arm": "'Home' uses",
-          "keypad_arm_mode": "When armed at the keypad, show as",
-          "alarm_code": "Home Assistant alarm code (optional)",
-          "code_arm_required": "Ask for the code when arming too",
-          "status_poll": "Check the panel every",
-          "create_dashboard": "Create or refresh the Alarm dashboard"
+          "keypad_arm_mode": "When armed at the keypad, show as"
+        }
+      },
+      "alarm_code": {
+        "title": "Home Assistant alarm code",
+        "description": "A code Home Assistant asks for before disarming. It's checked by Home Assistant, not the panel, and has nothing to do with your keypad codes. Leave it empty for no code.",
+        "data": {
+          "alarm_code": "Alarm code (optional)",
+          "code_arm_required": "Ask for the code when arming too"
         },
         "data_description": {
-          "alarm_code": "A code Home Assistant asks for before disarming. It's checked by Home Assistant, not the panel. Leave empty for no code.",
-          "status_poll": "Asks the panel whether it's armed (corrects missed events, and reconnects if the panel goes quiet). 0 turns it off.",
-          "create_dashboard": "Rebuilds the Alarm dashboard from the current zones (any changes you made to it are replaced)."
+          "code_arm_required": "If you use Apple Home, the HomeKit Bridge then needs the code in its settings too, or arming from the Home app fails."
         }
+      },
+      "clock": {
+        "title": "Panel clock",
+        "description": "The panel's clock resets if it loses all power (mains and battery). Home Assistant can keep it right: it checks once a day and when it connects, using Home Assistant's time zone, and sets it if it's more than a minute out.\n\nSaving reconnects to the panel, which can take up to a minute.",
+        "data": {
+          "time_sync": "Keep the panel clock right"
+        }
+      },
+      "status_poll": {
+        "title": "Checking the panel",
+        "description": "How often Home Assistant asks the panel whether it's armed. It corrects missed events, and reconnects if the panel goes quiet. 0 turns it off.\n\nSaving reconnects to the panel.",
+        "data": {
+          "status_poll": "Check the panel every"
+        }
+      },
+      "dashboard": {
+        "title": "Create or refresh the Alarm dashboard",
+        "description": "Builds the Alarm dashboard from the current zones and puts it in the sidebar. If you already have it, any changes you made to it are replaced."
+      },
+      "rediscover": {
+        "title": "Reading the panel"
       }
+    },
+    "progress": {
+      "reading": "Reading the zones and areas from the panel. This takes about ten seconds."
     },
     "error": {
       "same_part_arm": "Night and Home can't use the same part arm.",
-      "invalid_code_format": "Use digits only.",
+      "invalid_code_format": "Use digits only."
+    },
+    "abort": {
+      "rediscovered": "Read the panel again. Zones in use: {zones}. Areas: {areas}. Home Assistant reconnects to use them, which can take up to a minute.",
       "rediscover_failed": "Couldn't read the panel just now (it may be busy, e.g. reporting an alarm). Try again in a minute.",
-      "dashboard_failed": "Couldn't create the dashboard on this version of Home Assistant. The README has a version you can paste in."
+      "dashboard_created": "The Alarm dashboard is ready: it's in the sidebar.",
+      "dashboard_failed": "Couldn't create the dashboard on this version of Home Assistant. [Build the dashboard yourself]({help}) has a version you can paste in."
     }
   },
   "selector": {
