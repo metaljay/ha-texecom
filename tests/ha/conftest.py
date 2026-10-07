@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -37,3 +38,10 @@ async def fake(socket_enabled):
     await panel.start()
     yield panel
     await panel.close()
+
+
+@pytest.fixture
+def no_setup():
+    """Flow tests stop at the entry: don't connect."""
+    with patch("custom_components.texecom.async_setup_entry", return_value=True) as mock:
+        yield mock

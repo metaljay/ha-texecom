@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 from typing import TYPE_CHECKING
 
+from homeassistant import config_entries
+from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.texecom.connect import discovery as connect_discovery
@@ -15,6 +18,7 @@ if TYPE_CHECKING:
     from fake_connect_panel import FakeConnectPanel
 
 UDL = "1234"
+ALARM = "alarm_control_panel.texecom_house"
 
 
 async def wait_for(predicate, timeout: float = 5.0) -> None:
@@ -53,3 +57,23 @@ async def setup_connect(hass, fake: FakeConnectPanel, options: dict | None = Non
     await wait_for(lambda: entry.runtime_data.connected)
     await hass.async_block_till_done()
     return entry
+
+
+def state(hass) -> str:
+    return hass.states.get(ALARM).state
+
+
+def free_port() -> int:
+    with socket.socket() as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+async def start(hass, choice: str, sub_choice: str | None = None):
+    result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
+    assert result["type"] is FlowResultType.MENU
+    result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": choice})
+    if sub_choice:
+        assert result["type"] is FlowResultType.MENU
+        result = await hass.config_entries.flow.async_configure(result["flow_id"], {"next_step_id": sub_choice})
+    return result
