@@ -1,0 +1,23 @@
+{
+  "entity": {
+    "sensor": {
+      "display": {
+        "default": "mdi:dialpad"
+      },
+      "battery_voltage": {
+        "default": "mdi:car-battery"
+      },
+      "battery_current": {
+        "default": "mdi:car-battery"
+      }
+    },
+    "binary_sensor": {
+      "mains": {
+        "default": "mdi:power-plug",
+        "state": {
+          "off": "mdi:power-plug-off"
+        }
+      }
+    }
+  }
+}
