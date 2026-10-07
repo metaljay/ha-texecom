@@ -278,6 +278,34 @@ async def test_system_tampers(fake):
         await panel.stop()
 
 
+async def test_simulated_panel_commands(fake):
+    """The --commands mode of the simulated panel, used to try things on a test
+    Home Assistant: each command reaches the driver as a real panel's would."""
+    from fake_connect_panel import run_command
+
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        assert run_command(fake, "zone 2 open") == "ok: zone 2 open"
+        await wait_for(lambda: panel.zones[2].active)
+        run_command(fake, "lid open")
+        await wait_for(lambda: panel.extra.get("tampers") == {"Panel Box Tamper"})
+        run_command(fake, "Mains Off")
+        await wait_for(lambda: panel.extra.get("faults") == {"AC Fail"})
+        run_command(fake, "user 3")
+        run_command(fake, "armfail 3")
+        await wait_for(lambda: [t for t, _d in events] == ["tamper", "fault", "user", "arm_failed"])
+        run_command(fake, "area part 2")
+        await wait_for(lambda: panel.areas[1].state == ARMED_HOME)
+        run_command(fake, "refuse disarm")
+        with pytest.raises(PanelError, match="refused"):
+            await panel.disarm(1)
+        assert run_command(fake, "zone two open") == "? numbers only: 'zone two open'"
+        assert run_command(fake, "sound the bells").startswith("? 'sound the bells'\nCommands")
+    finally:
+        await panel.stop()
+
+
 async def test_mains_fault_and_restore(fake):
     events = []
     panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))

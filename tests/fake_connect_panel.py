@@ -1,9 +1,11 @@
 """Fake Texecom Connect panel (Premier Elite 24, one area) for tests and demos.
 
-    python3 tests/fake_connect_panel.py [port] [--demo]
+    python3 tests/fake_connect_panel.py [port] [--demo] [--clock-reset] [--commands]
 
 --demo uses friendlier zone names (for screenshots) and wanders a few zones
-between active and secure.
+between active and secure. --clock-reset starts its clock at 31 Oct 2023.
+--commands reads commands from standard input (see COMMANDS below), so a test
+Home Assistant can be shown tampers, mains failures, keypad users and alarms.
 """
 
 from __future__ import annotations
@@ -223,6 +225,68 @@ class FakeConnectPanel:
             reply(bytes([P.NAK]))
 
 
+COMMANDS = """Commands, one per line:
+  zone N open|closed|tamper|alarm    zone N changes (alarm: active and alarmed)
+  area off|exit|entry|armed|alarm    the area changes
+  area part N                        the area is part armed with part arm N
+  user N                             user N enters a code at a keypad
+  mains off|on                       mains fails (logged at once), or comes back (seen in the power readings)
+  lid open|closed                    the panel's lid (Panel Box Tamper)
+  aux open|closed                    a detector's cover (Auxiliary Tamper, the shared circuit)
+  armfail N                          arming failed: zone N was active when the exit time ended
+  drop                               hang up, as when the panel reports an alarm
+  refuse arm|disarm                  say no to the next arm or disarm from Home Assistant
+  log TYPE GROUP PARAMETER [AREAS]   any event-log entry"""
+
+ZONE_BITS = {"open": 0x01, "closed": 0x00, "tamper": 0x02, "alarm": 0x11}
+AREA_STATES = {"off": 0, "exit": 1, "entry": 2, "armed": 3, "alarm": 5}
+TAMPER_LOGS = {"lid": 60, "aux": 62}
+TAMPER_GROUPS = {"open": 11, "closed": 12}
+
+
+def run_command(panel: FakeConnectPanel, line: str) -> str:
+    """Does one command from COMMANDS to the panel; returns what happened."""
+    words = line.lower().split()
+    try:
+        match words:
+            case ["zone", n, state] if state in ZONE_BITS:
+                panel.set_zone(int(n), ZONE_BITS[state])
+            case ["area", "part", n]:
+                panel.set_area(4, int(n))
+            case ["area", state] if state in AREA_STATES:
+                panel.set_area(AREA_STATES[state])
+            case ["user", n]:
+                panel.send_user(int(n))
+            case ["mains", "off"]:
+                panel.on_battery = True
+                panel.send_log(47, 9, 0, areas=0)  # AC Fail, as a real panel logs it
+            case ["mains", "on"]:
+                panel.on_battery = False  # a real panel doesn't log the restore
+            case [place, state] if place in TAMPER_LOGS and state in TAMPER_GROUPS:
+                panel.send_log(TAMPER_LOGS[place], TAMPER_GROUPS[state], 0, areas=0)
+            case ["armfail", n]:
+                panel.send_log(85, 0, int(n))
+            case ["drop"]:
+                panel.drop_all()
+            case ["refuse", "arm" | "disarm" as what]:
+                panel.nak_next[P.CMD_ARM_AREA if what == "arm" else P.CMD_DISARM_AREA] = 1
+            case ["log", log_type, group, parameter, *areas] if len(areas) <= 1:
+                panel.send_log(int(log_type), int(group), int(parameter), *(int(a) for a in areas))
+            case _:
+                return f"? {line.strip()!r}\n{COMMANDS}"
+    except ValueError:
+        return f"? numbers only: {line.strip()!r}"
+    return f"ok: {line.strip()}"
+
+
+async def _read_commands(panel: FakeConnectPanel) -> None:
+    loop = asyncio.get_running_loop()
+    print(COMMANDS, flush=True)
+    while line := await loop.run_in_executor(None, sys.stdin.readline):
+        if line.strip():
+            print(run_command(panel, line), flush=True)
+
+
 async def _main() -> None:
     port = int(next((a for a in sys.argv[1:] if a.isdigit()), "10001"))
     demo = "--demo" in sys.argv
@@ -231,6 +295,8 @@ async def _main() -> None:
         panel.clock_offset = datetime(2023, 10, 31, 12, 0) - datetime.now()
     await panel.start(port, "0.0.0.0")
     print(f"Fake Texecom Connect panel on port {port} (UDL 1234)", flush=True)
+    if "--commands" in sys.argv:
+        reader = asyncio.create_task(_read_commands(panel))  # noqa: F841  (kept: asyncio holds tasks weakly)
     while True:
         await asyncio.sleep(random.uniform(8, 20) if demo else 3600)
         if demo:
