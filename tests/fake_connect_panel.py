@@ -217,6 +217,8 @@ async def _main() -> None:
     port = int(next((a for a in sys.argv[1:] if a.isdigit()), "10001"))
     demo = "--demo" in sys.argv
     panel = FakeConnectPanel(zones=DEMO_ZONES if demo else None, exit_delay=15 if demo else 2)
+    if "--clock-reset" in sys.argv:  # as after a full power-down: 31 Oct 2023
+        panel.clock_offset = datetime(2023, 10, 31, 12, 0) - datetime.now()
     await panel.start(port, "0.0.0.0")
     print(f"Fake Texecom Connect panel on port {port} (UDL 1234)", flush=True)
     while True:

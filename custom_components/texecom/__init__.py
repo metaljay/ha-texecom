@@ -14,9 +14,11 @@ from homeassistant.const import CONF_HOST, CONF_PORT, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import issue_registry as ir
 
 from .connect.panel import ConnectPanel
 from .const import (
+    CLOCK_DRIFT_LIMIT,
     CONF_AREA_COUNT,
     CONF_AREAS,
     CONF_BAUD_RATE,
@@ -36,6 +38,7 @@ from .const import (
     CONNECTION_SERIAL,
     DEFAULT_BAUD_RATE,
     DEFAULT_STATUS_POLL,
+    DOMAIN,
     EVENT,
     PROTOCOL_CONNECT,
     TIME_SYNC_HOURS,
@@ -50,6 +53,19 @@ _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR]
 
 type TexecomConfigEntry = ConfigEntry[TexecomPanel]
+
+
+def describe_drift(drift: int) -> str:
+    """E.g. "about 3 years behind", "12 minutes ahead"."""
+    seconds = abs(drift)
+    for unit, size in (("year", 365 * 86400), ("day", 86400), ("hour", 3600), ("minute", 60)):
+        if seconds >= size:
+            count = round(seconds / size)
+            amount = f"{count} {unit}{'s' if count != 1 else ''}"
+            break
+    else:
+        amount = f"{seconds} seconds"
+    return f"about {amount} {'ahead' if drift > 0 else 'behind'}"
 
 
 def zones_from_data(data: list[dict[str, Any]]) -> list[PanelZone]:
@@ -88,6 +104,23 @@ def create_panel(hass: HomeAssistant, entry: ConfigEntry) -> TexecomPanel:
         def auth_failed() -> None:
             entry.async_start_reauth(hass)
 
+        @callback
+        def clock_drift(drift: int) -> None:
+            issue_id = f"panel_clock_{entry.entry_id}"
+            if abs(drift) <= CLOCK_DRIFT_LIMIT:
+                ir.async_delete_issue(hass, DOMAIN, issue_id)
+                return
+            ir.async_create_issue(
+                hass,
+                DOMAIN,
+                issue_id,
+                is_fixable=True,
+                severity=ir.IssueSeverity.WARNING,
+                translation_key="panel_clock_wrong",
+                translation_placeholders={"drift": describe_drift(drift)},
+                data={"entry_id": entry.entry_id},
+            )
+
         return ConnectPanel(
             host=data[CONF_HOST],
             port=data[CONF_PORT],
@@ -101,6 +134,7 @@ def create_panel(hass: HomeAssistant, entry: ConfigEntry) -> TexecomPanel:
             on_event=fire,
             on_layout_changed=layout_changed,
             on_auth_failed=auth_failed,
+            on_clock_drift=clock_drift,
         )
 
     zones = [PanelZone(n, f"Zone {n}") for n in range(1, data[CONF_ZONE_COUNT] + 1)]
@@ -129,6 +163,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> b
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     # Connects in the background: entities show as unavailable until then.
     await panel.start()
+    if entry.options.get(CONF_TIME_SYNC):
+        ir.async_delete_issue(hass, DOMAIN, f"panel_clock_{entry.entry_id}")
     if entry.data.get(CONF_CREATE_DASHBOARD):
         # Asked for at the end of setup; done once the entities exist.
         with contextlib.suppress(HomeAssistantError):

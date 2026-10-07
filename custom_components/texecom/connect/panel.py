@@ -113,6 +113,7 @@ class ConnectPanel(TexecomPanel):
         on_event: Callable[[str, dict[str, Any]], None] | None = None,
         on_layout_changed: Callable[[PanelInfo, list[PanelZone], list[PanelArea]], None] | None = None,
         on_auth_failed: Callable[[], None] | None = None,
+        on_clock_drift: Callable[[int], None] | None = None,
         timing: Timing | None = None,
         reconnect_min: float = RECONNECT_MIN,
     ) -> None:
@@ -127,6 +128,8 @@ class ConnectPanel(TexecomPanel):
         self.on_event = on_event or (lambda _t, _d: None)
         self.on_layout_changed = on_layout_changed
         self.on_auth_failed = on_auth_failed
+        # Told the clock drift (seconds) once a session, when not syncing it.
+        self.on_clock_drift = on_clock_drift
         self.timing = timing
         self.reconnect_min = reconnect_min
         self.client: ConnectClient | None = None
@@ -229,11 +232,22 @@ class ConnectPanel(TexecomPanel):
                 await self.refresh()
                 await self.read_power()
                 await self.read_display()
+                await self._check_clock()
                 return
             except PanelBusyError:
                 if attempt == 2:
                     raise
                 await asyncio.sleep(1)
+
+    async def _check_clock(self) -> None:
+        """A full power-down resets the panel clock (seen on a real panel: to
+        31 Oct 2023). With clock sync off, report how far out it is."""
+        if self.time_sync_seconds > 0 or not self.on_clock_drift or not self.client:
+            return
+        clock = await self.client.date_time()
+        if clock:
+            now = datetime.now(self.time_zone).replace(tzinfo=None, microsecond=0)
+            self.on_clock_drift(int((datetime(*clock) - now).total_seconds()))
 
     # ─── State ──────────────────────────────────────────────────────────────
 

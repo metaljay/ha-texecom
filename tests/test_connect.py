@@ -310,6 +310,17 @@ async def test_mains_restore_comes_from_power_readings(fake):
         await panel.stop()
 
 
+async def test_clock_drift_is_reported_when_not_syncing(fake):
+    drifts = []
+    fake.clock_offset = timedelta(days=-700)
+    panel = await make_panel(fake, on_clock_drift=drifts.append)
+    try:
+        await wait_for(lambda: drifts)
+        assert drifts[0] < -700 * 86400 + 120
+    finally:
+        await panel.stop()
+
+
 async def test_auth_failure_stops_retrying(fake):
     calls = []
     info, zones, areas = await probe("127.0.0.1", fake.port, "1234")

@@ -38,3 +38,4 @@ DEFAULT_BAUD_RATE = 19200
 DEFAULT_UDL = "1234"
 DEFAULT_STATUS_POLL = 60
 TIME_SYNC_HOURS = 24
+CLOCK_DRIFT_LIMIT = 300  # seconds; more than this raises a Repairs notice (clock sync off)
