@@ -17,7 +17,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from . import TexecomConfigEntry
 from .const import CONF_ALARM_CODE, CONF_CODE_ARM_REQUIRED, DOMAIN
 from .entity import TexecomEntity, child_device_info, nice_name
-from .panel import PanelError, TexecomPanel
+from .panel import PanelError, PanelNotConnected, PanelRefused, TexecomPanel
 
 FEATURE_FOR_MODE = {
     "away": AlarmControlPanelEntityFeature.ARM_AWAY,
@@ -75,6 +75,10 @@ class TexecomAreaPanel(TexecomEntity, AlarmControlPanelEntity):
     async def _run(self, request) -> None:
         try:
             await request
+        except PanelNotConnected as err:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="not_connected") from err
+        except PanelRefused as err:
+            raise HomeAssistantError(translation_domain=DOMAIN, translation_key="refused") from err
         except PanelError as err:
             raise HomeAssistantError(
                 translation_domain=DOMAIN,

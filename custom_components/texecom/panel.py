@@ -54,6 +54,14 @@ class PanelError(Exception):
     """An arm/disarm request failed or the panel refused it."""
 
 
+class PanelNotConnected(PanelError):
+    """There's no connection to the panel just now (it reconnects by itself)."""
+
+
+class PanelRefused(PanelError):
+    """The panel answered, but refused the request."""
+
+
 @dataclass
 class PanelZone:
     number: int

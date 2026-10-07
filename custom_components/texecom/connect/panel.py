@@ -25,6 +25,8 @@ from ..panel import (
     PanelArea,
     PanelError,
     PanelInfo,
+    PanelNotConnected,
+    PanelRefused,
     PanelZone,
     TexecomPanel,
 )
@@ -333,7 +335,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
 
     def _ready_client(self) -> ConnectClient:
         if not self.connected or not self.client:
-            raise PanelError("not connected to the panel")
+            raise PanelNotConnected("not connected to the panel")
         return self.client
 
     @staticmethod
@@ -343,7 +345,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         except ConnectError as err:
             raise PanelError(f"{what} failed: {err}") from err
         if not ok:
-            raise PanelError(f"the panel refused {what}")
+            raise PanelRefused(f"the panel refused {what}")
 
     def diagnostics(self) -> dict[str, Any]:
         return {

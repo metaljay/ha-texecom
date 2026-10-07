@@ -12,7 +12,7 @@ import time
 from collections.abc import Callable
 from typing import Any
 
-from ..panel import PanelError
+from ..panel import PanelError, PanelNotConnected
 from . import protocol as P
 
 _LOGGER = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ class ConnectionMixin:
 
     def _write(self, data: bytes) -> None:
         if not self._writer:
-            raise CommandFailed("not connected to the panel")
+            raise PanelNotConnected("not connected to the panel")
         self._writer.write(data)
 
     def send_query(self, text: str) -> bool:
@@ -206,7 +206,7 @@ class ConnectionMixin:
             raise PanelError("arming needs the UDL code: add it in the integration's options")
         async with self._lock:
             if not self._writer:
-                raise PanelError("not connected to the panel")
+                raise PanelNotConnected("not connected to the panel")
             self._busy = True
             try:
                 try:

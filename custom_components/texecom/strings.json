@@ -254,6 +254,12 @@
     },
     "command_failed": {
       "message": "The panel didn't accept the request: {error}"
+    },
+    "not_connected": {
+      "message": "Home Assistant isn't connected to the panel just now. It reconnects by itself, so try again in a minute. Panel connection, on the panel's device, shows the link."
+    },
+    "refused": {
+      "message": "The panel refused. The keypad usually shows why, for example a fault, a tamper, or something that needs attention."
     }
   },
   "issues": {
