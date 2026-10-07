@@ -293,9 +293,9 @@ class TexecomConfigFlow(ConfigFlow, domain=DOMAIN):
             if error := _arm_modes_error(user_input):
                 errors["base"] = error
             else:
-                return self.async_create_entry(
-                    title=self._title(), data=self._data, options=_arm_mode_options(user_input)
-                )
+                # The dashboard is built once the entities exist (in setup).
+                data = {**self._data, CONF_CREATE_DASHBOARD: bool(user_input.get(CONF_CREATE_DASHBOARD))}
+                return self.async_create_entry(title=self._title(), data=data, options=_arm_mode_options(user_input))
         placeholders = {"zones": "", "areas": ""}
         if not crestron:
             placeholders = {

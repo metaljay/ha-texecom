@@ -73,9 +73,12 @@ async def async_setup_entry(
     async_add_entities(entities)
 
 
-class TexecomZoneSensor(TexecomEntity, BinarySensorEntity):
-    _attr_name = None  # the zone's device name, e.g. "Front Door"
+class TexecomBinarySensor(TexecomEntity, BinarySensorEntity):
     _entity_domain = "binary_sensor"
+
+
+class TexecomZoneSensor(TexecomBinarySensor):
+    _attr_name = None  # the zone's device name, e.g. "Front Door"
 
     def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel, number: int, device: DeviceInfo) -> None:
         super().__init__(entry, panel, f"zone_{number}", device, panel.zones[number].name)
@@ -98,12 +101,11 @@ class TexecomZoneSensor(TexecomEntity, BinarySensorEntity):
         return attrs
 
 
-class TexecomZoneTamperSensor(TexecomEntity, BinarySensorEntity):
+class TexecomZoneTamperSensor(TexecomBinarySensor):
     _attr_device_class = BinarySensorDeviceClass.TAMPER
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_entity_registry_enabled_default = False
     _attr_translation_key = "zone_tamper"
-    _entity_domain = "binary_sensor"
 
     def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel, number: int, device: DeviceInfo) -> None:
         super().__init__(entry, panel, f"zone_{number}_tamper", device, f"{panel.zones[number].name} tamper")
@@ -114,7 +116,7 @@ class TexecomZoneTamperSensor(TexecomEntity, BinarySensorEntity):
         return self.panel.zones[self.number].tampered
 
 
-class TexecomSystemTamperSensor(TexecomEntity, BinarySensorEntity):
+class TexecomSystemTamperSensor(TexecomBinarySensor):
     """On while the panel reports a tamper that isn't a zone: its lid, the
     shared detector tamper circuit, a keypad, the bell box..."""
 
@@ -122,7 +124,7 @@ class TexecomSystemTamperSensor(TexecomEntity, BinarySensorEntity):
     _attr_translation_key = "system_tamper"
 
     def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel) -> None:
-        super().__init__(entry, panel, "system_tamper")
+        super().__init__(entry, panel, "system_tamper", object_id="tamper")
 
     @property
     def is_on(self) -> bool:
@@ -133,14 +135,14 @@ class TexecomSystemTamperSensor(TexecomEntity, BinarySensorEntity):
         return {"sources": sorted(self.panel.extra.get("tampers", ()))}
 
 
-class TexecomProblemSensor(TexecomEntity, BinarySensorEntity):
+class TexecomProblemSensor(TexecomBinarySensor):
     """On while the panel reports a fault: mains, battery, communication..."""
 
     _attr_device_class = BinarySensorDeviceClass.PROBLEM
     _attr_translation_key = "problem"
 
     def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel) -> None:
-        super().__init__(entry, panel, "problem")
+        super().__init__(entry, panel, "problem", object_id="problem")
 
     @property
     def is_on(self) -> bool:
@@ -151,27 +153,27 @@ class TexecomProblemSensor(TexecomEntity, BinarySensorEntity):
         return {"sources": sorted(self.panel.extra.get("faults", ()))}
 
 
-class TexecomMainsSensor(TexecomEntity, BinarySensorEntity):
+class TexecomMainsSensor(TexecomBinarySensor):
     """Mains power to the panel (off while it runs on its battery)."""
 
     _attr_device_class = BinarySensorDeviceClass.POWER
     _attr_translation_key = "mains"
 
     def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel) -> None:
-        super().__init__(entry, panel, "mains")
+        super().__init__(entry, panel, "mains", object_id="mains_power")
 
     @property
     def is_on(self) -> bool:
         return not (self.panel.extra.get("faults", set()) & MAINS_FAULTS)
 
 
-class TexecomConnectionSensor(TexecomEntity, BinarySensorEntity):
+class TexecomConnectionSensor(TexecomBinarySensor):
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "connection"
 
     def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel) -> None:
-        super().__init__(entry, panel, "connection")
+        super().__init__(entry, panel, "connection", object_id="panel_connection")
 
     @property
     def available(self) -> bool:

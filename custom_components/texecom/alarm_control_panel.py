@@ -16,7 +16,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import TexecomConfigEntry
 from .const import CONF_ALARM_CODE, CONF_CODE_ARM_REQUIRED, DOMAIN
-from .entity import TexecomEntity, child_device_info
+from .entity import TexecomEntity, child_device_info, nice_name
 from .panel import PanelError, TexecomPanel
 
 FEATURE_FOR_MODE = {
@@ -34,12 +34,13 @@ async def async_setup_entry(
 
 
 class TexecomAreaPanel(TexecomEntity, AlarmControlPanelEntity):
-    _attr_name = None  # the area's device name, e.g. "House"
+    _attr_name = None  # the area's device name, e.g. "House alarm"
+    _attr_translation_key = "area"  # state names, e.g. "Off (disarmed)"
     _entity_domain = "alarm_control_panel"
 
     def __init__(self, hass: HomeAssistant, entry: TexecomConfigEntry, panel: TexecomPanel, number: int) -> None:
         name = panel.areas[number].name
-        device = child_device_info(hass, entry, f"area_{number}", name, f"Area {number}")
+        device = child_device_info(hass, entry, f"area_{number}", f"{nice_name(name)} alarm", f"Alarm area {number}")
         super().__init__(entry, panel, f"area_{number}", device, name)
         self.number = number
         features = AlarmControlPanelEntityFeature(0)

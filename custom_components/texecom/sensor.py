@@ -33,6 +33,7 @@ async def async_setup_entry(
 
 
 class TexecomPowerSensor(TexecomEntity, SensorEntity):
+    _entity_domain = "sensor"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_state_class = SensorStateClass.MEASUREMENT
 
@@ -46,7 +47,7 @@ class TexecomPowerSensor(TexecomEntity, SensorEntity):
         unit: str,
         enabled: bool,
     ) -> None:
-        super().__init__(entry, panel, key)
+        super().__init__(entry, panel, key, object_id=key)
         self._attribute = attribute
         self._attr_translation_key = key
         self._attr_device_class = device_class
@@ -68,11 +69,12 @@ class TexecomPowerSensor(TexecomEntity, SensorEntity):
 class TexecomDisplaySensor(TexecomEntity, SensorEntity):
     """The text on the keypads (checked every 30 seconds)."""
 
+    _entity_domain = "sensor"
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_translation_key = "display"
 
     def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel) -> None:
-        super().__init__(entry, panel, "display")
+        super().__init__(entry, panel, "display", object_id="keypad_display")
 
     @property
     def available(self) -> bool:

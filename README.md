@@ -57,7 +57,9 @@ Enter the SmartCom's **IP address**, leave the **port** at **10001**, and enter 
 
 <img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/setup-3-arm-modes.png" width="420" alt="Found your panel: choose the part arms for Night and Home">
 
-Home Assistant shows what it found. **Away** always sets the whole alarm. Choose which **part arm** sits behind **Night** and **Home** (or *Not used* to hide that button). See [Know your part arms](#part-arms) if you're unsure.
+Home Assistant shows what it found. **'Away'** always arms the whole alarm. Choose which **part arm** sits behind **'Night'** and **'Home'** (or *'Not used'* to hide that button). See [Know your part arms](#part-arms) if you're unsure.
+
+Your **area** (usually one, named by your installer, e.g. *House*) becomes the **alarm**: a device called *House alarm*. The panel itself appears as *Premier Elite 24 panel*, and each zone as its own device.
 
 Leave **Add an Alarm dashboard to the sidebar** ticked, and click **Submit**. That's it. 🎉
 
@@ -87,6 +89,7 @@ When the panel is part armed from the keypad, Home Assistant shows the mode you 
 
 <img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/security.png" width="760" alt="Home Assistant's Security page showing the alarm, doors and smoke detector">
 
+- **States** read *Off (disarmed)*, *Arming…*, *Armed: Away* / *Night* / *Home*, *Entry delay* and *Alarm!*.
 - **The Alarm dashboard** (in the sidebar) has the arm buttons, the last day's activity, panel health and every zone. Edit it like any dashboard, or rebuild it from **Configure → Create or refresh the Alarm dashboard**.
 - **Home Assistant's own Overview** picks the alarm up as well: its **Security** summary lists the alarm, doors and smoke detectors, and each room shows its zones.
 - **Apple Home**: see [Apple Home](#apple-home).

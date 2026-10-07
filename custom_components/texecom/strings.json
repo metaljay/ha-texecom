@@ -66,11 +66,11 @@
       },
       "arm_modes": {
         "title": "Found your panel",
-        "description": "**Areas:** {areas}\n**Zones:** {zones}\n\nAway always sets the whole alarm. Your installer may also have set up **part arms** that leave some zones off: for example Part Arm 1 at night, so you can move around upstairs. Pick the part arm for each Home Assistant mode, or *Not used* to hide that button.\n\nUnsure? Ask your installer, or check which zones each part arm omits in Wintex.",
+        "description": "**Areas** (parts of the system you arm separately, usually just one): {areas}\n**Zones:** {zones}\n\n**'Away'** always arms the whole alarm. Your installer may also have set up **part arms**, which leave some zones off: for example, Part Arm 1 at night, so you can move around upstairs while downstairs is armed.\n\nChoose the part arm behind **'Night'** and **'Home'**, or *'Not used'* to hide that button.\n\nUnsure? Ask your installer, or check which zones each part arm leaves off in Wintex.",
         "data": {
-          "night_part_arm": "Night uses",
-          "home_part_arm": "Home uses",
-          "create_dashboard": "Add an Alarm dashboard to the sidebar"
+          "night_part_arm": "'Night' uses",
+          "home_part_arm": "'Home' uses",
+          "create_dashboard": "Add an 'Alarm' dashboard to the sidebar"
         },
         "data_description": {
           "create_dashboard": "Built from Home Assistant's own cards: the alarm with its arm buttons, recent activity, and every zone grouped by type. You can edit or delete it like any dashboard."
@@ -78,12 +78,12 @@
       },
       "arm_modes_crestron": {
         "title": "Arm modes",
-        "description": "Away always sets the whole alarm. Pick the part arm for Night and Home, or *Not used* to hide that button. Over Crestron, part arms work for area 1 only.\n\nCrestron doesn't say whether the panel was fully or part armed when it's set at the keypad: choose how that should show.",
+        "description": "**'Away'** always arms the whole alarm. Choose the part arm behind **'Night'** and **'Home'**, or *'Not used'* to hide that button. Over Crestron, part arms work for area 1 only.\n\nCrestron doesn't say whether the panel was fully or part armed when it's set at the keypad: choose how that should show.",
         "data": {
-          "night_part_arm": "Night uses",
-          "home_part_arm": "Home uses",
+          "night_part_arm": "'Night' uses",
+          "home_part_arm": "'Home' uses",
           "keypad_arm_mode": "When armed at the keypad, show as",
-          "create_dashboard": "Add an Alarm dashboard to the sidebar"
+          "create_dashboard": "Add an 'Alarm' dashboard to the sidebar"
         },
         "data_description": {
           "create_dashboard": "Built from Home Assistant's own cards: the alarm with its arm buttons, recent activity, and every zone grouped by type. You can edit or delete it like any dashboard."
@@ -125,8 +125,8 @@
       "init": {
         "title": "Texecom options",
         "data": {
-          "night_part_arm": "Night uses",
-          "home_part_arm": "Home uses",
+          "night_part_arm": "'Night' uses",
+          "home_part_arm": "'Home' uses",
           "alarm_code": "Home Assistant alarm code (optional)",
           "code_arm_required": "Ask for the code when arming too",
           "time_sync": "Keep the panel clock right",
@@ -143,8 +143,8 @@
       "init_crestron": {
         "title": "Texecom options",
         "data": {
-          "night_part_arm": "Night uses",
-          "home_part_arm": "Home uses",
+          "night_part_arm": "'Night' uses",
+          "home_part_arm": "'Home' uses",
           "keypad_arm_mode": "When armed at the keypad, show as",
           "alarm_code": "Home Assistant alarm code (optional)",
           "code_arm_required": "Ask for the code when arming too",
@@ -168,7 +168,7 @@
   "selector": {
     "part_arm": {
       "options": {
-        "0": "Not used",
+        "0": "'Not used'",
         "1": "Part Arm 1",
         "2": "Part Arm 2",
         "3": "Part Arm 3"
@@ -215,6 +215,22 @@
       },
       "display": {
         "name": "Keypad display"
+      }
+    },
+    "alarm_control_panel": {
+      "area": {
+        "state": {
+          "disarmed": "Off (disarmed)",
+          "armed_away": "Armed: Away",
+          "armed_night": "Armed: Night",
+          "armed_home": "Armed: Home",
+          "arming": "Arming…",
+          "pending": "Entry delay",
+          "triggered": "Alarm!",
+          "disarming": "Disarming…",
+          "armed_custom_bypass": "Armed: part",
+          "armed_vacation": "Armed: vacation"
+        }
       }
     }
   },

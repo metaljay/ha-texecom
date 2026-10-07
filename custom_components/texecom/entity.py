@@ -33,7 +33,8 @@ def panel_device_info(entry: ConfigEntry, panel: TexecomPanel) -> DeviceInfo:
         manufacturer="Texecom",
         model=f"{info.model} {info.zones}" if is_connect and info.zones else "Premier Elite",
         sw_version=info.firmware if is_connect else None,
-        name=entry.title,
+        # Easy to pick out among the zones when assigning rooms.
+        name=f"{info.model} {info.zones} panel" if is_connect and info.zones else "Premier Elite panel",
     )
 
 
