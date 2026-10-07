@@ -3,6 +3,6 @@ contact_links:
   - name: "💬 Questions and setup help"
     url: https://github.com/metaljay/ha-texecom/discussions
     about: Not sure something's a bug? Ask in Discussions.
-  - name: "📖 Read the guide first"
-    url: https://github.com/metaljay/ha-texecom#readme
-    about: Setup, part arms, Apple Home, troubleshooting and known limits.
+  - name: "📖 Read the troubleshooting guide first"
+    url: https://github.com/metaljay/ha-texecom/blob/main/docs/user/troubleshooting.md
+    about: What error messages mean, Repairs notices, logs, diagnostics and known limits. The full guide is linked from there.
