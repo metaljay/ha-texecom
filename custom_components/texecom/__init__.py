@@ -21,7 +21,7 @@ from .dashboard import async_create_dashboard
 from .entity import panel_device_info
 from .factory import create_panel
 from .issues import clear_clock_issue, watch_connection
-from .notifications import dismiss_when_armed
+from .notifications import dismiss_when_armed, watch_conditions
 from .panel import TexecomPanel
 
 PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR]
@@ -41,6 +41,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> b
         clear_clock_issue(hass, entry)
     entry.async_on_unload(watch_connection(hass, entry, panel))
     entry.async_on_unload(dismiss_when_armed(hass, entry, panel))
+    entry.async_on_unload(watch_conditions(hass, entry, panel))
     if entry.data.get(CONF_CREATE_DASHBOARD):
         # Asked for at the end of setup; done once the entities exist.
         with contextlib.suppress(HomeAssistantError):

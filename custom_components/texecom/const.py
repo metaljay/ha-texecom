@@ -42,6 +42,8 @@ CLOCK_DRIFT_LIMIT = 300  # seconds; more than this raises a Repairs notice (cloc
 
 # More options.
 CONF_USER_NAMES = "user_names"  # {"3": "Sam"}: names for keypad users
+CONF_NOTIFY_MAINS = "notify_mains"
+CONF_NOTIFY_TAMPER = "notify_tamper"
 
 # Options a running panel driver depends on: changing one reconnects to the
 # panel. Others (codes, names, notifications) apply straight away.

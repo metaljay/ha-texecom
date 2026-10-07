@@ -155,6 +155,7 @@
           "arm_modes": "Night and Home buttons",
           "alarm_code": "Home Assistant alarm code",
           "user_names": "Names for keypad users",
+          "notices": "Notifications",
           "clock": "Panel clock",
           "status_poll": "Checking the panel",
           "rediscover": "Read zones and areas from the panel again",
@@ -194,6 +195,14 @@
         "description": "When someone uses a keypad, the alarm says who: *changed by User 3*. Give users names to see *changed by Sam* instead.\n\nOne user per line, the number then the name, for example:\n`1 = Sam`\n`3 = Alex`\n\nThe numbers are the ones your installer gave each code.",
         "data": {
           "user_names": "Names"
+        }
+      },
+      "notices": {
+        "title": "Notifications",
+        "description": "Home Assistant can show a notification while something needs attention. It goes by itself once it's put right.",
+        "data": {
+          "notify_mains": "When the panel loses mains power",
+          "notify_tamper": "When a tamper opens (the panel's lid, a detector's cover, the bell box…)"
         }
       },
       "clock": {

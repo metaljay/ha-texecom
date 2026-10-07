@@ -51,6 +51,7 @@ async def test_the_menu(hass, fake):
         "arm_modes",
         "alarm_code",
         "user_names",
+        "notices",
         "clock",
         "rediscover",
         "dashboard",
@@ -115,6 +116,16 @@ async def test_names_for_keypad_users(hass, fake):
     fake.send_user(3)
     fake.set_area(3)  # armed at the keypad by user 3
     await wait_for(lambda: hass.states.get(ALARM).attributes.get("changed_by") == "Sam")
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_notifications_setting(hass, fake):
+    entry = await setup_connect(hass, fake)
+    result = await open_options(hass, entry, "notices")
+    assert result["data_schema"]({}) == {"notify_mains": True, "notify_tamper": True}  # on unless turned off
+    result = await options(hass, entry, "notices", notify_mains=False, notify_tamper=True)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["notify_mains"] is False and entry.options["notify_tamper"] is True
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

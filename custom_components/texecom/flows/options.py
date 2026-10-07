@@ -3,6 +3,7 @@
 - the Night and Home buttons (and, over Crestron, how a keypad arm shows)
 - an optional Home Assistant alarm code
 - names for keypad users
+- notifications for mains failures and tampers (Connect)
 - keeping the panel clock right (Connect), or how often to check the panel
   (Crestron)
 - reading zones and areas again (Connect), and rebuilding the Alarm dashboard
@@ -31,6 +32,8 @@ from homeassistant.helpers.selector import (
 from ..const import (
     CONF_ALARM_CODE,
     CONF_CODE_ARM_REQUIRED,
+    CONF_NOTIFY_MAINS,
+    CONF_NOTIFY_TAMPER,
     CONF_PROTOCOL,
     CONF_STATUS_POLL,
     CONF_TIME_SYNC,
@@ -60,7 +63,7 @@ class TexecomOptionsFlow(OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         menu = ["arm_modes", "alarm_code", "user_names"]
-        menu += ["clock", "rediscover"] if self._is_connect else ["status_poll"]
+        menu += ["notices", "clock", "rediscover"] if self._is_connect else ["status_poll"]
         menu.append("dashboard")
         return self.async_show_menu(step_id="init", menu_options=menu, description_placeholders={"help": HELP_OPTIONS})
 
@@ -127,6 +130,23 @@ class TexecomOptionsFlow(OptionsFlow):
             }
         )
         return self.async_show_form(step_id="user_names", data_schema=schema, errors=errors)
+
+    async def async_step_notices(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        if user_input is not None:
+            return self._save(
+                {
+                    CONF_NOTIFY_MAINS: bool(user_input.get(CONF_NOTIFY_MAINS)),
+                    CONF_NOTIFY_TAMPER: bool(user_input.get(CONF_NOTIFY_TAMPER)),
+                }
+            )
+        options = self.config_entry.options
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_NOTIFY_MAINS, default=options.get(CONF_NOTIFY_MAINS, True)): BooleanSelector(),
+                vol.Required(CONF_NOTIFY_TAMPER, default=options.get(CONF_NOTIFY_TAMPER, True)): BooleanSelector(),
+            }
+        )
+        return self.async_show_form(step_id="notices", data_schema=schema)
 
     async def async_step_clock(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:
