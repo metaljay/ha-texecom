@@ -15,7 +15,7 @@ Control your Texecom **Premier Elite** alarm from **Home Assistant**, using the 
 - 🛡️ **An alarm for each area**: arm **Away**, **Night** or **Home**, disarm, and see when it's arming, in its entry delay or going off. Changes made at the keypad show straight away.
 - 🚪 **A sensor for every zone**, named as on your panel: doors and windows, motion detectors, smoke and gas. Each zone is its own device, so you can put it in a room.
 - 📋 **An Alarm dashboard**, made for you at the end of setup from Home Assistant's own cards. Nothing else to install.
-- 🔋 **Panel health**: connection, mains and battery voltage, and what the keypad screen says.
+- 🔋 **Panel health**: connection, mains and battery voltage, tampers, and what the keypad screen says.
 - ⚡ **Automations**: lights on when the hallway sees movement, a notification when the alarm goes off, arm when everyone leaves.
 - 🍏 **Apple Home** too, through Home Assistant's built-in [HomeKit Bridge](https://www.home-assistant.io/integrations/homekit/).
 
@@ -156,7 +156,7 @@ The integration also fires a `texecom_event` for things that aren't states:
 |---|---|---|
 | `zone_alarm` | A zone set the alarm off (Connect) | `zone`, `zone_name`, `tamper` |
 | `user` | Someone entered a code or tag at a keypad | `user`, `method` |
-| `tamper` | A tamper that isn't a zone, e.g. the panel lid taken off (Connect) | `source`, `log_type` |
+| `tamper` | A tamper that isn't a zone (Connect), e.g. *Panel Box Tamper* (the lid) or *Auxiliary Tamper* (a detector on the shared tamper circuit) | `source`, `log_type` |
 | `arm_failed` | Arming failed because a zone was active when the exit time ended (one event per zone). The panel sounds its "fail to set" warning | `zone`, `zone_name`, `areas` |
 
 <details>
@@ -182,6 +182,7 @@ actions:
 - 🚨 **When the alarm goes off**, the panel briefly drops the connection to send its own alarm report through the SmartCom. Home Assistant reconnects and catches up within seconds. If your SmartCom also reports to a monitoring centre, consider a second module (a ComIP) for Home Assistant.
 - 🔁 **Reconnects by itself** after a power cut, a router restart or a dropped connection, and reads the panel's state again so nothing is missed. After Home Assistant restarts, the SmartCom can take about a minute to accept it again.
 - 🔐 **The UDL code is stored in Home Assistant** (like any integration password). Anyone with admin access to your Home Assistant can arm and disarm, so keep that access tight, and consider the optional alarm code.
+- 🔧 **Tampers**: the panel's **Tamper** sensor turns on while its lid, a keypad, the bell box or a detector is open, and says which. Most installs wire every detector's tamper to one shared circuit, so the panel (and Home Assistant) can't say *which* detector; it shows as *Auxiliary Tamper*. Each zone also has a hidden **Tamper** sensor, which only works if that zone's tamper is wired to the zone itself.
 - 🧾 **Diagnostics**: on the panel's device page, **Download diagnostics** gives a report with the codes and address removed, for bug reports.
 
 <details>

@@ -422,3 +422,19 @@ def decode_message(body: bytes) -> dict[str, Any]:
     if kind == MSG_DEBUG:
         return {"kind": "debug", "data": p.hex()}
     return {"kind": "unknown", "data": body.hex()}
+
+
+# Names of the log event types that are tampers (not zones), from the
+# Apache-2.0 texecom-connect event list. Group 11 = tamper alarm, 12 = restore.
+TAMPER_LOG_NAMES = {
+    60: "Panel Box Tamper",
+    61: "Bell Tamper",
+    62: "Auxiliary Tamper",
+    63: "Expander Tamper",
+    64: "Keypad Tamper",
+    67: "Fire Zone Tamper",
+    68: "Zone Tamper",
+    70: "Code Tamper Alarm",
+    110: "PSU Tamper",
+    121: "GSM Tamper",
+}

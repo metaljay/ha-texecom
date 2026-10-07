@@ -255,15 +255,16 @@ async def test_alarm_names_the_zone_from_its_alarmed_flag(fake):
         await panel.stop()
 
 
-async def test_panel_lid_tamper(fake):
+async def test_system_tampers(fake):
     events = []
     panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
     try:
         fake.send_log(60, 11, 0, areas=0)  # lid off
-        await wait_for(lambda: panel.extra.get("panel_lid_open") is True)
-        assert events == [("tamper", {"source": "panel lid", "log_type": 60})]
+        fake.send_log(62, 11, 0, areas=0)  # a detector on the aux tamper circuit
+        await wait_for(lambda: panel.extra.get("tampers") == {"Panel Box Tamper", "Auxiliary Tamper"})
+        assert events[0] == ("tamper", {"source": "Panel Box Tamper", "log_type": 60})
         fake.send_log(60, 12, 0, areas=0)  # lid back on
-        await wait_for(lambda: panel.extra.get("panel_lid_open") is False)
+        await wait_for(lambda: panel.extra.get("tampers") == {"Auxiliary Tamper"})
     finally:
         await panel.stop()
 

@@ -56,7 +56,7 @@ async def async_setup_entry(
     entities: list[BinarySensorEntity] = [TexecomConnectionSensor(entry, panel)]
     is_connect = entry.data[CONF_PROTOCOL] == PROTOCOL_CONNECT
     if is_connect:
-        entities.append(TexecomPanelLidSensor(entry, panel))
+        entities.append(TexecomSystemTamperSensor(entry, panel))
     for number, zone in panel.zones.items():
         # Crestron zones are only "Zone 1"… until renamed, so no room match.
         device = child_device_info(
@@ -109,18 +109,23 @@ class TexecomZoneTamperSensor(TexecomEntity, BinarySensorEntity):
         return self.panel.zones[self.number].tampered
 
 
-class TexecomPanelLidSensor(TexecomEntity, BinarySensorEntity):
-    """On while the panel's lid is off (from the panel's tamper log)."""
+class TexecomSystemTamperSensor(TexecomEntity, BinarySensorEntity):
+    """On while the panel reports a tamper that isn't a zone: its lid, the
+    shared detector tamper circuit, a keypad, the bell box..."""
 
     _attr_device_class = BinarySensorDeviceClass.TAMPER
-    _attr_translation_key = "panel_lid"
+    _attr_translation_key = "system_tamper"
 
     def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel) -> None:
-        super().__init__(entry, panel, "panel_lid")
+        super().__init__(entry, panel, "system_tamper")
 
     @property
     def is_on(self) -> bool:
-        return bool(self.panel.extra.get("panel_lid_open"))
+        return bool(self.panel.extra.get("tampers"))
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        return {"sources": sorted(self.panel.extra.get("tampers", ()))}
 
 
 class TexecomConnectionSensor(TexecomEntity, BinarySensorEntity):

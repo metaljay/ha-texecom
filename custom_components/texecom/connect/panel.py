@@ -40,7 +40,6 @@ GROUP_PRIORITY_ALARM_RESTORE = 2
 GROUP_ALARM = 3
 GROUP_TAMPER_ALARM = 11
 GROUP_TAMPER_RESTORE = 12
-LOG_PANEL_LID_TAMPER = 60  # keypad shows "Panel Lid Tamper"; group 11 open, 12 closed
 FIRE_ALARM = 129
 FIRE_ALARM_END = 130
 USER_CHANGE_WINDOW = 60.0  # a keypad logon this recent explains an arm/disarm
@@ -385,16 +384,21 @@ class ConnectPanel(TexecomPanel):
             self._spawn(self._rediscover())
 
     def _on_system_tamper(self, m: dict[str, Any]) -> None:
-        """Tampers that aren't zones (seen on a real panel: the panel lid,
-        log type 60, group 11 when opened and 12 when closed again)."""
+        """Tampers that aren't zones, e.g. the panel lid (type 60) or a
+        detector on the shared auxiliary tamper circuit (type 62), seen on a
+        real panel: group 11 when opened, 12 when closed again."""
         active = m["group"] == GROUP_TAMPER_ALARM
-        source = "panel lid" if m["type"] == LOG_PANEL_LID_TAMPER else f"log type {m['type']}"
-        if m["type"] == LOG_PANEL_LID_TAMPER and self.extra.get("panel_lid_open") != active:
-            self.extra["panel_lid_open"] = active
+        name = P.TAMPER_LOG_NAMES.get(m["type"], f"Tamper (log type {m['type']})")
+        tampers: set[str] = self.extra.setdefault("tampers", set())
+        if active and name not in tampers:
+            tampers.add(name)
+            self.notify()
+        elif not active and name in tampers:
+            tampers.discard(name)
             self.notify()
         if active:
-            self._log.warning("Connect: tamper: %s", source)
-            self.on_event("tamper", {"source": source, "log_type": m["type"]})
+            self._log.warning("Connect: %s", name)
+            self.on_event("tamper", {"source": name, "log_type": m["type"]})
 
     def _credit_alarm_zone(self, number: int) -> None:
         """Names the zone that set the alarm off as the alarm's "changed by".
