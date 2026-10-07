@@ -1,22 +1,16 @@
-"""Arming, disarming, codes, who changed it, failed arms and alarms."""
+"""The alarm (alarm_control_panel.py): arming, disarming, codes and who
+changed it. A Crestron entry's alarm is covered in test_init.py."""
 
 from __future__ import annotations
 
 import pytest
-from homeassistant.components import persistent_notification
 from homeassistant.core import callback
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers.event import async_track_state_change_event
 
 from custom_components.texecom.connect import protocol as P
 
-from .common import setup_connect, wait_for
-
-ALARM = "alarm_control_panel.texecom_house"
-
-
-def state(hass) -> str:
-    return hass.states.get(ALARM).state
+from .common import ALARM, setup_connect, state, wait_for
 
 
 async def call(hass, service: str, code: str | None = None) -> None:
@@ -107,37 +101,4 @@ async def test_alarm_memory_doesnt_blame_a_zone_for_a_later_alarm(hass, fake):
     fake.set_area(5)
     fake.set_zone(2, 0x11)  # the Hallway sets it off
     await wait_for(lambda: hass.states.get(ALARM).attributes["changed_by"] == "Hallway")
-    assert await hass.config_entries.async_unload(entry.entry_id)
-
-
-async def test_failed_arm_is_explained(hass, fake):
-    entry = await setup_connect(hass, fake)
-    fake.send_log(85, 0, 4)  # ARM_FAILED: Kitchen active at the end of the exit time
-    fake.send_log(85, 0, 2)  # ...and the Hallway
-    await wait_for(lambda: len(_notes(hass)) == 1 and "Hallway" in next(iter(_notes(hass).values()))["message"])
-    note = next(iter(_notes(hass).values()))
-    assert "Kitchen" in note["message"] and note["title"] == "Alarm not set"
-    fake.set_area(3)  # armed on the next try: the notice goes
-    await wait_for(lambda: not _notes(hass))
-    assert await hass.config_entries.async_unload(entry.entry_id)
-
-
-def _notes(hass):
-    return {
-        key: value
-        for key, value in persistent_notification._async_get_or_create_notifications(hass).items()
-        if key.startswith("texecom_arm_failed")
-    }
-
-
-async def test_stays_available_while_the_smartcom_reports_an_alarm(hass, fake):
-    entry = await setup_connect(hass, fake)
-    panel = entry.runtime_data
-    fake.set_area(3)
-    await wait_for(lambda: state(hass) == "armed_away")
-    panel.offline_grace = 0.5
-    await fake.close()  # the SmartCom stops answering
-    await wait_for(lambda: hass.states.get("binary_sensor.texecom_panel_connection").state == "off")
-    assert state(hass) == "armed_away"  # last known state, not "unavailable"
-    await wait_for(lambda: state(hass) == "unavailable", timeout=3)  # gone for too long
     assert await hass.config_entries.async_unload(entry.entry_id)

@@ -1,4 +1,10 @@
-"""Texecom Connect panel driver: discovery, state sync and arm/disarm."""
+"""Texecom Connect panel driver: the session (connecting, reconnecting and
+keeping it alive), zone and area state, and arm/disarm.
+
+ConnectPanel is put together from compartments, one module each:
+discovery.py (reading zones and areas), events.py (what the panel's messages
+mean), conditions.py (tamper, faults, mains) and clock.py (the panel clock).
+"""
 
 from __future__ import annotations
 
@@ -7,7 +13,7 @@ import contextlib
 import logging
 import time
 from collections.abc import Callable
-from datetime import datetime, tzinfo
+from datetime import tzinfo
 from typing import Any
 
 from ..panel import (
@@ -21,32 +27,19 @@ from ..panel import (
     PanelInfo,
     PanelZone,
     TexecomPanel,
-    nice_name,
 )
 from . import protocol as P
-from .client import ConnectClient, ConnectError, HostLog, LoginRejected, PanelBusyError, Timing, Unreachable
+from .client import ConnectClient, ConnectError, HostLog, LoginRejected, PanelBusyError, Timing
+from .clock import ClockMixin
+from .conditions import ConditionsMixin
+from .discovery import RediscoveryMixin
+from .events import USER_CHANGE_WINDOW, EventsMixin
 
 _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_MIN = 5.0
 RECONNECT_MAX = 30.0
-MAINS_VOLTAGE = 13.3  # below this with no current flowing, the panel is on battery
-BATTERY_ONLY_VOLTAGE = 12.9  # the same, before the panel has ever reported current (mains gives ~13.6 V)
 POWER_EVERY_N_IDLE = 1  # voltages and currents every keep-alive (~30 s)
-
-# Log event types the driver reacts to (numbering as in texecom2mqtt).
-LOG_AUTO_OPEN_CLOSE = 39
-LOG_INSTALLER_PROGRAMMING_END = 59
-LOG_ARM_FAILED = 85
-PART_ARM_FROM_LOG = {78: 1, 79: 2, 80: 3, 204: 1, 205: 2, 206: 3, 207: 1, 208: 2, 209: 3}
-GROUP_PRIORITY_ALARM_RESTORE = 2
-GROUP_ALARM = 3
-GROUP_TAMPER_ALARM = 11
-GROUP_TAMPER_RESTORE = 12
-FIRE_ALARM = 129
-FIRE_ALARM_END = 130
-USER_CHANGE_WINDOW = 60.0  # a keypad logon this recent explains an arm/disarm
-ZONE_ALARM_REPEAT = 30.0
 SWITCH_GRACE = 10.0
 # A SmartCom refuses a new session for about a minute after the last one
 # closed (setup's check, a restart, an alarm report): the first few retries
@@ -54,63 +47,7 @@ SWITCH_GRACE = 10.0
 QUIET_FAILURES = 3  # longest a mode switch may sit between "disarmed" and the new exit delay
 
 
-def default_area_name(number: int) -> str:
-    """Area A, B... as on the keypad; numbers beyond Z."""
-    return f"Area {chr(64 + number)}" if number <= 26 else f"Area {number}"
-
-
-async def discover(client: ConnectClient) -> tuple[PanelInfo, list[PanelZone], list[PanelArea]]:
-    """Reads panel identity, zones in use (name, type, areas) and the areas
-    that contain them (like texecom2mqtt, empty areas are left out)."""
-    ident = await client.panel_identification()
-    if not ident.zones:
-        raise ConnectError(f"unrecognised panel identification {ident.text!r}")
-    info = PanelInfo(model=ident.model, zones=ident.zones, firmware=ident.firmware)
-    zones: list[PanelZone] = []
-    for number in range(1, ident.zones + 1):
-        details = await client.zone_details(number)
-        if not details or details.type == 0:
-            continue  # not used
-        zones.append(PanelZone(number, details.name or f"Zone {number}", details.type, details.areas))
-    areas: list[PanelArea] = []
-    for number in sorted({a for z in zones for a in z.areas}):
-        details = await client.area_details(number)
-        areas.append(PanelArea(number, (details and details.name) or default_area_name(number)))
-    return info, zones, areas
-
-
-PROBE_PATIENCE = 75.0  # seconds a SmartCom may take to free its session
-
-
-async def probe(
-    host: str, port: int, udl: str, patience: float | None = None
-) -> tuple[PanelInfo, list[PanelZone], list[PanelArea]]:
-    """One-off login and discovery (used when setting up).
-
-    A SmartCom refuses a new session for about a minute after the last one
-    closed (e.g. Homebridge just stopped), so keep trying for `patience`
-    seconds unless nothing answers at all or the UDL code is wrong.
-    """
-    loop = asyncio.get_running_loop()
-    deadline = loop.time() + (PROBE_PATIENCE if patience is None else patience)
-    while True:
-        client = ConnectClient(host, port, udl)
-        try:
-            await client.connect()
-            try:
-                return await discover(client)
-            finally:
-                await client.close()
-        except (Unreachable, LoginRejected):
-            raise
-        except ConnectError as err:
-            if loop.time() + 10 > deadline:
-                raise
-            _LOGGER.debug("Connect: panel busy while setting up (%s); trying again", err)
-            await asyncio.sleep(10)
-
-
-class ConnectPanel(TexecomPanel):
+class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, TexecomPanel):
     """Keeps one Connect session open, reconnecting with back-off."""
 
     def __init__(
@@ -263,22 +200,6 @@ class ConnectPanel(TexecomPanel):
                     raise
                 await asyncio.sleep(1)
 
-    async def _check_clock(self) -> None:
-        """A full power-down resets the panel clock (seen on a real panel: to
-        31 Oct 2023). With clock sync off, report how far out it is (None:
-        the clock holds an impossible date)."""
-        if self.time_sync_seconds > 0 or not self.on_clock_drift or not self.client:
-            return
-        try:
-            clock = await self.client.date_time()
-        except P.InvalidClock as err:
-            self._log.warning("Connect: %s", err)
-            self.on_clock_drift(None)
-            return
-        if clock:
-            now = datetime.now(self.time_zone).replace(tzinfo=None, microsecond=0)
-            self.on_clock_drift(int((datetime(*clock) - now).total_seconds()))
-
     # ─── State ──────────────────────────────────────────────────────────────
 
     async def refresh(self) -> None:
@@ -354,176 +275,6 @@ class ConnectPanel(TexecomPanel):
                 changed_by = self._alarm_zone[0]
             self.set_area(number, TRIGGERED, area.part_arm, changed_by)
 
-    def _recent_user(self) -> str | None:
-        if self._last_user and time.monotonic() - self._last_user[1] < USER_CHANGE_WINDOW:
-            return self._last_user[0]
-        return None
-
-    def _on_message(self, m: dict[str, Any]) -> None:
-        self._log.debug("Connect: message %s", m)
-        kind = m["kind"]
-        if kind == "zone":
-            zs: P.ZoneState = m["state"]
-            self.set_zone(m["zone"], zs.state, zs.bypassed)
-            if zs.alarmed and zs.active:
-                self._credit_alarm_zone(m["zone"])
-        elif kind == "area":
-            if m["state_code"] > 5:
-                # Seen straight after "Part Armed 1" (settled part arm?): not
-                # in the published lists, so re-read the flags instead.
-                self._log.debug("Connect: area %s reported state %s; re-reading", m["area"], m["state_code"])
-                self._refresh_areas_soon()
-            elif m["state"] == "part armed":
-                self._apply_area(m["area"], "part armed", self._last_part_arm, self._recent_user())
-                self._refresh_areas_soon()  # confirm which part arm from the flags
-            else:
-                self._apply_area(m["area"], m["state"], None, self._recent_user())
-            if m["state"] in ("disarmed", "armed", "part armed"):
-                # A code (or a request from Home Assistant) explains one arm
-                # or disarm, not whatever happens next.
-                self._last_user = None
-        elif kind == "user":
-            self._last_user = (f"User {m['user']}", time.monotonic())
-            self.on_event("user", {"user": m["user"], "method": m["method"]})
-        elif kind == "log":
-            self._on_log(m)
-
-    def _on_log(self, m: dict[str, Any]) -> None:
-        if m["type"] in PART_ARM_FROM_LOG:
-            self._last_part_arm = PART_ARM_FROM_LOG[m["type"]]
-        raw_group = m["group"] | (0x80 if m["communicated"] else 0) | (0x40 if m["comm_delayed"] else 0)
-        if 1 <= m["type"] <= 21:
-            # Zone alarm events carry the zone number in `parameter`.
-            if m["group"] in (GROUP_ALARM, GROUP_TAMPER_ALARM) or raw_group == FIRE_ALARM:
-                zone = self.zones.get(m["parameter"])
-                tamper = m["group"] == GROUP_TAMPER_ALARM
-                # The panel logs an alarm twice (seen on a real panel, the second
-                # time once it has been reported): only the first one counts.
-                key, now = (m["parameter"], tamper), time.monotonic()
-                if self._recent_alarms.get(key, -ZONE_ALARM_REPEAT) > now - ZONE_ALARM_REPEAT:
-                    return
-                self._recent_alarms[key] = now
-                self._credit_alarm_zone(m["parameter"])
-                self._log.warning(
-                    "Connect: zone %s (%s) in %s",
-                    m["parameter"],
-                    zone.name if zone else "unknown",
-                    "tamper alarm" if tamper else "alarm",
-                )
-                self.on_event(
-                    "zone_alarm", {"zone": m["parameter"], "zone_name": zone.name if zone else None, "tamper": tamper}
-                )
-            if m["group"] == GROUP_PRIORITY_ALARM_RESTORE or raw_group == FIRE_ALARM_END:
-                self._refresh_areas_soon()
-        if m["type"] > 21 and m["group"] in (GROUP_TAMPER_ALARM, GROUP_TAMPER_RESTORE):
-            self._on_system_tamper(m)
-        if m["type"] in P.FAULT_LOG_NAMES:
-            self._on_fault(m)
-        if m["type"] in (LOG_ARM_FAILED, LOG_AUTO_OPEN_CLOSE):
-            if m["type"] == LOG_ARM_FAILED:
-                # One log per zone that stopped the arm (seen on a real panel:
-                # zones active at the end of the exit time).
-                zone = self.zones.get(m["parameter"])
-                self._log.warning(
-                    "Connect: arming failed: zone %s (%s) active", m["parameter"], zone.name if zone else "unknown"
-                )
-                self.on_event(
-                    "arm_failed",
-                    {"areas": m["areas"], "zone": m["parameter"], "zone_name": zone.name if zone else None},
-                )
-            self._refresh_areas_soon()  # these produce no area event
-        elif m["type"] == LOG_INSTALLER_PROGRAMMING_END:
-            self._log.info("Connect: engineer programming finished; re-reading zones and areas")
-            self._spawn(self._rediscover())
-
-    def _on_system_tamper(self, m: dict[str, Any]) -> None:
-        """Tampers that aren't zones, e.g. the panel lid (type 60) or a
-        detector on the shared auxiliary tamper circuit (type 62), seen on a
-        real panel: group 11 when opened, 12 when closed again."""
-        active = m["group"] == GROUP_TAMPER_ALARM
-        name = P.TAMPER_LOG_NAMES.get(m["type"], f"Tamper (log type {m['type']})")
-        tampers: set[str] = self.extra.setdefault("tampers", set())
-        if active == (name in tampers):
-            return  # the panel logs some events twice (again once reported)
-        (tampers.add if active else tampers.discard)(name)
-        self.notify()
-        if active:
-            self._log.warning("Connect: %s", name)
-            self.on_event("tamper", {"source": name, "log_type": m["type"]})
-        else:
-            self._log.info("Connect: %s cleared", name)
-            self.on_event("tamper_cleared", {"source": name, "log_type": m["type"]})
-
-    def _mains_from_power(self, power: P.SystemPower) -> None:
-        """Mains on or off from the power readings. Seen on a real panel: on
-        battery both currents read 0 and the voltage falls below 13 V; with
-        mains, ~300 mA flows at ~13.6 V. The panel logs the mains failing at
-        once but didn't log it coming back, so this clears (or confirms) it,
-        and gives the right answer after a restart."""
-        if power.panel_current > 0:
-            self._seen_current = True
-        # Only trust "no current" from a panel that has reported current
-        # before; otherwise (a panel that always reads 0 mA, or a restart
-        # while on battery) only a clearly low voltage counts.
-        threshold = MAINS_VOLTAGE if self._seen_current else BATTERY_ONLY_VOLTAGE
-        on_battery = power.panel_current == 0 and power.panel_voltage < threshold
-        mains_ok = power.panel_current > 0 or power.panel_voltage >= MAINS_VOLTAGE
-        faults: set[str] = self.extra.setdefault("faults", set())
-        if on_battery and "AC Fail" not in faults:
-            faults.add("AC Fail")
-            self._log.warning("Connect: running on battery (no mains current, %.2f V)", power.panel_voltage)
-            self.on_event("fault", {"source": "AC Fail", "log_type": None})
-        elif mains_ok and faults & P.MAINS_FAULTS:
-            for name in sorted(faults & P.MAINS_FAULTS):
-                faults.discard(name)
-                self._log.info("Connect: mains back (%d mA, %.2f V)", power.panel_current, power.panel_voltage)
-                self.on_event("fault_cleared", {"source": name, "log_type": None})
-
-    def _on_fault(self, m: dict[str, Any]) -> None:
-        """Mains, battery, communication and other faults from the panel log."""
-        name = P.FAULT_LOG_NAMES[m["type"]]
-        if m["type"] in P.ZONE_FAULT_LOGS and (zone := self.zones.get(m["parameter"])):
-            name = f"{name}: {nice_name(zone.name)}"
-        if m["group"] in P.GROUPS_STARTING:
-            active = True
-        elif m["group"] in P.GROUPS_RESTORING:
-            active = False
-        else:
-            self._log.debug("Connect: %s with group %s (not a start or end)", name, m["group"])
-            return
-        faults: set[str] = self.extra.setdefault("faults", set())
-        if active == (name in faults):
-            return  # already known (logged twice, or seen in the power readings)
-        (faults.add if active else faults.discard)(name)
-        self.notify()
-        self._log.warning("Connect: %s%s", name, "" if active else " cleared")
-        self.on_event("fault" if active else "fault_cleared", {"source": name, "log_type": m["type"]})
-
-    def _credit_alarm_zone(self, number: int) -> None:
-        """Names the zone that set the alarm off as the alarm's "changed by".
-
-        The panel flags it on the zone's state as the alarm starts (the log
-        entry can come only after the disarm), in either order relative to
-        the area's "in alarm" message.
-        """
-        zone = self.zones.get(number)
-        if not zone:
-            return
-        # The alarmed bit stays set (alarm memory) after the disarm, so a zone
-        # in a disarmed area doesn't explain a later alarm.
-        zone_areas = [self.areas[a] for a in zone.areas if a in self.areas] or list(self.areas.values())
-        if all(a.state == DISARMED for a in zone_areas):
-            return
-        name = nice_name(zone.name)
-        now = time.monotonic()
-        if self._alarm_zone and self._alarm_zone[0] != name and now - self._alarm_zone[1] < USER_CHANGE_WINDOW:
-            return  # the first zone in an alarm is the one that set it off
-        self._alarm_zone = (name, now)
-        for number_, area in self.areas.items():
-            if area.state == TRIGGERED and (not zone.areas or number_ in zone.areas) and area.changed_by != name:
-                area.changed_by = name
-                self.notify()
-
     def _refresh_areas_soon(self) -> None:
         if self._refresh_handle:
             self._refresh_handle.cancel()
@@ -539,69 +290,6 @@ class ConnectPanel(TexecomPanel):
             await coro
         except ConnectError as err:
             self._log.debug("Connect: area refresh skipped: %s", err)
-
-    async def async_rediscover(self) -> tuple[PanelInfo, list[PanelZone], list[PanelArea]]:
-        """Reads zones and areas again over the open session (a SmartCom
-        allows only one, so a separate login would fail). Raises PanelError."""
-        client = self._ready_client()
-        try:
-            return await discover(client)
-        except ConnectError as err:
-            raise PanelError(f"couldn't read the panel: {err}") from err
-
-    async def _rediscover(self) -> None:
-        if not self.client:
-            return
-        try:
-            info, zones, areas = await discover(self.client)
-        except ConnectError as err:
-            self._log.warning("Connect: re-reading zones failed: %s", err)
-            return
-
-        def layout(zs, ars):
-            return ([(z.number, z.name, z.panel_type, z.areas) for z in zs], [(a.number, a.name) for a in ars])
-
-        if layout(zones, areas) != layout(self.zones.values(), self.areas.values()) and self.on_layout_changed:
-            self.on_layout_changed(info, zones, areas)
-
-    # ─── Clock ──────────────────────────────────────────────────────────────
-
-    async def _time_sync_loop(self) -> None:
-        await asyncio.sleep(5)  # soon after connecting, e.g. after a power cut
-        while True:
-            try:
-                await self.sync_clock()
-            except (ConnectError, PanelError) as err:
-                self._log.warning("Connect: clock check failed: %s", err)
-            await asyncio.sleep(self.time_sync_seconds)
-
-    async def sync_clock(self, now: datetime | None = None) -> bool:
-        """Sets the panel clock if it is more than a minute out.
-
-        The panel keeps local wall-clock time; Home Assistant's own time zone
-        is used, so a Docker container running on UTC can't put the panel an
-        hour out (a bug found in the Homebridge plugin).
-        """
-        assert self.client
-        now = now or datetime.now(self.time_zone)
-        want = (now.year, now.month, now.day, now.hour, now.minute, now.second)
-        try:
-            panel = await self.client.date_time()
-        except P.InvalidClock as err:
-            self._log.info("Connect: %s; setting it", err)
-        else:
-            if not panel:
-                return False
-            drift = (datetime(*panel) - datetime(*want)).total_seconds()
-            if abs(drift) <= 60:
-                self._log.debug("Connect: panel clock within %.0f s", abs(drift))
-                return False
-            self._log.info(
-                "Connect: panel clock is %.0f s %s; setting it", abs(drift), "ahead" if drift > 0 else "behind"
-            )
-        if not await self.client.set_date_time(want):
-            raise PanelError("the panel refused the new time")
-        return True
 
     # ─── Arm / disarm ───────────────────────────────────────────────────────
 
@@ -656,21 +344,6 @@ class ConnectPanel(TexecomPanel):
             raise PanelError(f"{what} failed: {err}") from err
         if not ok:
             raise PanelError(f"the panel refused {what}")
-
-    async def async_diagnostics(self) -> dict[str, Any]:
-        """Like diagnostics(), plus the panel clock against local time."""
-        result = self.diagnostics()
-        if self.connected and self.client:
-            try:
-                clock = await self.client.date_time()
-            except (ConnectError, P.InvalidClock) as err:
-                result["panel_clock"] = f"unreadable: {err}"
-            else:
-                if clock:
-                    now = datetime.now(self.time_zone).replace(tzinfo=None, microsecond=0)
-                    result["panel_clock"] = datetime(*clock).isoformat(sep=" ")
-                    result["panel_clock_drift_s"] = int((datetime(*clock) - now).total_seconds())
-        return result
 
     def diagnostics(self) -> dict[str, Any]:
         return {

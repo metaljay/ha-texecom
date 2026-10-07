@@ -1,4 +1,5 @@
-"""Tamper, mains, faults and the events that go with them."""
+"""Zone, tamper, problem and mains sensors (binary_sensor.py), and the
+events that go with them."""
 
 from __future__ import annotations
 

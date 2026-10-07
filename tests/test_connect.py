@@ -12,7 +12,8 @@ from fake_connect_panel import FakeConnectPanel
 
 from custom_components.texecom.connect import protocol as P
 from custom_components.texecom.connect.client import ConnectClient, LoginRejected, PanelBusyError, Timing
-from custom_components.texecom.connect.panel import ConnectPanel, probe
+from custom_components.texecom.connect.discovery import probe
+from custom_components.texecom.connect.panel import ConnectPanel
 from custom_components.texecom.panel import ARMED_AWAY, ARMED_HOME, ARMED_NIGHT, DISARMED, TRIGGERED, PanelError
 
 FAST = Timing(command_timeout=0.3, command_attempts=2, keepalive=30, login_delay=0)
@@ -38,7 +39,7 @@ async def fake():
 async def make_panel(fake: FakeConnectPanel, **kwargs) -> ConnectPanel:
     client = ConnectClient("127.0.0.1", fake.port, "1234", timing=FAST)
     await client.connect()
-    from custom_components.texecom.connect.panel import discover
+    from custom_components.texecom.connect.discovery import discover
 
     info, zones, areas = await discover(client)
     await client.close()
