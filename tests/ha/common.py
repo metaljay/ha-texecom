@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING
 
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.texecom import layout_to_data
 from custom_components.texecom.connect import discovery as connect_discovery
 from custom_components.texecom.const import DOMAIN
+from custom_components.texecom.factory import layout_to_data
 
 if TYPE_CHECKING:
     from fake_connect_panel import FakeConnectPanel

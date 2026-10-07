@@ -32,7 +32,6 @@ from homeassistant.helpers.selector import (
     TextSelectorType,
 )
 
-from . import layout_to_data
 from .connect.client import ConnectError, LoginRejected
 from .connect.discovery import probe
 from .const import (
@@ -65,6 +64,7 @@ from .const import (
 )
 from .dashboard import async_create_dashboard
 from .entity import nice_name
+from .factory import layout_to_data
 from .panel import PanelError
 
 _LOGGER = logging.getLogger(__name__)
