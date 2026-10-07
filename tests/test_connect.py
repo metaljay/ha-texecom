@@ -217,6 +217,17 @@ async def test_reconnects_after_the_panel_hangs_up(fake):
         await panel.stop()
 
 
+async def test_arm_failed_names_the_zone(fake):
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        fake.send_log(85, 0, 3)  # ARM_FAILED, zone 3 active at the end of the exit time
+        await wait_for(lambda: events)
+        assert events[0] == ("arm_failed", {"areas": 1, "zone": 3, "zone_name": "Kitchen"})
+    finally:
+        await panel.stop()
+
+
 async def test_auth_failure_stops_retrying(fake):
     calls = []
     info, zones, areas = await probe("127.0.0.1", fake.port, "1234")

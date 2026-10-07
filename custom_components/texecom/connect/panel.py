@@ -23,7 +23,7 @@ from ..panel import (
     TexecomPanel,
 )
 from . import protocol as P
-from .client import ConnectClient, ConnectError, LoginRejected, PanelBusyError, Timing
+from .client import ConnectClient, ConnectError, LoginRejected, PanelBusyError, Timing, Unreachable
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -65,14 +65,32 @@ async def discover(client: ConnectClient) -> tuple[PanelInfo, list[PanelZone], l
     return info, zones, areas
 
 
-async def probe(host: str, port: int, udl: str) -> tuple[PanelInfo, list[PanelZone], list[PanelArea]]:
-    """One-off login and discovery (used when setting up)."""
-    client = ConnectClient(host, port, udl)
-    await client.connect()
-    try:
-        return await discover(client)
-    finally:
-        await client.close()
+async def probe(
+    host: str, port: int, udl: str, patience: float = 75.0
+) -> tuple[PanelInfo, list[PanelZone], list[PanelArea]]:
+    """One-off login and discovery (used when setting up).
+
+    A SmartCom refuses a new session for about a minute after the last one
+    closed (e.g. Homebridge just stopped), so keep trying for `patience`
+    seconds unless nothing answers at all or the UDL code is wrong.
+    """
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + patience
+    while True:
+        client = ConnectClient(host, port, udl)
+        try:
+            await client.connect()
+            try:
+                return await discover(client)
+            finally:
+                await client.close()
+        except (Unreachable, LoginRejected):
+            raise
+        except ConnectError as err:
+            if loop.time() + 10 > deadline:
+                raise
+            _LOGGER.debug("Connect: panel busy while setting up (%s); trying again", err)
+            await asyncio.sleep(10)
 
 
 class ConnectPanel(TexecomPanel):
@@ -115,6 +133,7 @@ class ConnectPanel(TexecomPanel):
         self._last_part_arm: int | None = None
         self._last_user: tuple[str, float] | None = None
         self._recent_alarms: dict[tuple[int, bool], float] = {}
+        self._alarm_zone: tuple[str, float] | None = None
         self._idle_count = 0
         self._refresh_handle: asyncio.TimerHandle | None = None
         self.last_error: str | None = None
@@ -262,6 +281,8 @@ class ConnectPanel(TexecomPanel):
         elif state == "part armed":
             self.set_area(number, self.armed_state_for_part_arm(number, part_arm), part_arm, changed_by)
         elif state == "in alarm":
+            if self._alarm_zone and time.monotonic() - self._alarm_zone[1] < USER_CHANGE_WINDOW:
+                changed_by = self._alarm_zone[0]
             self.set_area(number, TRIGGERED, area.part_arm, changed_by)
 
     def _recent_user(self) -> str | None:
@@ -270,6 +291,7 @@ class ConnectPanel(TexecomPanel):
         return None
 
     def _on_message(self, m: dict[str, Any]) -> None:
+        _LOGGER.debug("Connect: message %s", m)
         kind = m["kind"]
         if kind == "zone":
             zs: P.ZoneState = m["state"]
@@ -306,8 +328,8 @@ class ConnectPanel(TexecomPanel):
                 if self._recent_alarms.get(key, -ZONE_ALARM_REPEAT) > now - ZONE_ALARM_REPEAT:
                     return
                 self._recent_alarms[key] = now
-                if zone:  # the area's "changed by" names the zone that set it off
-                    self._last_user = (zone.name.title() if zone.name.isupper() else zone.name, now)
+                if zone:  # the alarm's "changed by" names the zone that set it off
+                    self._alarm_zone = (zone.name.title() if zone.name.isupper() else zone.name, now)
                 _LOGGER.warning(
                     "Connect: zone %s (%s) in %s",
                     m["parameter"],
@@ -321,7 +343,16 @@ class ConnectPanel(TexecomPanel):
                 self._refresh_areas_soon()
         if m["type"] in (LOG_ARM_FAILED, LOG_AUTO_OPEN_CLOSE):
             if m["type"] == LOG_ARM_FAILED:
-                self.on_event("arm_failed", {"areas": m["areas"]})
+                # One log per zone that stopped the arm (seen on a real panel:
+                # zones active at the end of the exit time).
+                zone = self.zones.get(m["parameter"])
+                _LOGGER.warning(
+                    "Connect: arming failed: zone %s (%s) active", m["parameter"], zone.name if zone else "unknown"
+                )
+                self.on_event(
+                    "arm_failed",
+                    {"areas": m["areas"], "zone": m["parameter"], "zone_name": zone.name if zone else None},
+                )
             self._refresh_areas_soon()  # these produce no area event
         elif m["type"] == LOG_INSTALLER_PROGRAMMING_END:
             _LOGGER.info("Connect: engineer programming finished; re-reading zones and areas")

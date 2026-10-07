@@ -26,6 +26,10 @@ class ConnectError(Exception):
     """The session failed (refused login, dropped connection, no answer)."""
 
 
+class Unreachable(ConnectError):
+    """Nothing answered at that address and port."""
+
+
 class LoginRejected(ConnectError):
     """The panel refused the UDL code."""
 
@@ -94,7 +98,7 @@ class ConnectClient:
                 asyncio.open_connection(self.host, self.port), CONNECT_TIMEOUT
             )
         except (OSError, TimeoutError) as err:
-            raise ConnectError(f"cannot reach {self.host}:{self.port} ({err})") from err
+            raise Unreachable(f"cannot reach {self.host}:{self.port} ({err})") from err
         self._read_task = asyncio.get_running_loop().create_task(self._read_loop())
         try:
             await asyncio.sleep(self.timing.login_delay)

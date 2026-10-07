@@ -1,4 +1,4 @@
-<img src="docs/images/icon.png" width="96" align="right" alt="">
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/icon.png" width="96" align="right" alt="">
 
 # Texecom Premier Elite for Home Assistant
 
@@ -10,7 +10,7 @@ Control your Texecom **Premier Elite** alarm from **Home Assistant**, using the 
 
 ## ✨ What you get
 
-<img src="docs/images/dashboard.png" width="760" alt="The Alarm dashboard: the alarm with Away, Night, Home and Off buttons, recent activity, panel health, and every zone grouped by type">
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/dashboard.png" width="760" alt="The Alarm dashboard: the alarm with Away, Night, Home and Off buttons, recent activity, panel health, and every zone grouped by type">
 
 - 🛡️ **An alarm for each area**: arm **Away**, **Night** or **Home**, disarm, and see when it's arming, in its entry delay or going off. Changes made at the keypad show straight away.
 - 🚪 **A sensor for every zone**, named as on your panel: doors and windows, motion detectors, smoke and gas. Each zone is its own device, so you can put it in a room.
@@ -27,7 +27,7 @@ Control your Texecom **Premier Elite** alarm from **Home Assistant**, using the 
 | 🔢 | The panel's **UDL code**. Texecom's default is **1234**, and most panels keep it |
 | 🏡 | **Home Assistant** 2025.3 or newer, with [HACS](https://hacs.xyz) |
 
-> ⚠️ **The SmartCom takes one connection at a time.** While Home Assistant is connected, the **Texecom app** can't connect to it, and nor can Homebridge or texecom2mqtt. Stop those first. The app's alarm notifications (sent by the panel through Texecom's servers) still reach your phone.
+> ℹ️ **About the Texecom app.** Home Assistant uses the same SmartCom connection as the Texecom app, so the app can't connect while Home Assistant is. Your alarm works exactly as before, the app's alarm notifications still reach your phone, and Home Assistant does everything the app does day to day. If Homebridge or texecom2mqtt already use your SmartCom, turn them off first.
 
 ## 🚀 Set it up
 
@@ -45,17 +45,17 @@ Click the **Add to HACS** button above (or in HACS: **⋮ → Custom repositorie
 
 Or go to **Settings → Devices & services → Add integration** and search for **Texecom**.
 
-<img src="docs/images/setup-1-choose.png" width="420" alt="Choose Texecom Connect"> 
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/setup-1-choose.png" width="420" alt="Choose Texecom Connect"> 
 
 Choose **Texecom Connect**. (Crestron is for COM ports set to Crestron System: see [below](#crestron).)
 
-<img src="docs/images/setup-2-smartcom.png" width="420" alt="SmartCom address, port and UDL code">
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/setup-2-smartcom.png" width="420" alt="SmartCom address, port and UDL code">
 
-Enter the SmartCom's **IP address**, leave the **port** at **10001**, and enter the **UDL code**. Home Assistant logs in and reads your panel's areas and zones, which takes about ten seconds.
+Enter the SmartCom's **IP address**, leave the **port** at **10001**, and enter the **UDL code**. Home Assistant logs in and reads your panel's areas and zones. That takes about ten seconds, or up to a minute if something else was connected to the SmartCom just before.
 
 ### 4️⃣ Choose your arm modes
 
-<img src="docs/images/setup-3-arm-modes.png" width="420" alt="Found your panel: choose the part arms for Night and Home">
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/setup-3-arm-modes.png" width="420" alt="Found your panel: choose the part arms for Night and Home">
 
 Home Assistant shows what it found. **Away** always sets the whole alarm. Choose which **part arm** sits behind **Night** and **Home** (or *Not used* to hide that button). See [Know your part arms](#part-arms) if you're unsure.
 
@@ -85,7 +85,7 @@ When the panel is part armed from the keypad, Home Assistant shows the mode you 
 
 ## 🧭 Using it
 
-<img src="docs/images/security.png" width="760" alt="Home Assistant's Security page showing the alarm, doors and smoke detector">
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/security.png" width="760" alt="Home Assistant's Security page showing the alarm, doors and smoke detector">
 
 - **The Alarm dashboard** (in the sidebar) has the arm buttons, the last day's activity, panel health and every zone. Edit it like any dashboard, or rebuild it from **Configure → Create or refresh the Alarm dashboard**.
 - **Home Assistant's own Overview** picks the alarm up as well: its **Security** summary lists the alarm, doors and smoke detectors, and each room shows its zones.
@@ -93,7 +93,7 @@ When the panel is part armed from the keypad, Home Assistant shows the mode you 
 
 ### ⚙️ Options
 
-<img src="docs/images/options.png" width="420" alt="Texecom options">
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/options.png" width="420" alt="Texecom options">
 
 Open **Settings → Devices & services → Texecom → Configure**:
 
@@ -145,6 +145,7 @@ mode: single
 
 - **Who's home?** The example uses `zone.home`, which counts the people whose phones run the Home Assistant app. If you track presence another way (for example an *Occupancy* toggle that Apple Home switches when the last person leaves), use that instead: `trigger: state`, `entity_id: input_boolean.occupancy`, `to: "off"`.
 - **The 5 minutes** stop a quick trip to the bins from arming the house. The exit delay still runs as usual.
+- **If someone is still inside**, the arm fails at the end of the exit time (the panel sounds its "fail to set" warning) and Home Assistant fires an `arm_failed` event naming the zone. Add an automation on that event to tell you.
 - **We suggest not adding an automatic disarm.** If you do, require something besides phone location (for example the front door being unlocked with a code).
 
 ### 📣 Events
@@ -155,7 +156,7 @@ The integration also fires a `texecom_event` for things that aren't states:
 |---|---|---|
 | `zone_alarm` | A zone set the alarm off (Connect) | `zone`, `zone_name`, `tamper` |
 | `user` | Someone entered a code or tag at a keypad | `user`, `method` |
-| `arm_failed` | The panel refused to arm (e.g. a door open) | `areas` |
+| `arm_failed` | Arming failed because a zone was active when the exit time ended (one event per zone). The panel sounds its "fail to set" warning | `zone`, `zone_name`, `areas` |
 
 <details>
 <summary>Example: tell everyone which zone set the alarm off</summary>
@@ -178,7 +179,7 @@ actions:
 ## 💡 Good to know
 
 - 🚨 **When the alarm goes off**, the panel briefly drops the connection to send its own alarm report through the SmartCom. Home Assistant reconnects and catches up within seconds. If your SmartCom also reports to a monitoring centre, consider a second module (a ComIP) for Home Assistant.
-- 🔁 **Reconnects by itself** after a power cut, a router restart or a dropped connection, and reads the panel's state again so nothing is missed.
+- 🔁 **Reconnects by itself** after a power cut, a router restart or a dropped connection, and reads the panel's state again so nothing is missed. After Home Assistant restarts, the SmartCom can take about a minute to accept it again.
 - 🔐 **The UDL code is stored in Home Assistant** (like any integration password). Anyone with admin access to your Home Assistant can arm and disarm, so keep that access tight, and consider the optional alarm code.
 - 🧾 **Diagnostics**: on the panel's device page, **Download diagnostics** gives a report with the codes and address removed, for bug reports.
 
@@ -187,7 +188,7 @@ actions:
 
 | What you see | Try |
 |---|---|
-| "Couldn't connect" while setting up | Check the address and that the port is 10001. Close the Texecom app, and stop Homebridge, texecom2mqtt or anything else connected to the SmartCom |
+| "Couldn't connect" while setting up | Check the address and that the port is 10001. If the Texecom app, Homebridge or texecom2mqtt was connected a moment ago, wait a minute and try again |
 | "The panel refused the UDL code" | Try 1234; if that fails, ask your installer |
 | Everything shows as unavailable | Look at **Panel connection** on the panel's device page, and at **Settings → System → Logs** for "Connect:" lines |
 | A zone shows the wrong icon or wording | Open it, then **Settings → Show as** |
