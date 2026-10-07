@@ -65,6 +65,7 @@ class FakeConnectPanel:
         self.power_override: bytes | None = None  # raw GET_SYSTEM_POWER reply
         self.clock_raw: bytes | None = None  # raw GET_DATE_TIME reply (e.g. an impossible date)
         self.system_flags = bytes(8)  # GET_SYSTEM_FLAGS reply (its meaning isn't mapped yet)
+        self.ready: bool | None = None  # area flag 16; None: ready while disarmed with no zone open
 
     async def start(self, port: int = 0, host: str = "127.0.0.1") -> int:
         self.server = await asyncio.start_server(self._on_client, host, port)
@@ -184,6 +185,11 @@ class FakeConnectPanel:
         elif cmd == P.CMD_GET_AREA_FLAGS:
             flags = bytearray(73)
             s = self.area_state
+            ready = (
+                self.ready if self.ready is not None else s == 0 and not any(v & 3 for v in self.zone_state.values())
+            )
+            if ready:
+                flags[P.FLAG_READY] = 1
             if s == 5:
                 flags[P.FLAG_ALARM] = 1
             elif s == 1:

@@ -38,9 +38,11 @@ def build_config(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     entities = [e for e in er.async_entries_for_config_entry(registry, entry.entry_id) if not e.disabled_by]
 
     alarm_cards: list[dict[str, Any]] = [{"type": "heading", "heading": "Alarm", "icon": "mdi:shield-home"}]
+    alarms: list[str] = []
     for e in entities:
         if e.domain != "alarm_control_panel":
             continue
+        alarms.append(e.entity_id)
         features = (e.supported_features or 0) if e.supported_features is not None else 7
         modes = [mode for bit, mode in MODES.items() if features & bit] + ["disarmed"]
         alarm_cards.append(
@@ -52,10 +54,13 @@ def build_config(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
                 grid_options={"columns": "full"},
             )
         )
+        for ready in entities:
+            if ready.unique_id == f"{e.unique_id}_ready":
+                alarm_cards.append(_tile(ready.entity_id, name="Ready to arm", grid_options={"columns": "full"}))
     alarm_cards.append(
         {
             "type": "logbook",
-            "target": {"entity_id": [c["entity"] for c in alarm_cards if c.get("type") == "tile"]},
+            "target": {"entity_id": alarms},
             "hours_to_show": 24,
             "grid_options": {"columns": "full", "rows": 4},
         }

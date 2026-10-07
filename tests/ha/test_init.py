@@ -91,6 +91,7 @@ async def test_crestron_entities_and_keypad_events(hass, port):
     assert hass.states.get(ALARM).attributes["friendly_name"] == "Area A Alarm"
     assert hass.states.get("binary_sensor.texecom_zone_1").state == "off"
     assert hass.states.get("binary_sensor.texecom_tamper") is None  # Connect only
+    assert hass.states.get("binary_sensor.texecom_area_a_ready_to_arm") is None  # Connect only
 
     fake.send('"Z0021')
     await wait_for(lambda: hass.states.get("binary_sensor.texecom_zone_2").state == "on")

@@ -17,6 +17,12 @@
         "state": {
           "off": "mdi:power-plug-off"
         }
+      },
+      "ready_to_arm": {
+        "default": "mdi:shield-alert-outline",
+        "state": {
+          "on": "mdi:shield-check-outline"
+        }
       }
     }
   }

@@ -22,6 +22,6 @@ async def test_diagnostics_hide_codes_and_address(hass, fake):
     assert diag["panel"]["connected"] is True and abs(diag["panel"]["panel_clock_drift_s"]) < 5
     assert len(diag["panel"]["zones"]) == 8
     # For mapping the panel: every area flag by name, and the raw system flags.
-    assert diag["panel"]["area_flags"] == {1: []}  # disarmed, nothing set
+    assert diag["panel"]["area_flags"] == {1: ["16 Ready"]}  # disarmed, nothing open
     assert diag["panel"]["system_flags"] == "00 00 00 00 00 00 00 00"
     assert await hass.config_entries.async_unload(entry.entry_id)

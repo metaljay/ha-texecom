@@ -41,6 +41,7 @@ _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_MIN = 5.0
 RECONNECT_MAX = 30.0
+READY_CHECK_DELAY = 1.5  # after zones settle, re-read whether an area is ready to arm
 POWER_EVERY_N_IDLE = 1  # voltages and currents every keep-alive (~30 s)
 SWITCH_GRACE = 10.0
 # A SmartCom refuses a new session for about a minute after the last one
@@ -51,6 +52,8 @@ QUIET_FAILURES = 3  # longest a mode switch may sit between "disarmed" and the n
 
 class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, TexecomPanel):
     """Keeps one Connect session open, reconnecting with back-off."""
+
+    reports_ready = True  # area flag 16, "Ready"
 
     def __init__(
         self,
@@ -98,6 +101,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._seen_current = False
         self._idle_count = 0
         self._refresh_handle: asyncio.TimerHandle | None = None
+        self._ready_handle: asyncio.TimerHandle | None = None
         self._logged_flags: dict[int, list[int]] = {}  # area -> flags last named in the debug log
         self.last_error: str | None = None
 
@@ -113,8 +117,9 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
 
     async def stop(self) -> None:
         self._stopped = True
-        if self._refresh_handle:
-            self._refresh_handle.cancel()
+        for handle in (self._refresh_handle, self._ready_handle):
+            if handle:
+                handle.cancel()
         for task in [self._task, *self._tasks]:
             if task and not task.done():
                 task.cancel()
@@ -220,6 +225,30 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         for number, (state, part_arm) in states.items():
             self._apply_area(number, state, part_arm)
         self._log_area_flags()
+        self._update_ready()
+
+    def _update_ready(self) -> None:
+        flags = self.client.last_area_flags if self.client else None
+        if flags:
+            for number in self.areas:
+                self.set_area_ready(number, P.FLAG_READY in P.area_flags_set(flags, number, self.panel_zones))
+
+    def _check_ready_soon(self, zone_number: int) -> None:
+        """A zone changed: once zones settle, re-read whether its areas are
+        ready to arm (only while disarmed, when it matters; the panel doesn't
+        announce it)."""
+        zone = self.zones.get(zone_number)
+        areas = (zone.areas if zone and zone.areas else None) or list(self.areas)
+        if not any(self.areas[a].state == DISARMED for a in areas if a in self.areas):
+            return
+        if self._ready_handle:
+            self._ready_handle.cancel()
+
+        def run() -> None:
+            self._ready_handle = None
+            self._spawn(self._quiet(self.refresh_areas()))
+
+        self._ready_handle = asyncio.get_running_loop().call_later(READY_CHECK_DELAY, run)
 
     def _log_area_flags(self) -> None:
         """Names the flags set for each area in the debug log when they change

@@ -29,6 +29,7 @@ def fast_timings(monkeypatch):
     monkeypatch.setattr(connect_client, "COMMAND_ATTEMPTS", 2)
     monkeypatch.setattr(connect_client, "KEEPALIVE", 3600)
     monkeypatch.setattr(connect_panel, "RECONNECT_MIN", 0.05)
+    monkeypatch.setattr(connect_panel, "READY_CHECK_DELAY", 0.05)
     monkeypatch.setattr(connect_discovery, "PROBE_PATIENCE", 0)
 
 

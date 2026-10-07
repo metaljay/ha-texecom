@@ -65,6 +65,7 @@ ARM_PART_3 = 3
 
 # Indices into the GET_AREA_FLAGS response (one bitmap of areas per flag).
 FLAG_ALARM = 0
+FLAG_READY = 16  # ready to arm (official name; confirm on a real panel)
 FLAG_ENTRY = 17
 FLAG_SECOND_ENTRY = 18
 FLAG_EXIT = 19
@@ -78,6 +79,7 @@ FLAG_PART_ARM_2 = 51
 FLAG_PART_ARM_3 = 52
 AREA_FLAGS = (
     FLAG_ALARM,
+    FLAG_READY,
     FLAG_ENTRY,
     FLAG_SECOND_ENTRY,
     FLAG_EXIT,

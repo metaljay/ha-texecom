@@ -135,6 +135,24 @@ async def test_zone_events_and_initial_state(fake):
         await panel.stop()
 
 
+async def test_ready_to_arm_follows_the_panel(fake, monkeypatch):
+    from custom_components.texecom.connect import panel as connect_panel
+
+    monkeypatch.setattr(connect_panel, "READY_CHECK_DELAY", 0.05)
+    panel = await make_panel(fake)
+    try:
+        assert panel.reports_ready and panel.areas[1].ready is True  # disarmed, nothing open
+        fake.set_zone(2, 1)  # a door opens: re-read once zones settle
+        await wait_for(lambda: panel.areas[1].ready is False)
+        fake.set_zone(2, 0)
+        await wait_for(lambda: panel.areas[1].ready is True)
+        fake.ready = False  # whatever the panel says goes
+        fake.set_zone(3, 0)
+        await wait_for(lambda: panel.areas[1].ready is False)
+    finally:
+        await panel.stop()
+
+
 async def test_arm_night_uses_mapped_part_arm_then_disarm(fake):
     panel = await make_panel(fake)
     try:

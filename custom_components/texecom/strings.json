@@ -275,6 +275,13 @@
       },
       "mains": {
         "name": "Mains power"
+      },
+      "ready_to_arm": {
+        "name": "Ready to arm",
+        "state": {
+          "on": "Ready",
+          "off": "Not ready"
+        }
       }
     },
     "sensor": {

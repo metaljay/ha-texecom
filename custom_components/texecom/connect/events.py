@@ -55,6 +55,7 @@ class EventsMixin:
         if kind == "zone":
             zs: P.ZoneState = m["state"]
             self.set_zone(m["zone"], zs.state, zs.bypassed)
+            self._check_ready_soon(m["zone"])
             if zs.alarmed and zs.active:
                 self._credit_alarm_zone(m["zone"])
         elif kind == "area":
