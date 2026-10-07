@@ -306,6 +306,41 @@ async def test_simulated_panel_commands(fake):
         await panel.stop()
 
 
+def test_flag_and_log_names():
+    flags = bytearray(72)
+    flags[P.FLAG_ARMED] = flags[P.FLAG_FULL_ARMED] = 0b01  # area 1
+    flags[39] = 0b10  # area 2: chime enabled
+    assert P.area_flags_set(bytes(flags), 1, 24) == [21, 22]
+    assert P.flag_names([21, 22]) == ["21 Armed", "22 Full Armed"]
+    assert P.flag_names(P.area_flags_set(bytes(flags), 2, 24)) == ["39 Chime Enabled"]
+    assert len(P.AREA_FLAG_NAMES) == 73 and P.AREA_FLAG_NAMES[16] == "Ready"
+    m = {"type": 85, "group": 0, "parameter": 3, "areas": 1}
+    assert P.describe_log(m) == "Arm Failed (85), group Not Reported (0), parameter 3, areas 0x1"
+    assert P.describe_log({**m, "type": 137}).startswith("unknown (137)")
+
+
+async def test_diagnostics_name_the_flags_and_read_the_system_flags(fake, caplog):
+    caplog.set_level("DEBUG", logger="custom_components.texecom")
+    fake.system_flags = bytes([0, 4, 0, 0, 0, 0, 0, 0])
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        await panel.refresh_areas()
+        diagnostics = await panel.async_diagnostics()
+        assert diagnostics["area_flags"] == {1: ["21 Armed", "22 Full Armed"]}
+        assert diagnostics["system_flags"] == "00 04 00 00 00 00 00 00"
+        assert "area 1 flags: 21 Armed, 22 Full Armed" in caplog.text
+        # A panel that doesn't answer it: diagnostics say so, and the session carries on.
+        connections = fake.connections
+        fake.ignore_next[P.CMD_GET_SYSTEM_FLAGS] = 1
+        diagnostics = await panel.async_diagnostics()
+        assert diagnostics["system_flags"].startswith("unreadable")
+        assert panel.connected and fake.connections == connections
+    finally:
+        await panel.stop()
+
+
 async def test_mains_fault_and_restore(fake):
     events = []
     panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))

@@ -47,7 +47,10 @@ class EventsMixin:
         return None
 
     def _on_message(self, m: dict[str, Any]) -> None:
-        self._log.debug("Connect: message %s", m)
+        if m["kind"] == "log":
+            self._log.debug("Connect: message %s: %s", m, P.describe_log(m))
+        else:
+            self._log.debug("Connect: message %s", m)
         kind = m["kind"]
         if kind == "zone":
             zs: P.ZoneState = m["state"]

@@ -64,6 +64,7 @@ class FakeConnectPanel:
         self.connections = 0  # TCP connections accepted (a SmartCom counts these, logged in or not)
         self.power_override: bytes | None = None  # raw GET_SYSTEM_POWER reply
         self.clock_raw: bytes | None = None  # raw GET_DATE_TIME reply (e.g. an impossible date)
+        self.system_flags = bytes(8)  # GET_SYSTEM_FLAGS reply (its meaning isn't mapped yet)
 
     async def start(self, port: int = 0, host: str = "127.0.0.1") -> int:
         self.server = await asyncio.start_server(self._on_client, host, port)
@@ -221,6 +222,8 @@ class FakeConnectPanel:
             self.set_area(0)
         elif cmd == P.CMD_RESET_AREA:
             reply(ack)
+        elif cmd == P.CMD_GET_SYSTEM_FLAGS:
+            reply(self.system_flags)
         else:
             reply(bytes([P.NAK]))
 

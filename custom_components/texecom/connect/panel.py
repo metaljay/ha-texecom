@@ -98,6 +98,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._seen_current = False
         self._idle_count = 0
         self._refresh_handle: asyncio.TimerHandle | None = None
+        self._logged_flags: dict[int, list[int]] = {}  # area -> flags last named in the debug log
         self.last_error: str | None = None
 
     @property
@@ -218,6 +219,19 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         states = await self.client.area_states(list(self.areas), self.panel_zones)
         for number, (state, part_arm) in states.items():
             self._apply_area(number, state, part_arm)
+        self._log_area_flags()
+
+    def _log_area_flags(self) -> None:
+        """Names the flags set for each area in the debug log when they change
+        (most aren't used yet: this is how they get mapped on a real panel)."""
+        flags = self.client.last_area_flags if self.client else None
+        if not flags:
+            return
+        for number in self.areas:
+            now_set = P.area_flags_set(flags, number, self.panel_zones)
+            if self._logged_flags.get(number) != now_set:
+                self._logged_flags[number] = now_set
+                self._log.debug("Connect: area %s flags: %s", number, ", ".join(P.flag_names(now_set)) or "none")
 
     async def _on_idle(self) -> None:
         self._idle_count += 1
@@ -356,4 +370,11 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
             "display": self.extra.get("display"),
             "faults": sorted(self.extra.get("faults", ())),
             "tampers": sorted(self.extra.get("tampers", ())),
+            # Every flag the panel last reported for each area, by name.
+            "area_flags": {
+                number: P.flag_names(P.area_flags_set(self.client.last_area_flags, number, self.panel_zones))
+                for number in self.areas
+            }
+            if self.client and self.client.last_area_flags
+            else None,
         }

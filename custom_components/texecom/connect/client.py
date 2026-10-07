@@ -97,6 +97,7 @@ class ConnectClient:
         self._parser = P.FrameParser(self._on_frame, self._on_drop, lambda m: self._log.debug("Connect: %s", m))
         self.single_flag_reads = False
         self._bulk_flag_failures = 0
+        self.last_area_flags: bytes | None = None  # the last GET_AREA_FLAGS read, from flag 0
 
     @property
     def connected(self) -> bool:
@@ -204,10 +205,11 @@ class ConnectClient:
             except Exception:  # never let a handler kill the session
                 self._log.exception("Connect: error handling message %s", frame.body.hex())
 
-    async def command(self, cmd: int, body: bytes = b"") -> bytes:
+    async def command(self, cmd: int, body: bytes = b"", *, optional: bool = False) -> bytes:
         """Send a command and return its reply payload (after the echoed
         command byte). Commands never overlap; each is resent on timeout with
-        the same sequence number."""
+        the same sequence number. An optional command (one the panel might
+        not support) is sent once, and no answer doesn't end the session."""
         async with self._lock:
             if not self._writer or self._closed:
                 raise ConnectError("not connected")
@@ -216,7 +218,7 @@ class ConnectClient:
             frame = P.encode_command(sequence, cmd, body)
             loop = asyncio.get_running_loop()
             self._last_command = loop.time()
-            for _attempt in range(self.timing.command_attempts):
+            for _attempt in range(1 if optional else self.timing.command_attempts):
                 future: asyncio.Future[bytes] = loop.create_future()
                 self._pending = (sequence, cmd, future)
                 try:
@@ -228,6 +230,8 @@ class ConnectClient:
                     continue
                 finally:
                     self._pending = None
+            if optional:
+                raise ConnectError(f"command {cmd} was not answered")
             reason = f"command {cmd} was not answered after {self.timing.command_attempts} attempts"
             # An unanswered command means the session is dead even if TCP isn't.
             self._end(reason)
@@ -274,6 +278,12 @@ class ConnectClient:
     async def system_power(self) -> P.SystemPower | None:
         return P.decode_system_power(await self.command(P.CMD_GET_SYSTEM_POWER))
 
+    async def system_flags(self) -> bytes | None:
+        """The panel's system flags (meaning not mapped yet; for diagnostics).
+        None if the panel refuses."""
+        reply = await self.command(P.CMD_GET_SYSTEM_FLAGS, optional=True)
+        return None if P.is_nak(reply) else reply
+
     async def date_time(self) -> tuple[int, int, int, int, int, int] | None:
         return P.decode_date_time(await self.command(P.CMD_GET_DATE_TIME))
 
@@ -310,6 +320,7 @@ class ConnectClient:
             flags = await self.command(P.CMD_GET_AREA_FLAGS, bytes([0, count]))
             if len(flags) == count * size:
                 self._bulk_flag_failures = 0
+                self.last_area_flags = flags
                 return P.decode_area_flags(flags, areas, panel_zones)
             # A NAK can be transient, so only give up after repeated failures.
             self._bulk_flag_failures += 1
@@ -331,6 +342,7 @@ class ConnectClient:
             if int.from_bytes(bitmap, "little") & ~valid_bits:
                 raise PanelBusyError(f"area flag {flag}: reply {bitmap.hex()} looks like a NAK")
             buf[flag * size : flag * size + size] = bitmap
+        self.last_area_flags = bytes(buf)
         return P.decode_area_flags(bytes(buf), areas, panel_zones)
 
     # ─── Arm / disarm (adapted from texecom2mqtt, MIT) ──────────────────────

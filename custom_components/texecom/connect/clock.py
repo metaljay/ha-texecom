@@ -81,9 +81,17 @@ class ClockMixin:
         return True
 
     async def async_diagnostics(self) -> dict[str, Any]:
-        """Like diagnostics(), plus the panel clock against local time."""
+        """Like diagnostics(), plus what has to be asked for: the panel clock
+        against local time, and the panel's system flags (raw: their meaning
+        isn't mapped yet)."""
         result = self.diagnostics()
         if self.connected and self.client:
+            try:
+                flags = await self.client.system_flags()
+            except ConnectError as err:
+                result["system_flags"] = f"unreadable: {err}"
+            else:
+                result["system_flags"] = flags.hex(" ") if flags is not None else "refused"
             try:
                 clock = await self.client.date_time()
             except (ConnectError, P.InvalidClock) as err:
