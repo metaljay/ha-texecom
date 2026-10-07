@@ -23,7 +23,7 @@ from ..panel import (
     TexecomPanel,
 )
 from . import protocol as P
-from .client import ConnectClient, ConnectError, LoginRejected, PanelBusyError, Timing, Unreachable
+from .client import ConnectClient, ConnectError, HostLog, LoginRejected, PanelBusyError, Timing, Unreachable
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -43,6 +43,7 @@ FIRE_ALARM = 129
 FIRE_ALARM_END = 130
 USER_CHANGE_WINDOW = 60.0  # a keypad logon this recent explains an arm/disarm
 ZONE_ALARM_REPEAT = 30.0
+SWITCH_GRACE = 10.0  # longest a mode switch may sit between "disarmed" and the new exit delay
 
 
 async def discover(client: ConnectClient) -> tuple[PanelInfo, list[PanelZone], list[PanelArea]]:
@@ -115,6 +116,7 @@ class ConnectPanel(TexecomPanel):
     ) -> None:
         super().__init__(part_arms)
         self.host, self.port, self.udl = host, port, str(udl)
+        self._log = HostLog(_LOGGER, {"host": host})
         self.info = info
         self.zones = {z.number: z for z in zones}
         self.areas = {a.number: a for a in areas}
@@ -134,6 +136,7 @@ class ConnectPanel(TexecomPanel):
         self._last_user: tuple[str, float] | None = None
         self._recent_alarms: dict[tuple[int, bool], float] = {}
         self._alarm_zone: tuple[str, float] | None = None
+        self._switching: dict[int, float] = {}
         self._idle_count = 0
         self._refresh_handle: asyncio.TimerHandle | None = None
         self.last_error: str | None = None
@@ -183,10 +186,10 @@ class ConnectPanel(TexecomPanel):
             )
             self.client = client
             try:
-                _LOGGER.debug("Connect: connecting to %s:%s", self.host, self.port)
+                self._log.debug("Connect: connecting to %s:%s", self.host, self.port)
                 await client.connect()
                 await self._start_up()
-                _LOGGER.info("Connect: logged in to %s:%s", self.host, self.port)
+                self._log.info("Connect: logged in to %s:%s", self.host, self.port)
                 self.last_error = None
                 delay = self.reconnect_min
                 self.set_connected(True)
@@ -202,19 +205,19 @@ class ConnectPanel(TexecomPanel):
                 raise
             except LoginRejected as err:
                 self.last_error = str(err)
-                _LOGGER.error("Connect: %s", err)
+                self._log.error("Connect: %s", err)
                 if self.on_auth_failed:
                     self.on_auth_failed()
                     self._stopped = True  # wait for a new code rather than retry
             except Exception as err:  # noqa: BLE001 - any failure means reconnect
                 self.last_error = str(err)
-                _LOGGER.warning("Connect: %s", err)
+                self._log.warning("Connect: %s", err)
             finally:
                 await client.close()
                 self.set_connected(False)
             if self._stopped:
                 break
-            _LOGGER.info("Connect: reconnecting in %.0f s", delay)
+            self._log.info("Connect: reconnecting in %.0f s", delay)
             await asyncio.sleep(delay)
             delay = min(delay * 2, max(RECONNECT_MAX, self.reconnect_min))
 
@@ -223,6 +226,7 @@ class ConnectPanel(TexecomPanel):
             try:
                 await self.refresh()
                 await self.read_power()
+                await self.read_display()
                 return
             except PanelBusyError:
                 if attempt == 2:
@@ -249,8 +253,18 @@ class ConnectPanel(TexecomPanel):
     async def _on_idle(self) -> None:
         self._idle_count += 1
         await self.refresh()
+        await self.read_display()
         if self._idle_count % POWER_EVERY_N_IDLE == 1:
             await self.read_power()
+
+    async def read_display(self) -> None:
+        """What the keypads show, e.g. "System alerts" after an alarm."""
+        assert self.client
+        with contextlib.suppress(PanelBusyError):
+            text = P.clean_text((await self.client.lcd_display()).encode("latin1"))
+            if text and text != self.extra.get("display"):
+                self.extra["display"] = text
+                self.notify()
 
     async def read_power(self) -> None:
         assert self.client
@@ -265,13 +279,20 @@ class ConnectPanel(TexecomPanel):
         if area is None:
             return
         if state == "disarmed":
+            if self._switching.get(number, 0) > time.monotonic():
+                self._log.debug("Connect: area %s: disarmed while switching mode; still arming", number)
+                return
+            self._switching.pop(number, None)
             self.set_area(number, DISARMED, None, changed_by)
         elif state == "in exit":
+            if self._switching.pop(number, None) is not None:
+                self.set_area(number, ARMING, None, changed_by)
+                return
             # An armed area can't start an exit delay without being disarmed
             # first; a flag re-read just after a remote arm can still show the
             # exit flag (seen on a real panel), so ignore it.
             if area.known and area.state not in (DISARMED, TRIGGERED, ARMING):
-                _LOGGER.debug("Connect: area %s: ignoring a stale exit flag while armed", number)
+                self._log.debug("Connect: area %s: ignoring a stale exit flag while armed", number)
                 return
             self.set_area(number, ARMING, None, changed_by)
         elif state == "in entry":
@@ -291,16 +312,18 @@ class ConnectPanel(TexecomPanel):
         return None
 
     def _on_message(self, m: dict[str, Any]) -> None:
-        _LOGGER.debug("Connect: message %s", m)
+        self._log.debug("Connect: message %s", m)
         kind = m["kind"]
         if kind == "zone":
             zs: P.ZoneState = m["state"]
             self.set_zone(m["zone"], zs.state, zs.bypassed)
+            if zs.alarmed and zs.active:
+                self._credit_alarm_zone(m["zone"])
         elif kind == "area":
             if m["state_code"] > 5:
                 # Seen straight after "Part Armed 1" (settled part arm?): not
                 # in the published lists, so re-read the flags instead.
-                _LOGGER.debug("Connect: area %s reported state %s; re-reading", m["area"], m["state_code"])
+                self._log.debug("Connect: area %s reported state %s; re-reading", m["area"], m["state_code"])
                 self._refresh_areas_soon()
             elif m["state"] == "part armed":
                 self._apply_area(m["area"], "part armed", self._last_part_arm, self._recent_user())
@@ -328,9 +351,8 @@ class ConnectPanel(TexecomPanel):
                 if self._recent_alarms.get(key, -ZONE_ALARM_REPEAT) > now - ZONE_ALARM_REPEAT:
                     return
                 self._recent_alarms[key] = now
-                if zone:  # the alarm's "changed by" names the zone that set it off
-                    self._alarm_zone = (zone.name.title() if zone.name.isupper() else zone.name, now)
-                _LOGGER.warning(
+                self._credit_alarm_zone(m["parameter"])
+                self._log.warning(
                     "Connect: zone %s (%s) in %s",
                     m["parameter"],
                     zone.name if zone else "unknown",
@@ -346,7 +368,7 @@ class ConnectPanel(TexecomPanel):
                 # One log per zone that stopped the arm (seen on a real panel:
                 # zones active at the end of the exit time).
                 zone = self.zones.get(m["parameter"])
-                _LOGGER.warning(
+                self._log.warning(
                     "Connect: arming failed: zone %s (%s) active", m["parameter"], zone.name if zone else "unknown"
                 )
                 self.on_event(
@@ -355,8 +377,28 @@ class ConnectPanel(TexecomPanel):
                 )
             self._refresh_areas_soon()  # these produce no area event
         elif m["type"] == LOG_INSTALLER_PROGRAMMING_END:
-            _LOGGER.info("Connect: engineer programming finished; re-reading zones and areas")
+            self._log.info("Connect: engineer programming finished; re-reading zones and areas")
             self._spawn(self._rediscover())
+
+    def _credit_alarm_zone(self, number: int) -> None:
+        """Names the zone that set the alarm off as the alarm's "changed by".
+
+        The panel flags it on the zone's state as the alarm starts (the log
+        entry can come only after the disarm), in either order relative to
+        the area's "in alarm" message.
+        """
+        zone = self.zones.get(number)
+        if not zone:
+            return
+        name = zone.name.title() if zone.name.isupper() else zone.name
+        now = time.monotonic()
+        if self._alarm_zone and self._alarm_zone[0] != name and now - self._alarm_zone[1] < USER_CHANGE_WINDOW:
+            return  # the first zone in an alarm is the one that set it off
+        self._alarm_zone = (name, now)
+        for number_, area in self.areas.items():
+            if area.state == TRIGGERED and (not zone.areas or number_ in zone.areas) and area.changed_by != name:
+                area.changed_by = name
+                self.notify()
 
     def _refresh_areas_soon(self) -> None:
         if self._refresh_handle:
@@ -372,7 +414,7 @@ class ConnectPanel(TexecomPanel):
         try:
             await coro
         except ConnectError as err:
-            _LOGGER.debug("Connect: area refresh skipped: %s", err)
+            self._log.debug("Connect: area refresh skipped: %s", err)
 
     async def _rediscover(self) -> None:
         if not self.client:
@@ -380,7 +422,7 @@ class ConnectPanel(TexecomPanel):
         try:
             info, zones, areas = await discover(self.client)
         except ConnectError as err:
-            _LOGGER.warning("Connect: re-reading zones failed: %s", err)
+            self._log.warning("Connect: re-reading zones failed: %s", err)
             return
 
         def layout(zs, ars):
@@ -397,7 +439,7 @@ class ConnectPanel(TexecomPanel):
             try:
                 await self.sync_clock()
             except ConnectError as err:
-                _LOGGER.debug("Connect: clock check failed: %s", err)
+                self._log.debug("Connect: clock check failed: %s", err)
             await asyncio.sleep(self.time_sync_seconds)
 
     async def sync_clock(self, now: datetime | None = None) -> bool:
@@ -415,9 +457,9 @@ class ConnectPanel(TexecomPanel):
         want = (now.year, now.month, now.day, now.hour, now.minute, now.second)
         drift = (datetime(*panel) - datetime(*want)).total_seconds()
         if abs(drift) <= 60:
-            _LOGGER.debug("Connect: panel clock within %.0f s", abs(drift))
+            self._log.debug("Connect: panel clock within %.0f s", abs(drift))
             return False
-        _LOGGER.info("Connect: panel clock is %.0f s %s; setting it", abs(drift), "ahead" if drift > 0 else "behind")
+        self._log.info("Connect: panel clock is %.0f s %s; setting it", abs(drift), "ahead" if drift > 0 else "behind")
         if not await self.client.set_date_time(want):
             raise PanelError("the panel refused the new time")
         return True
@@ -441,10 +483,17 @@ class ConnectPanel(TexecomPanel):
         self._last_user = ("Home Assistant", time.monotonic())
         try:
             if current not in (DISARMED, ARMING, PENDING, TRIGGERED):
+                # Switching mode: the panel reports "disarmed" for a moment
+                # before the new exit delay. Show "arming" throughout, so
+                # automations on "disarmed" don't fire (seen on a real panel).
+                self._switching[area] = time.monotonic() + SWITCH_GRACE
+                self.set_area(area, ARMING, None, "Home Assistant")
                 await self._ok(client.disarm(area, self.panel_zones), "disarm before re-arm")
             await self._ok(client.arm(area, arm_type, self.panel_zones), f"arm ({mode})")
         except PanelError:
             self._requested_mode.pop(area, None)
+            if self._switching.pop(area, None) is not None:
+                self._refresh_areas_soon()  # show whatever the panel is really in
             raise
 
     async def disarm(self, area: int) -> None:
@@ -475,4 +524,5 @@ class ConnectPanel(TexecomPanel):
             "single_flag_reads": bool(self.client and self.client.single_flag_reads),
             "last_error": self.last_error,
             "power": self.extra.get("power").__dict__ if self.extra.get("power") else None,
+            "display": self.extra.get("display"),
         }

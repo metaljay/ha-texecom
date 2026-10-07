@@ -15,7 +15,7 @@ Control your Texecom **Premier Elite** alarm from **Home Assistant**, using the 
 - 🛡️ **An alarm for each area**: arm **Away**, **Night** or **Home**, disarm, and see when it's arming, in its entry delay or going off. Changes made at the keypad show straight away.
 - 🚪 **A sensor for every zone**, named as on your panel: doors and windows, motion detectors, smoke and gas. Each zone is its own device, so you can put it in a room.
 - 📋 **An Alarm dashboard**, made for you at the end of setup from Home Assistant's own cards. Nothing else to install.
-- 🔋 **Panel health**: connection, mains and battery voltage.
+- 🔋 **Panel health**: connection, mains and battery voltage, and what the keypad screen says.
 - ⚡ **Automations**: lights on when the hallway sees movement, a notification when the alarm goes off, arm when everyone leaves.
 - 🍏 **Apple Home** too, through Home Assistant's built-in [HomeKit Bridge](https://www.home-assistant.io/integrations/homekit/).
 

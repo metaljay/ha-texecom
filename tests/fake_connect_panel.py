@@ -185,6 +185,8 @@ class FakeConnectPanel:
                 flags[P.FLAG_ARMED] = flags[P.FLAG_PART_ARMED] = 1
                 flags[P.FLAG_PART_ARM_1 + (self.part_arm or 1) - 1] = 1
             reply(bytes(flags[args[0] : args[0] + args[1]]))
+        elif cmd == P.CMD_GET_LCD_DISPLAY:
+            reply(b" Premier Elite  " + datetime.now().strftime(" %a %d %H:%M  ").encode())
         elif cmd == P.CMD_GET_SYSTEM_POWER:
             reply(bytes([100, 101, 99, 30, 2]))
         elif cmd == P.CMD_ARM_AREA:

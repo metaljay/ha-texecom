@@ -27,7 +27,9 @@ async def async_setup_entry(
     if entry.data[CONF_PROTOCOL] != PROTOCOL_CONNECT:
         return
     panel = entry.runtime_data
-    async_add_entities(TexecomPowerSensor(entry, panel, *spec) for spec in POWER_SENSORS)
+    async_add_entities(
+        [*(TexecomPowerSensor(entry, panel, *spec) for spec in POWER_SENSORS), TexecomDisplaySensor(entry, panel)]
+    )
 
 
 class TexecomPowerSensor(TexecomEntity, SensorEntity):
@@ -61,3 +63,21 @@ class TexecomPowerSensor(TexecomEntity, SensorEntity):
     def native_value(self) -> float | None:
         power = self.panel.extra.get("power")
         return getattr(power, self._attribute) if power else None
+
+
+class TexecomDisplaySensor(TexecomEntity, SensorEntity):
+    """The text on the keypads (checked every 30 seconds)."""
+
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
+    _attr_translation_key = "display"
+
+    def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel) -> None:
+        super().__init__(entry, panel, "display")
+
+    @property
+    def available(self) -> bool:
+        return self.panel.connected and "display" in self.panel.extra
+
+    @property
+    def native_value(self) -> str | None:
+        return self.panel.extra.get("display")

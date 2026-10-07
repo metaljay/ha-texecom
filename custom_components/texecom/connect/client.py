@@ -22,6 +22,14 @@ LOGIN_DELAY = 2.0  # a login sent too soon after connecting is ignored
 CONNECT_TIMEOUT = 10.0
 
 
+class HostLog(logging.LoggerAdapter):
+    """Puts the panel's address in every line, for homes (or test rigs) with
+    more than one panel."""
+
+    def process(self, msg, kwargs):
+        return msg.replace("Connect: ", f"Connect {self.extra['host']}: ", 1), kwargs
+
+
 class ConnectError(Exception):
     """The session failed (refused login, dropped connection, no answer)."""
 
@@ -67,6 +75,7 @@ class ConnectClient:
         timing: Timing | None = None,
     ) -> None:
         self.host = host
+        self._log = HostLog(_LOGGER, {"host": host})
         self.port = port
         self.udl = str(udl)
         self.on_message = on_message
@@ -83,7 +92,7 @@ class ConnectClient:
         self._last_message_seq = -1
         self._closed = False
         self._last_command = 0.0
-        self._parser = P.FrameParser(self._on_frame, self._on_drop, lambda m: _LOGGER.debug("Connect: %s", m))
+        self._parser = P.FrameParser(self._on_frame, self._on_drop, lambda m: self._log.debug("Connect: %s", m))
         self.single_flag_reads = False
         self._bulk_flag_failures = 0
 
@@ -139,7 +148,7 @@ class ConnectClient:
         if self._closed:
             return
         self._closed = True
-        _LOGGER.warning("Connect: %s", reason)
+        self._log.warning("Connect: %s", reason)
         asyncio.get_running_loop().create_task(self._teardown(reason))
         self.on_close(reason)
 
@@ -165,7 +174,7 @@ class ConnectClient:
         if frame.type == P.TYPE_RESPONSE:
             pending = self._pending
             if not pending or frame.sequence != pending[0] or pending[2].done():
-                _LOGGER.debug("Connect: ignoring response with unexpected sequence %s", frame.sequence)
+                self._log.debug("Connect: ignoring response with unexpected sequence %s", frame.sequence)
                 return
             if frame.body[:1] != bytes([pending[1]]):
                 pending[2].set_exception(
@@ -180,7 +189,7 @@ class ConnectClient:
             try:
                 self.on_message(P.decode_message(frame.body))
             except Exception:  # never let a handler kill the session
-                _LOGGER.exception("Connect: error handling message %s", frame.body.hex())
+                self._log.exception("Connect: error handling message %s", frame.body.hex())
 
     async def command(self, cmd: int, body: bytes = b"") -> bytes:
         """Send a command and return its reply payload (after the echoed
@@ -224,11 +233,11 @@ class ConnectClient:
                 else:
                     await self.command(P.CMD_GET_DATE_TIME)
             except PanelBusyError as err:
-                _LOGGER.debug("Connect: state re-read skipped: %s", err)
+                self._log.debug("Connect: state re-read skipped: %s", err)
             except ConnectError as err:
-                _LOGGER.debug("Connect: keep-alive failed: %s", err)
+                self._log.debug("Connect: keep-alive failed: %s", err)
             except Exception:
-                _LOGGER.exception("Connect: keep-alive error")
+                self._log.exception("Connect: keep-alive error")
             # Whatever happened, don't spin: wait at least a full interval.
             self._last_command = max(self._last_command, loop.time())
 
@@ -243,6 +252,11 @@ class ConnectClient:
 
     async def area_details(self, area: int) -> P.AreaDetails | None:
         return P.decode_area_details(await self.command(P.CMD_GET_AREA_DETAILS, bytes([area])))
+
+    async def lcd_display(self) -> str:
+        """The keypad's two 16-character lines, joined with a space."""
+        text = (await self.command(P.CMD_GET_LCD_DISPLAY)).decode("latin1")
+        return " ".join(part.strip() for part in (text[:16], text[16:32]) if part.strip())
 
     async def system_power(self) -> P.SystemPower | None:
         return P.decode_system_power(await self.command(P.CMD_GET_SYSTEM_POWER))
@@ -289,7 +303,7 @@ class ConnectClient:
             what = "panel replied NAK" if P.is_nak(flags) else f"got {len(flags)} of {count * size} bytes"
             if self._bulk_flag_failures < 3:
                 raise PanelBusyError(f"area flags: {what}")
-            _LOGGER.info("Connect: bulk area-flag reads keep failing (%s); switching to single-flag reads", what)
+            self._log.info("Connect: bulk area-flag reads keep failing (%s); switching to single-flag reads", what)
             self.single_flag_reads = True
         valid_bits = (1 << P.area_count(panel_zones)) - 1
         buf = bytearray(count * size)

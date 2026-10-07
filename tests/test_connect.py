@@ -117,6 +117,7 @@ async def test_zone_events_and_initial_state(fake):
         assert panel.zones[2].active and not panel.zones[1].active
         assert panel.areas[1].state == DISARMED
         assert panel.extra["power"].panel_voltage == pytest.approx(13.77)
+        assert panel.extra["display"].startswith("Premier Elite")
         fake.set_zone(1, 1)
         await wait_for(lambda: panel.zones[1].active)
         fake.set_zone(1, 2)
@@ -151,6 +152,20 @@ async def test_switching_mode_disarms_first_and_unmapped_mode_is_refused(fake):
         panel.part_arms["home"] = 0
         with pytest.raises(PanelError):
             await panel.arm(1, "home")
+    finally:
+        await panel.stop()
+
+
+async def test_switching_mode_never_shows_disarmed(fake):
+    panel = await make_panel(fake, part_arms={"night": 1, "home": 0})
+    seen = []
+    try:
+        await panel.arm(1, "night")
+        await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
+        panel.add_listener(lambda: seen.append(panel.areas[1].state))
+        await panel.arm(1, "away")
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        assert DISARMED not in seen
     finally:
         await panel.stop()
 
@@ -224,6 +239,18 @@ async def test_arm_failed_names_the_zone(fake):
         fake.send_log(85, 0, 3)  # ARM_FAILED, zone 3 active at the end of the exit time
         await wait_for(lambda: events)
         assert events[0] == ("arm_failed", {"areas": 1, "zone": 3, "zone_name": "Kitchen"})
+    finally:
+        await panel.stop()
+
+
+async def test_alarm_names_the_zone_from_its_alarmed_flag(fake):
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        fake.set_area(5)
+        fake.set_zone(3, 0x11)  # active + alarmed, as the panel sends it
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED and panel.areas[1].changed_by == "Kitchen")
     finally:
         await panel.stop()
 

@@ -203,6 +203,9 @@
       },
       "battery_current": {
         "name": "Battery current"
+      },
+      "display": {
+        "name": "Keypad display"
       }
     }
   },
