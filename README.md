@@ -102,7 +102,7 @@ Open **Settings → Devices & services → Texecom → Configure**:
 | **Night uses / Home uses** | The part arm behind each button |
 | **Home Assistant alarm code** | Optional. Home Assistant asks for it before disarming (and arming, if you tick the next option). It's checked by Home Assistant, not the panel, and has nothing to do with your keypad codes |
 | **Create or refresh the Alarm dashboard** | Builds the dashboard again from the current zones |
-| **Keep the panel clock right** | Once a day, sets the panel's clock if it's more than a minute out. Uses Home Assistant's time zone, so British Summer Time is handled |
+| **Keep the panel clock right** | Once a day (and on connecting), sets the panel's clock if it's more than a minute out. Uses Home Assistant's time zone, so British Summer Time is handled. If it's off and the clock is more than 5 minutes out (e.g. after a total power loss), Home Assistant's **Repairs** shows a notice with a **Fix** button |
 | **Read zones and areas from the panel again** | After your installer changes zones or names. This also happens by itself when engineer programming ends |
 
 To change the SmartCom's address or the UDL code, use **⋮ → Reconfigure**.
@@ -203,7 +203,7 @@ actions:
 - 🚨 **When the alarm goes off**, the panel briefly drops the connection to send its own alarm report through the SmartCom. Home Assistant reconnects and catches up within seconds. If your SmartCom also reports to a monitoring centre, consider a second module (a ComIP) for Home Assistant.
 - 🔁 **Reconnects by itself** after a power cut, a router restart or a dropped connection, and reads the panel's state again so nothing is missed. After Home Assistant restarts, the SmartCom can take about a minute to accept it again.
 - 🔐 **The UDL code is stored in Home Assistant** (like any integration password). Anyone with admin access to your Home Assistant can arm and disarm, so keep that access tight, and consider the optional alarm code.
-- 🔌 **Mains and faults**: **Mains power** turns off as soon as the panel reports a mains failure, and **Problem** lists any fault it reports. The panel reports a mains failure straight away; see *Known limits* for when the mains comes back.
+- 🔌 **Mains and faults**: **Mains power** turns off as soon as the panel reports a mains failure, and **Problem** lists any fault it reports. The panel reports a mains failure straight away; see [Known limits](#known-limits) for when the mains comes back.
 - 🔧 **Tampers**: the panel's **Tamper** sensor turns on while its lid, a keypad, the bell box or a detector is open, and says which. Most installs wire every detector's tamper to one shared circuit, so the panel (and Home Assistant) can't say *which* detector; it shows as *Auxiliary Tamper*. Each zone also has a hidden **Tamper** sensor, which only works if that zone's tamper is wired to the zone itself.
 - 🧾 **Diagnostics**: on the panel's device page, **Download diagnostics** gives a report with the codes and address removed, for bug reports.
 
@@ -266,6 +266,23 @@ views:
           - type: tile
             entity: binary_sensor.texecom_hallway
 ```
+
+</details>
+
+<a id="known-limits"></a>
+
+<details>
+<summary><b>📏 Known limits</b> (what the panel does and doesn't tell Home Assistant)</summary>
+
+Found while testing on a real Premier Elite 24 (V6.05.03):
+
+- **One connection at a time.** The SmartCom serves Home Assistant *or* the Texecom app (or Homebridge, texecom2mqtt). It also refuses a new connection for about a minute after the last one closed, so after Home Assistant restarts the alarm can take a minute to come back.
+- **During an alarm** the SmartCom drops Home Assistant for about a minute to send its own report. Home Assistant reconnects and catches up by itself.
+- **Mains coming back** isn't reported by the panel, only the failure. Home Assistant reads the panel's power every 30 seconds instead, so *Mains power* turns back on within half a minute.
+- **Which detector was tampered with** usually isn't known: most installs wire every detector's tamper switch to one shared circuit, which the panel reports as *Auxiliary Tamper*.
+- **Keypad lights** (e.g. the spanner) aren't sent; the *Keypad display* sensor shows the screen text instead.
+- **The panel's clock resets** if it loses all power (mains and battery). Home Assistant raises a Repairs notice and can set it for you.
+- **Zones that saw you at the end of an exit time** make the arm fail, and the panel sounds its "fail to set" warning. Home Assistant reports it as an `arm_failed` event naming the zone.
 
 </details>
 
