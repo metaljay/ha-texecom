@@ -49,6 +49,23 @@ async def test_entities_devices_and_states(hass, fake):
     await hass.async_block_till_done()
 
 
+async def test_only_old_zones_can_be_deleted(hass, fake):
+    from custom_components.texecom import async_remove_config_entry_device
+    from custom_components.texecom.const import DOMAIN
+
+    entry = await setup_connect(hass, fake)
+    devices = dr.async_get(hass)
+    # A zone the installer has since removed from the panel.
+    old = devices.async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={(DOMAIN, f"{entry.entry_id}_zone_99")}, name="Old Zone"
+    )
+    by_name = {d.name: d for d in dr.async_entries_for_config_entry(devices, entry.entry_id)}
+    assert await async_remove_config_entry_device(hass, entry, old) is True
+    for current in ("Front Door", "House Alarm", "Premier Elite 24 panel"):
+        assert await async_remove_config_entry_device(hass, entry, by_name[current]) is False
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 # ─── A Crestron entry ───────────────────────────────────────────────────────
 
 ALARM = "alarm_control_panel.texecom_area_a"

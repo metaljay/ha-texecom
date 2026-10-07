@@ -4,7 +4,7 @@
 Setting up and unloading a config entry. The panel driver is built in
 factory.py; the notices it raises are in notifications.py and issues.py.
 Changing an option the driver uses reloads the entry; the others apply at
-once."""
+once. A zone or area the panel no longer has can have its device deleted."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_CREATE_DASHBOARD, CONF_TIME_SYNC, DRIVER_OPTIONS
+from .const import CONF_CREATE_DASHBOARD, CONF_TIME_SYNC, DOMAIN, DRIVER_OPTIONS
 from .dashboard import async_create_dashboard
 from .entity import panel_device_info
 from .factory import create_panel
@@ -61,6 +61,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> b
 
     entry.async_on_unload(entry.add_update_listener(options_updated))
     return True
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: TexecomConfigEntry, device: dr.DeviceEntry
+) -> bool:
+    """Whether a device may be deleted (its ⋮ → Delete): only a zone or area
+    the panel no longer has, e.g. after the installer removed a zone."""
+    panel = getattr(entry, "runtime_data", None)
+    if panel is None:
+        return False
+    current = {entry.entry_id}
+    current |= {f"{entry.entry_id}_zone_{number}" for number in panel.zones}
+    current |= {f"{entry.entry_id}_area_{number}" for number in panel.areas}
+    return not any(domain == DOMAIN and key in current for domain, key in device.identifiers)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> bool:
