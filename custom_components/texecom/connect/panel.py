@@ -29,7 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_MIN = 5.0
 RECONNECT_MAX = 60.0
-POWER_EVERY_N_IDLE = 10  # read voltages every ~5 minutes
+POWER_EVERY_N_IDLE = 1  # voltages and currents every keep-alive (~30 s)
 
 # Log event types the driver reacts to (numbering as in texecom2mqtt).
 LOG_AUTO_OPEN_CLOSE = 39
@@ -262,7 +262,7 @@ class ConnectPanel(TexecomPanel):
         """What the keypads show, e.g. "System alerts" after an alarm."""
         assert self.client
         with contextlib.suppress(PanelBusyError):
-            text = P.clean_text((await self.client.lcd_display()).encode("latin1"))
+            text = P.display_message(P.clean_text((await self.client.lcd_display()).encode("latin1")))
             if text and text != self.extra.get("display"):
                 self.extra["display"] = text
                 self.notify()

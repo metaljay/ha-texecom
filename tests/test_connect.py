@@ -90,6 +90,14 @@ def test_message_decoding():
     assert P.decode_message(bytes([P.MSG_AREA, 1, 6]))["state"] == "unknown (6)"
 
 
+def test_display_message_drops_the_clock():
+    assert P.display_message("HOME 13:48.52 Wed 07") == "HOME"
+    assert P.display_message("HOME Wed 07 Oct 2026") == "HOME"
+    assert P.display_message("System Alerts! 14:03.17 Wed 07") == "System Alerts!"
+    assert P.display_message("Panel Lid Tamper 14:04.19 Wed 07") == "Panel Lid Tamper"
+    assert P.display_message("Exit Time 10") == "Exit Time 10"
+
+
 def test_panel_identification():
     ident = P.decode_panel_identification(b"Elite 24     V6.05.03LS1".ljust(32, b"\0"))
     assert (ident.model, ident.zones, ident.firmware) == ("Premier Elite", 24, "V6.05.03LS1")
@@ -117,7 +125,7 @@ async def test_zone_events_and_initial_state(fake):
         assert panel.zones[2].active and not panel.zones[1].active
         assert panel.areas[1].state == DISARMED
         assert panel.extra["power"].panel_voltage == pytest.approx(13.77)
-        assert panel.extra["display"].startswith("Premier Elite")
+        assert panel.extra["display"] == "Premier Elite"
         fake.set_zone(1, 1)
         await wait_for(lambda: panel.zones[1].active)
         fake.set_zone(1, 2)

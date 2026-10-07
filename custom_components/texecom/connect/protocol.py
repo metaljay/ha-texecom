@@ -273,6 +273,16 @@ def decode_area_flags(flags: bytes, areas: list[int], panel_zones: int | None) -
     return result
 
 
+_DISPLAY_CLOCK = re.compile(r"\s*(\d{1,2}[:.]\d{2}([:.]\d{2})?\s+)?(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b.*$", re.IGNORECASE)
+
+
+def display_message(text: str) -> str:
+    """The keypad's message without its clock and date, so it only changes
+    when the message does: "HOME 13:48.52 Wed 07" and "HOME Wed 07 Oct 2026"
+    both become "HOME"; "System Alerts! 14:03.17 Wed 07" -> "System Alerts!"."""
+    return _DISPLAY_CLOCK.sub("", text).strip() or text
+
+
 def clean_text(data: bytes) -> str:
     text = data.decode("latin1").replace("\0", " ")
     text = re.sub(r"[^\x20-\x7e]+", " ", text)
