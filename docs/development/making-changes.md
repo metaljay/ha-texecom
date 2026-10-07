@@ -32,20 +32,24 @@ All code paths are under `custom_components/texecom/`; test paths are under `tes
 | The Crestron connection or commands | `crestron/connection.py` | `test_crestron.py` |
 | Crestron events, arming | `crestron/panel.py` | `test_crestron.py`, `ha/test_init.py` |
 | Area states, names, the offline grace (shared by both drivers) | `panel.py` (a contract: careful) | both driver test files |
-| How the alarm entity behaves | `alarm_control_panel.py` | `ha/test_alarm_control_panel.py` |
+| How the alarm entity behaves, or the message when arming fails | `alarm_control_panel.py` | `ha/test_alarm_control_panel.py` |
+| Names for keypad users | `users.py` (the option's text), used by `alarm_control_panel.py` and `logbook.py` | `ha/test_users.py`, `ha/test_flows_options.py` |
+| What the activity list (Logbook) says about an event | `logbook.py` | `ha/test_logbook.py` |
 | Zone, tamper, problem, mains or connection sensors | `binary_sensor.py` | `ha/test_binary_sensor.py` |
 | Voltages, currents, keypad display | `sensor.py` | `ha/test_init.py` (add `ha/test_sensor.py` if you change it) |
 | What every entity shares: availability, device names, entity IDs, rooms | `entity.py` | `ha/test_entity.py`, `ha/test_init.py` |
 | The setup screens | `flows/connect.py`, `flows/crestron.py`, `config_flow.py` (menu, arm modes), `flows/validation.py` | `ha/test_flows_connect.py`, `ha/test_flows_crestron.py`, `ha/test_config_flow.py` |
-| The options screen | `flows/options.py` | `ha/test_flows_options.py` |
+| The options menu (**Configure**) | `flows/options.py` | `ha/test_flows_options.py` |
 | Reauth or reconfigure | `flows/reauth_reconfigure.py` | `ha/test_flows_reauth_reconfigure.py` |
 | Building the driver from an entry; `texecom_event`; reload on layout change | `factory.py` | `ha/test_init.py` |
-| Setup/unload, reloading on options change | `__init__.py` | `ha/test_init.py`, `ha/test_flows_options.py` |
-| A persistent notification | `notifications.py` | `ha/test_notifications.py` |
+| Setup/unload; which option changes reconnect (`DRIVER_OPTIONS` in `const.py`) | `__init__.py` | `ha/test_init.py`, `ha/test_flows_options.py` |
+| A notification (*Alarm not set*, *on battery*, *tamper*) | `notifications.py` | `ha/test_notifications.py` |
 | A Repairs notice, or its Fix | `issues.py`, `repairs.py` | `ha/test_issues.py`, `ha/test_repairs.py` |
 | The Alarm dashboard | `dashboard.py` | `ha/test_dashboard.py` |
 | Diagnostics | `diagnostics.py` | `ha/test_diagnostics.py` |
 | Any words on screen | `strings.json`, then copy it to `translations/en.json` | (hassfest checks the format) |
+| Entity icons | `icons.json` | (hassfest checks the format) |
+| The ready-made automations | `blueprints/automation/texecom/` (outside `custom_components/`) | `ha/test_blueprints.py` |
 | What users read | `docs/user/`, `README.md` | (none) |
 
 ## Recipes
@@ -77,11 +81,13 @@ You'll see it in a debug log: `Connect: message {...}` with `kind: unknown`, an 
 
 ### Add an option
 
-1. Add the key and default to `const.py`.
-2. Add the field to `flows/options.py` and its label and help text to `strings.json` (`options.step.init`, and `init_crestron` if Crestron has it too).
-3. Use it where it matters: in `factory.py` if the driver needs it, or in the entity or notice that uses it.
-4. Test the screen in `ha/test_flows_options.py` and the effect in the compartment's test file.
-5. Add it to the options table in [Using it](../user/using.md#options).
+The options are a menu (**Configure**), with one small screen per entry.
+
+1. Add the key (and default) to `const.py`. If the driver is built with it (`factory.py` reads it), also add it to `DRIVER_OPTIONS`, so changing it reconnects. Otherwise it applies straight away, so the code that uses it must read `entry.options` each time, not once at setup.
+2. Add it to a screen in `flows/options.py`: a field on an existing screen, or a new screen (a menu entry in `async_step_init`'s list, and an `async_step_<entry>` that shows a form and saves with `self._save({...})`). Its words go in `strings.json` under `options.step.<entry>`, and the menu label under `options.step.init.menu_options`.
+3. Use it where it matters: in `factory.py` if the driver needs it, or in the entity or notification that uses it.
+4. Test the screen in `ha/test_flows_options.py` (`options(hass, entry, "<entry>", key=value)` picks the menu entry and submits it) and the effect in the compartment's test file. Check whether it reconnects: count `fake.connections` before and after.
+5. Add it to the options table in [Using it](../user/using.md#options), marked *reconnects to the panel* if it does.
 
 Options are stored in the config entry, so a new option needs a sensible default for entries saved before it existed: read it with `.get(KEY, DEFAULT)`.
 
@@ -89,14 +95,35 @@ Options are stored in the config entry, so a new option needs a sensible default
 
 1. Edit `strings.json`. Keep the tone of the rest: plain words, short sentences, say what to do next.
 2. Copy it over `translations/en.json` (they must be identical).
-3. Links in screen text can't be written directly: pass them in as placeholders from the code (`description_placeholders`).
+3. Links can't be written into `strings.json` (hassfest rejects URLs there). Add the link to `const.py` (`HELP_*`) and pass it in as `{help}` with `description_placeholders`; the text then says `[the setup guide]({help})`.
 4. Run the checks (hassfest validates the file).
 
 ### Add a notification or a Repairs notice
 
-- **A notification** (like "Alarm not set") goes in `notifications.py`: one function that creates it and one that removes it when it no longer applies, wired up from `factory.py` (events) or `__init__.py` (listeners).
+- **A notification about something that happened** (like *Alarm not set*) goes in `notifications.py`: one function that creates it from the event and one that removes it when it no longer applies, wired up from `factory.py` (events) or `__init__.py` (listeners).
+- **A notification that lasts while something lasts** (like *Alarm panel on battery* or *Alarm tamper*) goes in `watch_conditions` in `notifications.py`. It runs on every change the panel reports, and only touches a notification when its text changes. Add a setting to turn it off on the **Notifications** screen of the options.
 - **A Repairs notice** goes in `issues.py`, with its text under `issues` in `strings.json`. If it can offer a **Fix**, that goes in `repairs.py`.
 - Test in `ha/test_notifications.py` / `ha/test_issues.py` / `ha/test_repairs.py`.
+
+### Describe a new event in the activity list
+
+`logbook.py` turns each `texecom_event` into a sentence against the area's alarm (*House Alarm reported a fault: AC Fail*). For a new event type, add a branch to `_message`, and a test in `ha/test_logbook.py` that fires the event and checks the sentence.
+
+### Make a screen wait for something slow
+
+Setup, reauth, reconfigure and *read zones again* talk to the panel, which can take up to a minute. They show a progress screen meanwhile instead of a frozen form:
+
+1. Start the slow work as a task (`self.hass.async_create_task(...)`), keep it on the flow, and return `self.async_show_progress(step_id=..., progress_action=..., progress_task=task)`. The progress text goes in `strings.json` under `progress.<progress_action>`.
+2. Home Assistant runs the same step again when the task finishes: read the result there, and return `self.async_show_progress_done(next_step_id=...)` to move on (to the next screen, or back to the form with the error).
+3. In tests, `after_progress(hass, result)` (in `tests/ha/common.py`) waits for the task and moves the flow on.
+
+See `flows/connect.py` (`async_step_connect_check`) for the pattern.
+
+### Add or change a ready-made automation (blueprint)
+
+1. Edit the YAML in `blueprints/automation/texecom/`. Input names are a [contract](architecture.md#the-contracts): people's automations store them. Add new inputs with a default.
+2. Test it in `tests/ha/test_blueprints.py`: `install()` puts the blueprint in a test config folder, `use()` makes an automation from it, then drive the simulated panel and check what happened. A phone notification can't run in tests, so `alerts_for_test()` swaps it for an event the test can see.
+3. The import buttons in [Automations](../user/automations.md) point at the file on `main`, so a new blueprint reaches users once it's merged. Don't rename or move one.
 
 ### Change what's stored in the config entry
 

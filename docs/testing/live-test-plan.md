@@ -60,11 +60,11 @@ Keep a findings log (a file outside the repository while it may contain anything
 | A2 | Look at the devices | *Premier Elite 24 panel*, *House Alarm*, one device per zone; zones in matching rooms |
 | A3 | Look at the entities | `alarm_control_panel.texecom_house` (Off); `binary_sensor.texecom_front_door` (door); smoke detector shows as smoke; Panel connection on; Mains power on; Keypad display shows *Premier Elite*; voltages around 13.7 V |
 | A4 | Arm Away, Night, switch Night → Away, disarm, from the dashboard | *Arming…* then the armed state; a mode switch never shows *Off* |
-| A5 | Set a Home Assistant alarm code in **Configure**; disarm without it, with a wrong one, with the right one | Refused, refused, disarmed |
-| A6 | **Configure**: change Home to Part Arm 2 | The alarm gains a Home button after the entry reloads |
-| A7 | **Configure → Read zones and areas from the panel again** | Completes; zones unchanged |
-| A8 | **Configure → Create or refresh the Alarm dashboard** | The dashboard is rebuilt |
-| A9 | **⋮ → Reconfigure** with the same details | The entry pauses and comes back |
+| A5 | **Configure → Home Assistant alarm code**: set one; disarm without it, with a wrong one, with the right one | Refused, refused, disarmed |
+| A6 | **Configure → Night and Home buttons**: change Home to Part Arm 2 | The alarm gains a Home button after it reconnects |
+| A7 | **Configure → Read zones and areas from the panel again** | *Reading the panel…*, then a message with the number of zones and areas; zones unchanged |
+| A8 | **Configure → Create or refresh the Alarm dashboard** | It asks first, then says the dashboard is ready; the dashboard is rebuilt |
+| A9 | **⋮ → Reconfigure** with the same details | *Connecting to your panel…* while the entry pauses; it comes back |
 | A10 | **Download diagnostics** | No UDL code, alarm code or address in the file |
 | A11 | Restart Home Assistant | The alarm comes back by itself |
 | A12 | Restart the simulated panel with `--clock-reset` | **Repairs** shows *Your alarm panel's clock is wrong*; its **Fix** turns on clock sync and the notice goes |
@@ -74,7 +74,27 @@ Keep a findings log (a file outside the repository while it may contain anything
 
 ## Part B — New features
 
-🟢 Each new feature adds its own checks here, on the simulated panel, when it's added.
+🟢 Checks for features added since the last release, on the simulated panel started with `--commands` (see [Testing](../development/testing.md#the-simulated-panels)), so you can make it report tampers, mains failures, keypad users and alarms. "Send `lid open`" means type that command to it. Each new feature adds its checks here.
+
+| ID | Do | Expect |
+|---|---|---|
+| B1 | Add the integration (as A1) and watch the screen after **Submit**. Follow the *setup guide* and *part arms explained* links | *Connecting to your panel…* with a short explanation, then the arm-modes screen. Both links open the right page |
+| B2 | Add it with UDL code 9999, then 1234 | *Connecting…*, then back to the form saying the code was refused, with the address still filled in; 1234 goes through |
+| B3 | Add it with an address where nothing answers | *Connecting…*, then *Couldn't connect*. Note how long it took |
+| B4 | Open **Configure**, and follow the link at the top | A menu: *Night and Home buttons*, *Home Assistant alarm code*, *Names for keypad users*, *Notifications*, *Panel clock*, *Read zones and areas from the panel again*, *Create or refresh the Alarm dashboard*. The link opens the options guide |
+| B5 | **Configure → Home Assistant alarm code**: set one; watch **Panel connection** and the simulated panel's output | It applies at once without reconnecting (Panel connection stays on); disarming now asks for the code |
+| B6 | **Configure → Names for keypad users**: type `Sam is user three`; then `1 = Alex` and `3 = Sam` on two lines. Send `user 3`, then `area armed`; then `user 4`, `area off` | The first is refused with an example; the second saves without reconnecting. *Changed by* says *Sam*, then *User 4* |
+| B7 | Send `mains off`; wait; send `mains on` | Within seconds: **Mains power** off, **Problem** shows *AC Fail*, and an *Alarm panel on battery* notification saying what to check. After `mains on`, all clear within about 30 seconds |
+| B8 | Send `lid open`, `aux open`, then `lid closed`, `aux closed` | One *Alarm tamper* notification, updated to list both with what to check; gone once both are closed. **Tamper** follows |
+| B9 | **Configure → Notifications**: turn both off; repeat B7 and B8 | No notifications; the sensors still change. Turn them back on |
+| B10 | Send `armfail 4` | *Alarm not set* naming Kitchen |
+| B11 | Send `area armed`, then `area alarm` and `zone 4 alarm`; then `area off`, `zone 4 closed` | *Alarm!*, changed by *Kitchen* |
+| B12 | Open the alarm's page and the **Logbook** after B6–B11 | Plain sentences for each: *keypad used by Sam (a code)*, *reported a fault: AC Fail*, *fault cleared…*, *reported a tamper: Panel Box Tamper*, *tamper put right…*, *didn't arm: Kitchen was active…*, *was set off by Kitchen* |
+| B13 | Send `refuse arm`, then arm from the dashboard. Then stop the simulated panel and arm again | *The panel refused…* (says to look at the keypad); then *Home Assistant isn't connected to the panel just now…*. Neither is a raw error |
+| B14 | Import both blueprints ([Automations](../user/automations.md); the buttons point at `main`, so before merging use the branch's file URL in **Blueprints → Import blueprint**). Make *arm when everyone leaves* with an *Occupancy* toggle and 1 minute, and *tell me about the alarm* with a test phone | Turning the toggle off arms Away after a minute; turning it back on within the minute doesn't arm. The phone gets a notification for B7, B8, B10 and B11, with the texts in the guide |
+| B15 | **⋮ → Reconfigure**: an address where nothing answers, then close the dialog during *Connecting…* | The entry comes back with its old address, Panel connection on within a minute |
+| B16 | Look at the icons | **Mains power** off: a crossed-out plug; **Keypad display**: a keypad; battery voltage: a battery |
+| B17 | On a Crestron entry (if you have one): open **Configure** | *Checking the panel* instead of *Notifications*, *Panel clock* and *Read zones…*; the activity list shows keypad users only |
 
 ## Part C — Real panel, read-only
 
@@ -109,6 +129,7 @@ Most of this is listening: run it **alongside** Parts C and E, with debug loggin
 | D8 | **The SmartCom's network name** | In the router's or the Home Assistant host's DHCP leases: the SmartCom's hostname and MAC. If the hostname is distinctive, Home Assistant could discover it by itself |
 | D9 | **Crestron lines** | During C10 and (🔴, with the owner) an arm and disarm from Home Assistant over Crestron: every line, how long the held-back burst takes after the UDL session, and how often the UDL login gets an `OK` |
 | D10 | **Summer time** | On the night the clocks change (UK: 25 October 2026, then 28 March 2027): read the panel clock (diagnostics) before 01:00 and after 02:00 GMT, once with **Keep the panel clock right** on and once off. Does the panel change its own clock? Does clock sync fight it? |
+| D11 | **Asking what's open now** | Tampers and faults are only known from log events, so after a restart an open cover or a fault isn't shown until it changes. Look for a read-only command that reports the current system tampers and faults (system flags, or reading the last few log entries on connecting) with `ConnectClient.command()`, while E8 has a cover open |
 
 Write every confirmed result into [protocol.md](../development/protocol.md), with the panel, firmware and date. Add a simulated-panel test for anything the code should now rely on.
 
@@ -118,16 +139,16 @@ Write every confirmed result into [protocol.md](../development/protocol.md), wit
 
 | ID | Do | Expect |
 |---|---|---|
-| E1 | Arm **Away** from the dashboard; the owner disarms at the keypad after it has armed | *Arming…* for the exit delay, then *Armed: Away* (changed by Home Assistant); *Off* after the keypad disarm (changed by the keypad user) |
+| E1 | Arm **Away** from the dashboard; the owner disarms at the keypad after it has armed | *Arming…* for the exit delay, then *Armed: Away* (changed by Home Assistant); *Off* after the keypad disarm (changed by the keypad user, by name if [B6](#part-b--new-features) names were set) |
 | E2 | Arm **Night** from Home Assistant; once armed, switch to **Away** from Home Assistant; owner disarms | *Armed: Night*, then *Arming…*, then *Armed: Away*; **never** *Off* in between |
 | E3 | Owner arms at the keypad: full, then part arm 1, then the part arm Home Assistant doesn't use | Each shows straight away with the user number; the unmatched part arm shows as *Home* |
 | E4 | Owner arms Away, walks back in through the entry route, disarms during the entry delay | *Entry delay*, then *Off* |
-| E5 | Arm Away from Home Assistant with a door left open | At the end of the exit time: the panel's fail-to-set warning, and an **Alarm not set** notification naming the door; it clears when the alarm next arms |
+| E5 | Arm Away from Home Assistant with a door left open | At the end of the exit time: the panel's fail-to-set warning, and an **Alarm not set** notification naming the door; it clears when the alarm next arms. The activity list says *didn't arm* |
 | E6 | **Full alarm** (warn everyone first, safety rule 2): arm Away, let the entry delay run out | *Alarm!* naming the zone; Panel connection drops for about a minute while the SmartCom reports, but the alarm keeps showing *Alarm!*; the owner resets and disarms; *System Alerts!* on the keypad |
 | E7 | During E1–E6, with the alarm in the Home app: arm from the Home app and with Siri; watch the alert during E6 | Buttons as configured; a critical alert for the alarm |
-| E8 | Owner opens a detector's cover, then (if they're happy to) the panel lid, while disarmed. **This can sound the internal sounders** | **Tamper** on, with *Auxiliary Tamper* / *Panel Box Tamper*; off again when closed; `tamper` and `tamper_cleared` events |
-| E9 | Owner switches off the panel's mains (its fused spur) for 5 minutes, then on. The battery must be healthy | **Mains power** off within seconds and **Problem** shows *AC Fail*; voltages fall; back on within 30 s of the power returning |
-| E10 | Restart the test Home Assistant during an exit delay, and (with E6) during an alarm | It comes back showing the right state |
+| E8 | Owner opens a detector's cover, then (if they're happy to) the panel lid, while disarmed. **This can sound the internal sounders** | **Tamper** on, with *Auxiliary Tamper* / *Panel Box Tamper*; off again when closed; `tamper` and `tamper_cleared` events; the *Alarm tamper* notification says where to look, and goes when closed |
+| E9 | Owner switches off the panel's mains (its fused spur) for 5 minutes, then on. The battery must be healthy | **Mains power** off within seconds and **Problem** shows *AC Fail*; voltages fall; the *Alarm panel on battery* notification shows; all back within 30 s of the power returning |
+| E10 | Restart the test Home Assistant during an exit delay, and (with E6) during an alarm. Also once during E8 with the cover still open | It comes back showing the right state. Record whether **Tamper** shows the open cover after the restart (it's expected not to: see D11) |
 | E11 | Unplug the SmartCom's network cable for 2 minutes, then (separately) for 16 | Entities keep their state for 3 minutes; Panel connection off; **Repairs** after 15 minutes; everything back within a minute or two of reconnecting |
 | E12 | The installer enters and leaves engineer programming (no changes) | Zones and areas are read again by themselves |
 
@@ -139,13 +160,13 @@ Walk through these as the household would, end to end, on the everyday Home Assi
 
 | ID | Situation | Check |
 |---|---|---|
-| F1 | **Everyone leaves** | The "arm when everyone leaves" automation arms Away after the delay, only if disarmed, and tells someone |
+| F1 | **Everyone leaves** | The *arm when everyone leaves* blueprint arms Away after the delay, only if disarmed, and (with *Then also*) tells someone |
 | F2 | **Coming home** | Entry delay shows; disarming at the keypad shows who; nothing confusing in the activity list |
 | F3 | **Going to bed** | Night from the Home app or Siri; morning disarm at the keypad |
 | F4 | **Someone stays in** while others go out | Home or Night as the household would use them; no accidental Away |
 | F5 | **Away for a week** | Mains, battery and connection stay healthy; a power cut or a dropped connection would be noticed |
-| F6 | **The alarm goes off while you're out** | The phone alert says which zone; the dashboard shows what happened and when |
-| F7 | **A power cut** | Someone is told; the battery voltage is visible; it clears when power returns |
+| F6 | **The alarm goes off while you're out** | The *tell me about the alarm* blueprint's phone alert says which zone; the dashboard's activity list shows what happened and when |
+| F7 | **A power cut** | The *Alarm panel on battery* notification (and the phone, with the blueprint); the battery voltage is visible; it clears when power returns |
 | F8 | **The installer adds a zone** | It appears (re-read by itself, or with **Read zones and areas again**); the dashboard can be refreshed |
 | F9 | **Home Assistant is down** for an update | The alarm itself carries on; Home Assistant catches up when it's back |
 
@@ -156,10 +177,11 @@ Walk through these as the household would, end to end, on the everyday Home Assi
 1. Install from HACS using only the README's buttons.
 2. Add the integration; read every screen's words. Is it clear what a UDL code is? What a part arm is? What happens next?
 3. Make each error happen and read the message: a wrong address, a wrong UDL code, a UDL code with a letter in it, the SmartCom busy (connect right after a restart).
-4. Open **Configure** and read every option. Would you know what each does without the docs?
+4. Open **Configure** and read every entry in the menu and every screen. Would you know what each does without the docs?
 5. Look at the devices, the dashboard and the Security summary on a phone as well as a computer.
-6. Read the Repairs notices and the notifications (A12, A13, E5).
-7. Time the whole setup.
+6. Read the Repairs notices and the notifications (A12, A13, B7, B8, E5). Would you know what to do?
+7. Import a blueprint from the [Automations](../user/automations.md) page as a newcomer would.
+8. Time the whole setup.
 
 Write each confusing word or missing step as a *UX* finding, with better wording.
 

@@ -5,9 +5,9 @@
 | Page | What's in it |
 |---|---|
 | [Setting it up](user/setup.md) | Installing from HACS, adding the integration, part arms, coming from Homebridge |
-| [Using it](user/using.md) | The alarm's states, the sensors, the Alarm dashboard, options, codes, good to know |
+| [Using it](user/using.md) | The alarm's states, the sensors, the Alarm dashboard, options, notifications, the activity list, codes, good to know |
 | [Apple Home](user/apple-home.md) | The alarm in the Home app through HomeKit Bridge |
-| [Automations](user/automations.md) | Arm when everyone leaves, alerts, the `texecom_event` events |
+| [Automations](user/automations.md) | One-click automations (arm when everyone leaves, alerts on your phone), the `texecom_event` events |
 | [Troubleshooting](user/troubleshooting.md) | What error messages mean, Repairs notices, logs, diagnostics, known limits |
 | [Crestron](user/crestron.md) | Using a COM port set to Crestron instead of a SmartCom |
 

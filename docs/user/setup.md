@@ -48,7 +48,7 @@ Choose **Texecom Connect**.
 
 Enter the SmartCom's **IP address**, leave the **port** at **10001**, and enter the **UDL code**, then click **Submit**.
 
-Home Assistant logs in and reads your panel's areas and zones. That takes about ten seconds, or **up to a minute** if something else (the Texecom app, Homebridge, a restart) was connected to the SmartCom just before. That's normal: the SmartCom waits a while before it lets a new connection in.
+Home Assistant shows **Connecting to your panel…** while it logs in and reads your panel's areas and zones. That takes about ten seconds, or **up to a minute** if something else (the Texecom app, Homebridge, a restart) was connected to the SmartCom just before. That's normal: the SmartCom waits a while before it lets a new connection in.
 
 If it says **"Couldn't connect"** or **"The panel refused the UDL code"**, see [Troubleshooting](troubleshooting.md#setting-up).
 

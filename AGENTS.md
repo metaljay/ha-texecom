@@ -11,7 +11,7 @@ This repository is maintained through AI agents: **the owner doesn't write code.
 1. **Never arm or disarm a real panel** unless the owner is present and has agreed to that test. Read-only checks are fine any time. Leave disarming to the owner.
 2. **Never write a code into anything**: no UDL code, keypad code or alarm code in the repository, tests, issues, logs you post, or commits. Tests use the dummy codes already in them.
 3. **Everything here is public.** No real names, email addresses, home details, Wintex files, or screenshots with personal data. Commit as `metaljay <metaljay@users.noreply.github.com>`, and check the diff for personal details before every push.
-4. **Don't change the contracts without a plan** (and say so in the pull request): the `TexecomPanel` interface, the `texecom_event` types and fields, entity unique IDs and entity IDs, and the stored config entry data. Details: [Architecture → The contracts](docs/development/architecture.md#the-contracts).
+4. **Don't change the contracts without a plan** (and say so in the pull request): the `TexecomPanel` interface, the `texecom_event` types and fields, entity unique IDs and entity IDs, the stored config entry data, and the blueprints' input names and paths. Details: [Architecture → The contracts](docs/development/architecture.md#the-contracts).
 5. **Layers 1 and 2 never import Home Assistant** (`connect/`, `crestron/`, `panel.py`).
 6. **One kind of change per commit.** Moving code (a refactor) never goes in the same commit as a change in behaviour.
 7. **Releases only when the owner asks**, as patch increments (0.2.3, 0.2.4…). See [Releasing](docs/development/making-changes.md#releasing).
@@ -26,7 +26,8 @@ Three layers; each module has one job and its own test file. Code is under `cust
 |---|---|
 | **1. Protocol** (bytes only) | `connect/protocol.py`, `crestron/protocol.py` |
 | **2. Panel drivers** | `panel.py` (the shared model and the `TexecomPanel` contract); Connect: `connect/client.py` (the session), `connect/panel.py` (connection, state, arm/disarm), `connect/discovery.py`, `connect/events.py`, `connect/conditions.py`, `connect/clock.py`; Crestron: `crestron/connection.py`, `crestron/panel.py` |
-| **3. Home Assistant** | `__init__.py` (setup/unload), `factory.py` (builds the driver), `entity.py`, `alarm_control_panel.py`, `binary_sensor.py`, `sensor.py`, `notifications.py`, `issues.py`, `repairs.py`, `dashboard.py`, `diagnostics.py`, `config_flow.py` and `flows/` (setup and options screens), `strings.json` (all screen text; `translations/en.json` is an identical copy) |
+| **3. Home Assistant** | `__init__.py` (setup/unload), `factory.py` (builds the driver), `entity.py`, `alarm_control_panel.py`, `binary_sensor.py`, `sensor.py`, `notifications.py`, `issues.py`, `repairs.py`, `dashboard.py`, `diagnostics.py`, `logbook.py` (the activity list), `users.py` (names for keypad users), `config_flow.py` and `flows/` (setup screens and the options menu), `strings.json` (all screen text; `translations/en.json` is an identical copy), `icons.json` |
+| **Outside the integration** | `blueprints/automation/texecom/`: ready-made automations users import with one click (YAML, tested in `tests/ha/test_blueprints.py`) |
 
 The full map, the contracts and how things flow: [docs/development/architecture.md](docs/development/architecture.md). Which file and test to change for each kind of task: [docs/development/making-changes.md](docs/development/making-changes.md#where-does-my-change-go).
 

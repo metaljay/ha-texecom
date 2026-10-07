@@ -16,7 +16,7 @@ This project is maintained through AI coding agents: the owner doesn't write cod
 
 - **Three layers**: protocol (bytes) → panel drivers (talking to the panel) → Home Assistant glue (screens, entities, notices). Only the last imports Home Assistant.
 - **Compartments**: each module has one job; each has its own test file. Change one compartment at a time.
-- **Contracts**: the `TexecomPanel` interface, the `texecom_event` events, entity IDs, and the stored settings. People's setups depend on them; don't change them without a plan.
+- **Contracts**: the `TexecomPanel` interface, the `texecom_event` events, entity IDs, the stored settings, and the blueprints' inputs. People's setups depend on them; don't change them without a plan.
 - **Safety**: never arm or disarm a real panel unless its owner is there and has agreed.
 - **Checks**: `ruff check .`, `ruff format --check .`, the driver tests (Python 3.13) and the Home Assistant tests (Python 3.14). CI runs them on every push.
 

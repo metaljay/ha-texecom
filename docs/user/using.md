@@ -1,6 +1,6 @@
 # Using it
 
-**On this page:** [What you'll see](#what-youll-see) · [The alarm](#the-alarm) · [The Alarm dashboard](#the-alarm-dashboard) · [Options](#options) · [Codes](#codes) · [Good to know](#good-to-know) · [Build the dashboard yourself](#build-the-dashboard-yourself)
+**On this page:** [What you'll see](#what-youll-see) · [The alarm](#the-alarm) · [The Alarm dashboard](#the-alarm-dashboard) · [Options](#options) · [Notifications](#notifications) · [The activity list](#the-activity-list) · [Codes](#codes) · [Good to know](#good-to-know) · [Build the dashboard yourself](#build-the-dashboard-yourself)
 
 ## What you'll see
 
@@ -27,7 +27,7 @@ Home Assistant's own **Overview** picks the alarm up as well: its **Security** s
 | **Entry delay** | Someone came in: disarm now |
 | **Alarm!** | The alarm is going off |
 
-- **Changed by** (on the alarm's details) says who or what did it: *Home Assistant*, a keypad user (*User 3*), or for an alarm, the zone that set it off (*Kitchen*).
+- **Changed by** (on the alarm's details) says who or what did it: *Home Assistant*, a keypad user (*User 3*, or their name if you [gave them one](#options)), or for an alarm, the zone that set it off (*Kitchen*).
 - **Arms and disarms at the keypad** show straight away.
 - **Switching mode** (for example Night to Away) shows *Arming…* while the panel switches over; you won't see *Off* in between, so automations that run on *Off* don't fire.
 
@@ -41,22 +41,44 @@ To build it again (for example after adding zones), use **Configure → Create o
 
 ## Options
 
-<img src="../images/options.png" width="420" alt="Texecom options">
+Open **Settings → Devices & services → Texecom → ⚙️ Configure**, and pick what to change:
 
-Open **Settings → Devices & services → Texecom → ⚙️ Configure**:
-
-| Option | What it does |
+| In the menu | What it does |
 |---|---|
-| **'Night' uses / 'Home' uses** | The part arm behind each button. *'Not used'* hides the button |
-| **Home Assistant alarm code** | Optional. Home Assistant asks for it before disarming. It's checked by Home Assistant, not the panel, and has nothing to do with your keypad codes |
-| **Ask for the code when arming too** | Asks for that code when arming as well |
-| **Keep the panel clock right** | Once a day (and on connecting), sets the panel's clock if it's more than a minute out, in Home Assistant's time zone (so British Summer Time is handled) |
-| **Read zones and areas from the panel again** | After your installer adds or renames zones. This also happens by itself when engineer programming ends |
-| **Create or refresh the Alarm dashboard** | Builds the dashboard again from the current zones |
+| **Night and Home buttons** | The part arm behind each button. *'Not used'* hides the button. *Reconnects to the panel* |
+| **Home Assistant alarm code** | Optional. Home Assistant asks for it before disarming (and, if you tick the box, before arming). It's checked by Home Assistant, not the panel, and has nothing to do with your keypad codes |
+| **Names for keypad users** | One per line, like `3 = Sam`: the alarm then says *changed by Sam* instead of *User 3*, here and in the activity list |
+| **Notifications** | Whether Home Assistant shows a notification while the panel has no mains power, or while a tamper is open (both on to start with) |
+| **Panel clock** | **Keep the panel clock right**: once a day (and on connecting), sets the panel's clock if it's more than a minute out, in Home Assistant's time zone (so British Summer Time is handled). *Reconnects to the panel* |
+| **Read zones and areas from the panel again** | After your installer adds or renames zones. It happens by itself when engineer programming ends, too |
+| **Create or refresh the Alarm dashboard** | Builds the dashboard again from the current zones (it asks first, because any changes you made to it are replaced) |
 
 To change the SmartCom's address or the UDL code, use **⋮ → Reconfigure** on the same page.
 
-> Saving options reconnects to the panel. The SmartCom can take up to a minute to let Home Assistant back in, so the alarm may show as unavailable briefly.
+> Settings marked *reconnects to the panel* take up to a minute to apply, because the SmartCom waits a while before it lets Home Assistant back in. Everything else applies straight away.
+
+## Notifications
+
+Besides the **Alarm not set** notification (the alarm couldn't arm because a zone was still active), Home Assistant shows:
+
+| Notification | While | Goes when |
+|---|---|---|
+| **Alarm panel on battery** | The panel has lost its mains power | The mains is back |
+| **Alarm tamper** | A tamper is open, with what to check (e.g. *the panel's lid is open*, or *a detector's cover is open*) | It's closed again |
+
+Turn either off in **Configure → Notifications**. These appear in Home Assistant itself; to be told on your phone, see [Automations](automations.md#tell-me-about-the-alarm-on-my-phone). All three need **Texecom Connect**: a [Crestron](crestron.md) connection doesn't report them.
+
+## The activity list
+
+The alarm's activity (on its page, in the **Logbook**, and on the Alarm dashboard) shows what happened in plain words, for example:
+
+- *House Alarm was set off by Kitchen*
+- *House Alarm didn't arm: Front Door was active when the exit time ended*
+- *House Alarm reported a tamper: Panel Box Tamper*
+- *House Alarm reported a fault: AC Fail*
+- *House Alarm keypad used by Sam (a code)*
+
+With [Crestron](crestron.md) you see the keypad users; the rest needs **Texecom Connect**.
 
 ## Codes
 

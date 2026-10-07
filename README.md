@@ -16,6 +16,8 @@ Use your Texecom **Premier Elite** alarm from **Home Assistant** (and Apple Home
 - 🚪 **A sensor for every zone**, named as on your panel: doors, windows, motion, smoke and gas.
 - 📋 **A ready-made Alarm dashboard**, built for you at the end of setup.
 - 🔋 **Panel health**: connection, mains power, battery, tampers, and what the keypad says.
+- 🔔 **Notifications** in Home Assistant when the alarm couldn't arm, the panel is on battery, or a tamper opens, saying what to check.
+- ⚡ **One-click automations**: arm when everyone leaves, and tell your phone when the alarm goes off. [Add them →](https://github.com/metaljay/ha-texecom/blob/main/docs/user/automations.md)
 - 🍏 **Apple Home** too, through Home Assistant's built-in HomeKit Bridge.
 
 ## 🧰 What you need
@@ -43,6 +45,7 @@ Use your Texecom **Premier Elite** alarm from **Home Assistant** (and Apple Home
 |---|---|
 | Set it up step by step, or understand part arms | [Setting it up](https://github.com/metaljay/ha-texecom/blob/main/docs/user/setup.md) |
 | Know what the states, sensors and options mean | [Using it](https://github.com/metaljay/ha-texecom/blob/main/docs/user/using.md) |
+| Give keypad users names, or change the options | [Options](https://github.com/metaljay/ha-texecom/blob/main/docs/user/using.md#options) |
 | Use it in the Home app on iPhone | [Apple Home](https://github.com/metaljay/ha-texecom/blob/main/docs/user/apple-home.md) |
 | Arm automatically when everyone leaves, or get told when it goes off | [Automations](https://github.com/metaljay/ha-texecom/blob/main/docs/user/automations.md) |
 | Fix a problem | [Troubleshooting](https://github.com/metaljay/ha-texecom/blob/main/docs/user/troubleshooting.md) |

@@ -34,8 +34,8 @@ Run one compartment's tests while you work, e.g. `pytest tests/ha/test_flows_opt
 
 | Suite | Where | What it covers |
 |---|---|---|
-| **Driver tests** (34) | `tests/test_connect.py`, `tests/test_crestron.py` | Layers 1 and 2: decoding, and each driver against a simulated panel over real sockets. Fast, and need no Home Assistant |
-| **Home Assistant tests** (41) | `tests/ha/` | Layer 3: the integration running inside a real Home Assistant (setup screens, options, entities, services, events, notifications, Repairs, diagnostics, the dashboard), against the same simulated panels |
+| **Driver tests** (35) | `tests/test_connect.py`, `tests/test_crestron.py` | Layers 1 and 2: decoding, and each driver against a simulated panel over real sockets. Fast, and need no Home Assistant |
+| **Home Assistant tests** (67) | `tests/ha/` | Layer 3: the integration running inside a real Home Assistant (setup screens, options, entities, services, events, notifications, the activity list, Repairs, diagnostics, the dashboard, the blueprints), against the same simulated panels |
 
 The Home Assistant tests have one file per module (see [Architecture](architecture.md#tests)). `tests/ha/common.py` holds shared helpers:
 
@@ -44,6 +44,7 @@ The Home Assistant tests have one file per module (see [Architecture](architectu
 | `setup_connect(hass, fake, options=..., data=...)` | Adds a Connect entry for the simulated panel, sets it up, waits until connected; returns the entry |
 | `wait_for(predicate, timeout)` | Waits until something is true (state changes arrive asynchronously) |
 | `start(hass, "connect")` | Starts the setup flow and picks a menu entry |
+| `after_progress(hass, result)` | Moves a flow on past a progress screen (*Connecting to your panel…*) once its work has finished. Pass `hass.config_entries.options` as the third argument for the options flow |
 | `free_port()` | A port nothing listens on (for "couldn't connect" tests) |
 | `state(hass)` / `ALARM` | The alarm entity's state, and its entity ID (`alarm_control_panel.texecom_house`) |
 
@@ -72,6 +73,15 @@ It also runs on its own, so a test Home Assistant can connect to it:
 ```bash
 python tests/fake_connect_panel.py 10001 --demo          # friendly zone names, zones that wander
 python tests/fake_connect_panel.py 10001 --clock-reset   # its clock says 31 Oct 2023
+python tests/fake_connect_panel.py 10001 --demo --commands   # and take commands (below)
+```
+
+With `--commands` you type what the panel should do next: `lid open`, `mains off`, `user 3`, `armfail 4`, `zone 4 alarm`, `area alarm`, `drop`… (it prints the full list, `COMMANDS` in the file). That's how to try notifications, the activity list and the blueprints on a test Home Assistant without touching a real alarm. To send commands while it runs in the background, feed it from a file:
+
+```bash
+touch fake.in
+tail -n0 -f fake.in | python tests/fake_connect_panel.py 10001 --demo --commands > fake.log 2>&1 &
+echo "lid open" >> fake.in      # then look at fake.log for "ok: lid open"
 ```
 
 **`FakeCrestronPort`** (in `tests/test_crestron.py`) answers like a COM port set to Crestron: `send(line)` sends a line (e.g. `'"Z0021'`), `armed` sets the ASTATUS answer, `login_ok=False` / `text_error=True` mimic a panel that ignores the UDL login and refuses text commands.
@@ -79,6 +89,8 @@ python tests/fake_connect_panel.py 10001 --clock-reset   # its clock says 31 Oct
 ## Writing a test
 
 - **Driver behaviour** → `tests/test_connect.py` or `tests/test_crestron.py`: build a panel with `make_panel(fake, ...)`, make the fake do something, `wait_for` the result. Always `await panel.stop()` in a `finally`.
+- **A screen that talks to the panel** shows a progress screen first: `result = await after_progress(hass, result)` to get the next screen.
+- **A blueprint** → `tests/ha/test_blueprints.py`: `install()` it, `use()` it with inputs, then drive the fake and check the outcome.
 - **Home Assistant behaviour** → the module's file in `tests/ha/`: `entry = await setup_connect(hass, fake)`, act (a service call, a fake event), `wait_for` the state, and finish with `assert await hass.config_entries.async_unload(entry.entry_id)`.
 - Name tests after the behaviour, in plain words: `test_alarm_memory_doesnt_blame_a_zone_for_a_later_alarm`.
 - Prefer a test that fails without your change. Run it before the fix to see it fail.

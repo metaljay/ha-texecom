@@ -11,7 +11,7 @@
 | **"The UDL code is 4 to 8 digits"** | Digits only, no spaces |
 | **"Connected, but the panel reported no zones in use"** | Your installer may not have set the zones up yet, or this isn't the panel you expected |
 | **"This panel is already set up"** | It's already in **Settings → Devices & services → Texecom** |
-| **Setup takes a long time** | Up to a minute is normal if something else was connected to the SmartCom just before |
+| **"Connecting to your panel…" for a long time** | Up to a minute is normal if something else was connected to the SmartCom just before |
 
 ## Day to day
 
@@ -20,9 +20,14 @@
 | **Everything shows as unavailable** | The panel has been unreachable for over 3 minutes. Look at **Panel connection** on the panel's device page and at **Settings → Repairs**, then see [The panel is unreachable](#the-panel-is-unreachable) |
 | **The SmartCom's address changed** | **Settings → Devices & services → Texecom → ⋮ → Reconfigure**, and enter the new one. Reserve the address in your router so it doesn't happen again |
 | **"Alarm not set" notification** | A zone was still active when the exit time ended (a door open, or someone in view of a sensor), so the panel didn't arm. The notification names the zone. Close it or keep out of view, and arm again |
-| **Home or Night is missing from the alarm** | It's set to *'Not used'*: change it in **Configure** |
+| **Home or Night is missing from the alarm** | It's set to *'Not used'*: change it in **Configure → Night and Home buttons** |
 | **Home or Night is missing in the Home app** | The Home app remembers an alarm's buttons: see [Apple Home](apple-home.md#changed-night-or-home) |
-| **"The panel didn't accept the request"** when arming | The message says why. *Not connected*: wait for **Panel connection** to come back. *Refused*: look at the keypad, which usually says what needs attention |
+| **"Home Assistant isn't connected to the panel just now"** when arming | It reconnects by itself: wait for **Panel connection** (on the panel's device) to come back, usually within a minute, and try again |
+| **"The panel refused"** when arming | Look at the keypad, which usually says what needs attention (a fault, a tamper, an open zone) |
+| **"The panel didn't accept the request"** | The message says why. If it keeps happening, [report it](#reporting-a-problem) |
+| **"Alarm panel on battery" notification** | The panel has no mains power: check for a power cut, and the panel's fused spur. The alarm still works on its battery for now. The notification goes within half a minute of the mains coming back |
+| **"Alarm tamper" notification** | It says where: *the panel's lid is open*, *a detector's cover is open*, the bell box… Put it right and it goes by itself. *Auxiliary Tamper* means one of the detectors on the shared tamper circuit, so check each one's cover |
+| **Keypad users show as *User 3*** | Give them names in **Configure → Names for keypad users** |
 | **A zone shows the wrong icon or wording** | Open it, then **⚙️ Settings → Show as** |
 | **The alarm takes about a minute to come back after restarting Home Assistant** | Normal: the SmartCom waits a while before it lets a new connection in |
 | **Keypad says "System Alerts!" after an alarm** | The panel wants the alarm acknowledged at the keypad. On some panels this needs the engineer code |
@@ -74,6 +79,7 @@ What the panel does and doesn't tell Home Assistant, found by testing on a real 
 - **Mains coming back** isn't reported by the panel, only the failure. Home Assistant reads the panel's power every 30 seconds instead, so *Mains power* turns back on within half a minute.
 - **Which detector was tampered with** usually isn't known: most installs wire every detector's tamper switch to one shared circuit, which the panel reports as *Auxiliary Tamper*.
 - **Keypad lights** (e.g. the spanner) aren't sent; **Keypad display** shows the screen text instead.
+- **Tampers and faults that started before Home Assistant connected** (for example during a restart) show only once the panel next reports them: the panel tells Home Assistant when they start and end, and there's no way yet to ask what's open now. Mains power is the exception: it's worked out from the power readings within half a minute.
 - **The panel's clock resets** if it loses all power (see [above](#the-panel-clock-is-wrong)).
 - **Zones active at the end of an exit time** make the arm fail, and the panel sounds its "fail to set" warning (see *Alarm not set* above).
 
