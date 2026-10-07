@@ -39,6 +39,8 @@ PART_ARM_FROM_LOG = {78: 1, 79: 2, 80: 3, 204: 1, 205: 2, 206: 3, 207: 1, 208: 2
 GROUP_PRIORITY_ALARM_RESTORE = 2
 GROUP_ALARM = 3
 GROUP_TAMPER_ALARM = 11
+GROUP_TAMPER_RESTORE = 12
+LOG_PANEL_LID_TAMPER = 60  # keypad shows "Panel Lid Tamper"; group 11 open, 12 closed
 FIRE_ALARM = 129
 FIRE_ALARM_END = 130
 USER_CHANGE_WINDOW = 60.0  # a keypad logon this recent explains an arm/disarm
@@ -363,6 +365,8 @@ class ConnectPanel(TexecomPanel):
                 )
             if m["group"] == GROUP_PRIORITY_ALARM_RESTORE or raw_group == FIRE_ALARM_END:
                 self._refresh_areas_soon()
+        if m["type"] > 21 and m["group"] in (GROUP_TAMPER_ALARM, GROUP_TAMPER_RESTORE):
+            self._on_system_tamper(m)
         if m["type"] in (LOG_ARM_FAILED, LOG_AUTO_OPEN_CLOSE):
             if m["type"] == LOG_ARM_FAILED:
                 # One log per zone that stopped the arm (seen on a real panel:
@@ -379,6 +383,18 @@ class ConnectPanel(TexecomPanel):
         elif m["type"] == LOG_INSTALLER_PROGRAMMING_END:
             self._log.info("Connect: engineer programming finished; re-reading zones and areas")
             self._spawn(self._rediscover())
+
+    def _on_system_tamper(self, m: dict[str, Any]) -> None:
+        """Tampers that aren't zones (seen on a real panel: the panel lid,
+        log type 60, group 11 when opened and 12 when closed again)."""
+        active = m["group"] == GROUP_TAMPER_ALARM
+        source = "panel lid" if m["type"] == LOG_PANEL_LID_TAMPER else f"log type {m['type']}"
+        if m["type"] == LOG_PANEL_LID_TAMPER and self.extra.get("panel_lid_open") != active:
+            self.extra["panel_lid_open"] = active
+            self.notify()
+        if active:
+            self._log.warning("Connect: tamper: %s", source)
+            self.on_event("tamper", {"source": source, "log_type": m["type"]})
 
     def _credit_alarm_zone(self, number: int) -> None:
         """Names the zone that set the alarm off as the alarm's "changed by".

@@ -55,6 +55,8 @@ async def async_setup_entry(
     panel = entry.runtime_data
     entities: list[BinarySensorEntity] = [TexecomConnectionSensor(entry, panel)]
     is_connect = entry.data[CONF_PROTOCOL] == PROTOCOL_CONNECT
+    if is_connect:
+        entities.append(TexecomPanelLidSensor(entry, panel))
     for number, zone in panel.zones.items():
         # Crestron zones are only "Zone 1"… until renamed, so no room match.
         device = child_device_info(
@@ -105,6 +107,20 @@ class TexecomZoneTamperSensor(TexecomEntity, BinarySensorEntity):
     @property
     def is_on(self) -> bool:
         return self.panel.zones[self.number].tampered
+
+
+class TexecomPanelLidSensor(TexecomEntity, BinarySensorEntity):
+    """On while the panel's lid is off (from the panel's tamper log)."""
+
+    _attr_device_class = BinarySensorDeviceClass.TAMPER
+    _attr_translation_key = "panel_lid"
+
+    def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel) -> None:
+        super().__init__(entry, panel, "panel_lid")
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.panel.extra.get("panel_lid_open"))
 
 
 class TexecomConnectionSensor(TexecomEntity, BinarySensorEntity):

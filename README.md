@@ -156,6 +156,7 @@ The integration also fires a `texecom_event` for things that aren't states:
 |---|---|---|
 | `zone_alarm` | A zone set the alarm off (Connect) | `zone`, `zone_name`, `tamper` |
 | `user` | Someone entered a code or tag at a keypad | `user`, `method` |
+| `tamper` | A tamper that isn't a zone, e.g. the panel lid taken off (Connect) | `source`, `log_type` |
 | `arm_failed` | Arming failed because a zone was active when the exit time ended (one event per zone). The panel sounds its "fail to set" warning | `zone`, `zone_name`, `areas` |
 
 <details>

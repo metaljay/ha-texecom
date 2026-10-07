@@ -189,6 +189,9 @@
       },
       "zone_tamper": {
         "name": "Tamper"
+      },
+      "panel_lid": {
+        "name": "Panel lid"
       }
     },
     "sensor": {
