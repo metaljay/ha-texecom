@@ -13,8 +13,8 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.texecom import config_flow
 from custom_components.texecom.const import DOMAIN
+from custom_components.texecom.flows import validation
 
 from .common import UDL, setup_connect, wait_for
 
@@ -150,7 +150,7 @@ async def test_crestron_network(hass, crestron_port, no_setup):
 async def test_crestron_no_reply(hass, crestron_port, no_setup, monkeypatch):
     port, state = crestron_port
     state["answer"] = False
-    monkeypatch.setattr(config_flow, "CRESTRON_REPLY_TIMEOUT", 0.2)
+    monkeypatch.setattr(validation, "CRESTRON_REPLY_TIMEOUT", 0.2)
     result = await start(hass, "crestron", "crestron_network")
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"host": "127.0.0.1", "port": port, "zone_count": 5, "area_count": 1}
