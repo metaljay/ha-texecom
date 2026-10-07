@@ -2,6 +2,7 @@
 
 - the Night and Home buttons (and, over Crestron, how a keypad arm shows)
 - an optional Home Assistant alarm code
+- names for keypad users
 - keeping the panel clock right (Connect), or how often to check the panel
   (Crestron)
 - reading zones and areas again (Connect), and rebuilding the Alarm dashboard
@@ -23,6 +24,8 @@ from homeassistant.helpers.selector import (
     NumberSelector,
     NumberSelectorConfig,
     NumberSelectorMode,
+    TextSelector,
+    TextSelectorConfig,
 )
 
 from ..const import (
@@ -31,6 +34,7 @@ from ..const import (
     CONF_PROTOCOL,
     CONF_STATUS_POLL,
     CONF_TIME_SYNC,
+    CONF_USER_NAMES,
     DEFAULT_STATUS_POLL,
     HELP_DASHBOARD,
     HELP_OPTIONS,
@@ -40,6 +44,7 @@ from ..const import (
 from ..dashboard import async_create_dashboard
 from ..factory import layout_to_data
 from ..panel import PanelError
+from ..users import format_user_names, parse_user_names
 from .validation import UDL_SELECTOR, arm_mode_options, arm_modes_error, arm_modes_schema
 
 _LOGGER = logging.getLogger(__name__)
@@ -54,7 +59,7 @@ class TexecomOptionsFlow(OptionsFlow):
         return self.config_entry.data[CONF_PROTOCOL] == PROTOCOL_CONNECT
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
-        menu = ["arm_modes", "alarm_code"]
+        menu = ["arm_modes", "alarm_code", "user_names"]
         menu += ["clock", "rediscover"] if self._is_connect else ["status_poll"]
         menu.append("dashboard")
         return self.async_show_menu(step_id="init", menu_options=menu, description_placeholders={"help": HELP_OPTIONS})
@@ -104,6 +109,24 @@ class TexecomOptionsFlow(OptionsFlow):
             }
         )
         return self.async_show_form(step_id="alarm_code", data_schema=schema, errors=errors)
+
+    async def async_step_user_names(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        text = format_user_names(self.config_entry.options.get(CONF_USER_NAMES, {}))
+        if user_input is not None:
+            text = user_input.get(CONF_USER_NAMES, "")
+            if (names := parse_user_names(text)) is None:
+                errors[CONF_USER_NAMES] = "invalid_user_names"
+            else:
+                return self._save({CONF_USER_NAMES: names})
+        schema = vol.Schema(
+            {
+                vol.Optional(CONF_USER_NAMES, description={"suggested_value": text}): TextSelector(
+                    TextSelectorConfig(multiline=True)
+                )
+            }
+        )
+        return self.async_show_form(step_id="user_names", data_schema=schema, errors=errors)
 
     async def async_step_clock(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:

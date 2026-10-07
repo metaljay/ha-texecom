@@ -50,6 +50,7 @@ async def test_the_menu(hass, fake):
     assert result["menu_options"] == [
         "arm_modes",
         "alarm_code",
+        "user_names",
         "clock",
         "rediscover",
         "dashboard",
@@ -62,7 +63,7 @@ async def test_the_menu_for_crestron(hass):
     entry = MockConfigEntry(domain=DOMAIN, data=CRESTRON, options={"night_part_arm": 1, "home_part_arm": 0})
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["menu_options"] == ["arm_modes", "alarm_code", "status_poll", "dashboard"]
+    assert result["menu_options"] == ["arm_modes", "alarm_code", "user_names", "status_poll", "dashboard"]
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "arm_modes"})
     assert result["step_id"] == "arm_modes_crestron"  # with "when armed at the keypad, show as"
     result = await options(hass, entry, "status_poll", status_poll=120)
@@ -98,6 +99,22 @@ async def test_alarm_code_applies_without_reconnecting(hass, fake):
     assert hass.states.get(ALARM).attributes["code_format"] == "number"
     assert hass.states.get(ALARM).attributes["code_arm_required"] is True
     assert fake.connections == connections  # no reconnect
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_names_for_keypad_users(hass, fake):
+    entry = await setup_connect(hass, fake)
+    result = await options(hass, entry, "user_names", user_names="Sam is user three")
+    assert result["errors"] == {"user_names": "invalid_user_names"}
+    connections = fake.connections
+    result = await options(hass, entry, "user_names", user_names="1 = Alex\nUser 3: Sam\n")
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["user_names"] == {"1": "Alex", "3": "Sam"}
+    await settle(hass)
+    assert fake.connections == connections  # no reconnect
+    fake.send_user(3)
+    fake.set_area(3)  # armed at the keypad by user 3
+    await wait_for(lambda: hass.states.get(ALARM).attributes.get("changed_by") == "Sam")
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

@@ -40,6 +40,9 @@ DEFAULT_STATUS_POLL = 60
 TIME_SYNC_HOURS = 24
 CLOCK_DRIFT_LIMIT = 300  # seconds; more than this raises a Repairs notice (clock sync off)
 
+# More options.
+CONF_USER_NAMES = "user_names"  # {"3": "Sam"}: names for keypad users
+
 # Options a running panel driver depends on: changing one reconnects to the
 # panel. Others (codes, names, notifications) apply straight away.
 DRIVER_OPTIONS = (CONF_HOME_PART_ARM, CONF_NIGHT_PART_ARM, CONF_KEYPAD_ARM_MODE, CONF_TIME_SYNC, CONF_STATUS_POLL)

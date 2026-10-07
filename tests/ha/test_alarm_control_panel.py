@@ -121,3 +121,15 @@ async def test_a_refusal_says_so(hass, fake):
         await call(hass, "alarm_arm_away")
     assert err.value.translation_key == "refused"
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_changed_by_uses_keypad_user_names(hass, fake):
+    entry = await setup_connect(hass, fake, options={"user_names": {"3": "Sam"}})
+    fake.send_user(3)
+    fake.set_area(3)
+    await wait_for(lambda: state(hass) == "armed_away")
+    assert hass.states.get(ALARM).attributes["changed_by"] == "Sam"
+    fake.send_user(4)  # no name given: stays "User 4"
+    fake.set_area(0)
+    await wait_for(lambda: hass.states.get(ALARM).attributes["changed_by"] == "User 4")
+    assert await hass.config_entries.async_unload(entry.entry_id)

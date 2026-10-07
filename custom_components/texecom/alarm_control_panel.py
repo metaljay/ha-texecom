@@ -18,6 +18,7 @@ from . import TexecomConfigEntry
 from .const import CONF_ALARM_CODE, CONF_CODE_ARM_REQUIRED, DOMAIN
 from .entity import TexecomEntity, child_device_info, nice_name
 from .panel import PanelError, PanelNotConnected, PanelRefused, TexecomPanel
+from .users import with_user_name
 
 FEATURE_FOR_MODE = {
     "away": AlarmControlPanelEntityFeature.ARM_AWAY,
@@ -71,7 +72,7 @@ class TexecomAreaPanel(TexecomEntity, AlarmControlPanelEntity):
 
     @property
     def changed_by(self) -> str | None:
-        return self.panel.areas[self.number].changed_by
+        return with_user_name(self._entry.options, self.panel.areas[self.number].changed_by)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
