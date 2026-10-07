@@ -85,7 +85,14 @@ def build_config(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
             zone_cards.append(_tile(e.entity_id))
 
     panel_cards: list[dict[str, Any]] = [{"type": "heading", "heading": "Panel", "icon": "mdi:information-outline"}]
-    for key, name in (("connection", "Connection"), ("battery_voltage", "Battery"), ("panel_voltage", "Mains supply")):
+    for key, name in (
+        ("connection", "Connection"),
+        ("mains", "Mains"),
+        ("problem", "Faults"),
+        ("system_tamper", "Tamper"),
+        ("display", "Keypad"),
+        ("battery_voltage", "Battery"),
+    ):
         for e in entities:
             if e.unique_id == f"{entry.entry_id}_{key}":
                 panel_cards.append(_tile(e.entity_id, name=name))

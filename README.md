@@ -17,7 +17,7 @@ Control your Texecom **Premier Elite** alarm from **Home Assistant**, using the 
 - 📋 **An Alarm dashboard**, made for you at the end of setup from Home Assistant's own cards. Nothing else to install.
 - 🔋 **Panel health**: connection, mains and battery voltage, tampers, and what the keypad screen says.
 - ⚡ **Automations**: lights on when the hallway sees movement, a notification when the alarm goes off, arm when everyone leaves.
-- 🍏 **Apple Home** too, through Home Assistant's built-in [HomeKit Bridge](https://www.home-assistant.io/integrations/homekit/).
+- 🍏 **Apple Home** too, through Home Assistant's built-in HomeKit Bridge: see [Apple Home](#apple-home).
 
 ## 🧰 What you need
 
@@ -89,7 +89,7 @@ When the panel is part armed from the keypad, Home Assistant shows the mode you 
 
 - **The Alarm dashboard** (in the sidebar) has the arm buttons, the last day's activity, panel health and every zone. Edit it like any dashboard, or rebuild it from **Configure → Create or refresh the Alarm dashboard**.
 - **Home Assistant's own Overview** picks the alarm up as well: its **Security** summary lists the alarm, doors and smoke detectors, and each room shows its zones.
-- **Apple Home**: add the alarm (and any zones you want) to Home Assistant's [HomeKit Bridge](https://www.home-assistant.io/integrations/homekit/). Away, Night and Home appear as the Home app's buttons.
+- **Apple Home**: see [Apple Home](#apple-home).
 
 ### ⚙️ Options
 
@@ -106,6 +106,26 @@ Open **Settings → Devices & services → Texecom → Configure**:
 | **Read zones and areas from the panel again** | After your installer changes zones or names. This also happens by itself when engineer programming ends |
 
 To change the SmartCom's address or the UDL code, use **⋮ → Reconfigure**.
+
+<a id="apple-home"></a>
+
+## 🍏 Apple Home
+
+Home Assistant's built-in **HomeKit Bridge** puts the alarm (and any zones you like) in the Home app, with Siri, Control Centre and Apple's critical alerts.
+
+1. Go to **Settings → Devices & services → Add integration → HomeKit Bridge**, choose **Alarm Control Panel** (and **Binary Sensor** if you want the zones), and follow the pairing steps. If you already have a HomeKit Bridge, open its **Configure** and add `alarm_control_panel.texecom_house` instead.
+2. In the Home app, put the alarm in a room and turn on its notifications.
+
+**What you'll see**
+
+| In the Home app | Comes from |
+|---|---|
+| **Away**, **Night**, **Home**, **Off** buttons | Away always; Night and Home only if you gave them a part arm. Set them up *before* pairing: the Home app remembers an alarm's buttons, and after changing them you need to remove the alarm from the bridge and add it again |
+| **Arming…** | The exit delay. The alarm's page shows *Off* until the panel has armed, because that's what it is until then |
+| **Triggered**, with a critical alert | The alarm going off |
+| Arms and disarms made at the keypad | Show straight away (an arm after its exit delay) |
+
+**Codes:** the Home app can't ask for a code. If you set a Home Assistant alarm code, HomeKit Bridge needs it in its settings (`entity_config` → `code`) or arming from the Home app fails. Without a code, the Home app arms and disarms as it did with Homebridge, so consider [arming automatically from Home Assistant](#automations) and leaving disarming to the keypad.
 
 <a id="automations"></a>
 
@@ -156,6 +176,7 @@ The integration also fires a `texecom_event` for things that aren't states:
 |---|---|---|
 | `zone_alarm` | A zone set the alarm off (Connect) | `zone`, `zone_name`, `tamper` |
 | `user` | Someone entered a code or tag at a keypad | `user`, `method` |
+| `fault` / `fault_cleared` | A fault such as *AC Fail* (mains off), *Low Battery* or *Fail to Communicate* | `source`, `log_type` |
 | `tamper` | A tamper that isn't a zone (Connect), e.g. *Panel Box Tamper* (the lid) or *Auxiliary Tamper* (a detector on the shared tamper circuit) | `source`, `log_type` |
 | `arm_failed` | Arming failed because a zone was active when the exit time ended (one event per zone). The panel sounds its "fail to set" warning | `zone`, `zone_name`, `areas` |
 
@@ -182,6 +203,7 @@ actions:
 - 🚨 **When the alarm goes off**, the panel briefly drops the connection to send its own alarm report through the SmartCom. Home Assistant reconnects and catches up within seconds. If your SmartCom also reports to a monitoring centre, consider a second module (a ComIP) for Home Assistant.
 - 🔁 **Reconnects by itself** after a power cut, a router restart or a dropped connection, and reads the panel's state again so nothing is missed. After Home Assistant restarts, the SmartCom can take about a minute to accept it again.
 - 🔐 **The UDL code is stored in Home Assistant** (like any integration password). Anyone with admin access to your Home Assistant can arm and disarm, so keep that access tight, and consider the optional alarm code.
+- 🔌 **Mains and faults**: **Mains power** turns off as soon as the panel reports a mains failure, and **Problem** lists any fault it reports. The panel reports a mains failure straight away; see *Known limits* for when the mains comes back.
 - 🔧 **Tampers**: the panel's **Tamper** sensor turns on while its lid, a keypad, the bell box or a detector is open, and says which. Most installs wire every detector's tamper to one shared circuit, so the panel (and Home Assistant) can't say *which* detector; it shows as *Auxiliary Tamper*. Each zone also has a hidden **Tamper** sensor, which only works if that zone's tamper is wired to the zone itself.
 - 🧾 **Diagnostics**: on the panel's device page, **Download diagnostics** gives a report with the codes and address removed, for bug reports.
 
