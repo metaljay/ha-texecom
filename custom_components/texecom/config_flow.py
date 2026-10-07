@@ -428,6 +428,7 @@ class TexecomOptionsFlow(OptionsFlow):
         entry = self.config_entry
         is_connect = entry.data[CONF_PROTOCOL] == PROTOCOL_CONNECT
         errors: dict[str, str] = {}
+        reload_for_layout = False
         if user_input is not None:
             code = (user_input.get(CONF_ALARM_CODE) or "").strip()
             if error := _arm_modes_error(user_input):
@@ -451,7 +452,7 @@ class TexecomOptionsFlow(OptionsFlow):
                             self.hass.config_entries.async_update_entry(
                                 entry, data={**entry.data, **layout_to_data(info, zones, areas)}
                             )
-                            self.hass.config_entries.async_schedule_reload(entry.entry_id)
+                            reload_for_layout = True
                 else:
                     options[CONF_STATUS_POLL] = int(user_input[CONF_STATUS_POLL])
                 if not errors and user_input.get(CONF_CREATE_DASHBOARD):
@@ -460,6 +461,10 @@ class TexecomOptionsFlow(OptionsFlow):
                     except HomeAssistantError:
                         errors["base"] = "dashboard_failed"
                 if not errors:
+                    if reload_for_layout and options == dict(entry.options):
+                        # Changed options reload the entry anyway; two reloads
+                        # in a row would log in twice, which a SmartCom refuses.
+                        self.hass.config_entries.async_schedule_reload(entry.entry_id)
                     return self.async_create_entry(data=options)
 
         current = {**entry.options, **(user_input or {})}

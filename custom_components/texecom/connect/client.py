@@ -121,6 +121,15 @@ class ConnectClient:
             reply = await self.command(P.CMD_SET_EVENT_MESSAGES, bytes([flags & 0xFF, flags >> 8]))
             if reply[:1] != bytes([P.ACK]):
                 raise ConnectError("the panel refused the event subscription")
+        except LoginRejected:
+            await self.close()
+            raise
+        except ConnectError as err:
+            ended = self._closed
+            await self.close()
+            if ended:  # the panel closed the connection instead of answering
+                raise ConnectError("the panel closed the connection (busy with another session?)") from err
+            raise
         except BaseException:
             await self.close()
             raise

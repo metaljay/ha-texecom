@@ -47,7 +47,11 @@ FIRE_ALARM = 129
 FIRE_ALARM_END = 130
 USER_CHANGE_WINDOW = 60.0  # a keypad logon this recent explains an arm/disarm
 ZONE_ALARM_REPEAT = 30.0
-SWITCH_GRACE = 10.0  # longest a mode switch may sit between "disarmed" and the new exit delay
+SWITCH_GRACE = 10.0
+# A SmartCom refuses a new session for about a minute after the last one
+# closed (setup's check, a restart, an alarm report): the first few retries
+# are expected, so only later ones are logged as warnings.
+QUIET_FAILURES = 3  # longest a mode switch may sit between "disarmed" and the new exit delay
 
 
 def default_area_name(number: int) -> str:
@@ -233,10 +237,10 @@ class ConnectPanel(TexecomPanel):
                 # A SmartCom is often busy for a minute (e.g. reporting an
                 # alarm): one warning, then quieter until it's back.
                 failures += 1
-                if failures == 1:
-                    self._log.warning("Connect: %s; retrying", err)
+                if failures == QUIET_FAILURES + 1:
+                    self._log.warning("Connect: %s; still trying", err)
                 else:
-                    self._log.debug("Connect: still unavailable (%s)", err)
+                    self._log.debug("Connect: unavailable (%s); retrying", err)
             finally:
                 await client.close()
                 self.set_connected(False)

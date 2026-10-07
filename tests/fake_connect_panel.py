@@ -59,6 +59,7 @@ class FakeConnectPanel:
         self.port = 0
         self._exit_timer: asyncio.TimerHandle | None = None
         self.on_battery = False
+        self.connections = 0  # TCP connections accepted (a SmartCom counts these, logged in or not)
         self.power_override: bytes | None = None  # raw GET_SYSTEM_POWER reply
         self.clock_raw: bytes | None = None  # raw GET_DATE_TIME reply (e.g. an impossible date)
 
@@ -115,6 +116,7 @@ class FakeConnectPanel:
     # ─── Commands ───────────────────────────────────────────────────────────
 
     async def _on_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        self.connections += 1
         self.writers.add(writer)
         parser = P.FrameParser(lambda f: self._on_frame(writer, f))
         try:

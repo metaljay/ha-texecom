@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import time
 from datetime import datetime, timedelta
 
@@ -59,6 +60,22 @@ async def test_read_zones_again_uses_the_open_connection(hass, fake):
     names = {d.name for d in dr.async_entries_for_config_entry(dr.async_get(hass), entry.entry_id)}
     assert "Porch Door" in names
     assert entry.data["zones"][0]["name"] == "Porch Door"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_read_zones_again_with_other_changes_reloads_once(hass, fake):
+    entry = await setup_connect(hass, fake)
+    connections = fake.connections
+    result = await options(hass, entry, rediscover=True, time_sync=True)
+    assert result["type"] == "create_entry"
+    await hass.async_block_till_done()
+    await wait_for(lambda: entry.runtime_data.connected)
+    for _ in range(5):  # let any second reload happen
+        await asyncio.sleep(0.1)
+        await hass.async_block_till_done()
+    await wait_for(lambda: entry.runtime_data.connected)
+    # One reload, one new connection: a SmartCom refuses a second for a minute.
+    assert fake.connections == connections + 1
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
