@@ -17,6 +17,7 @@ TO_REDACT = {CONF_UDL, CONF_ALARM_CODE, CONF_HOST}
 
 async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: TexecomConfigEntry) -> dict[str, Any]:
     panel = entry.runtime_data
+    extra = await panel.async_diagnostics() if hasattr(panel, "async_diagnostics") else panel.diagnostics()
     return {
         "entry": {
             "data": async_redact_data(dict(entry.data), TO_REDACT),
@@ -28,6 +29,6 @@ async def async_get_config_entry_diagnostics(hass: HomeAssistant, entry: Texecom
             "part_arms": panel.part_arms,
             "areas": [asdict(a) for a in panel.areas.values()],
             "zones": [asdict(z) for z in panel.zones.values()],
-            **panel.diagnostics(),
+            **extra,
         },
     }

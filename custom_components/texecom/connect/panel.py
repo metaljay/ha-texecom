@@ -28,7 +28,7 @@ from .client import ConnectClient, ConnectError, HostLog, LoginRejected, PanelBu
 _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_MIN = 5.0
-RECONNECT_MAX = 60.0
+RECONNECT_MAX = 30.0
 MAINS_VOLTAGE = 13.3  # below this with no current flowing, the panel is on battery
 POWER_EVERY_N_IDLE = 1  # voltages and currents every keep-alive (~30 s)
 
@@ -578,6 +578,21 @@ class ConnectPanel(TexecomPanel):
         if not ok:
             raise PanelError(f"the panel refused {what}")
 
+    async def async_diagnostics(self) -> dict[str, Any]:
+        """Like diagnostics(), plus the panel clock against local time."""
+        result = self.diagnostics()
+        if self.connected and self.client:
+            try:
+                clock = await self.client.date_time()
+            except ConnectError as err:
+                result["panel_clock"] = f"unreadable: {err}"
+            else:
+                if clock:
+                    now = datetime.now(self.time_zone).replace(tzinfo=None, microsecond=0)
+                    result["panel_clock"] = datetime(*clock).isoformat(sep=" ")
+                    result["panel_clock_drift_s"] = int((datetime(*clock) - now).total_seconds())
+        return result
+
     def diagnostics(self) -> dict[str, Any]:
         return {
             "protocol": "connect",
@@ -585,4 +600,6 @@ class ConnectPanel(TexecomPanel):
             "last_error": self.last_error,
             "power": self.extra.get("power").__dict__ if self.extra.get("power") else None,
             "display": self.extra.get("display"),
+            "faults": sorted(self.extra.get("faults", ())),
+            "tampers": sorted(self.extra.get("tampers", ())),
         }
