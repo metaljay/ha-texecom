@@ -58,6 +58,7 @@ class FakeConnectPanel:
         self.server: asyncio.base_events.Server | None = None
         self.port = 0
         self._exit_timer: asyncio.TimerHandle | None = None
+        self.on_battery = False
 
     async def start(self, port: int = 0, host: str = "127.0.0.1") -> int:
         self.server = await asyncio.start_server(self._on_client, host, port)
@@ -188,7 +189,9 @@ class FakeConnectPanel:
         elif cmd == P.CMD_GET_LCD_DISPLAY:
             reply(b" Premier Elite  " + datetime.now().strftime(" %a %d %H:%M  ").encode())
         elif cmd == P.CMD_GET_SYSTEM_POWER:
-            reply(bytes([100, 101, 99, 30, 2]))
+            # ref, system V, battery V, system I, battery I (as a real panel:
+            # on battery both currents read 0 and the voltage drops)
+            reply(bytes([100, 92, 94, 0, 0]) if self.on_battery else bytes([100, 101, 99, 30, 2]))
         elif cmd == P.CMD_ARM_AREA:
             arm_type = args[0]
             reply(ack)

@@ -29,6 +29,7 @@ _LOGGER = logging.getLogger(__name__)
 
 RECONNECT_MIN = 5.0
 RECONNECT_MAX = 60.0
+MAINS_VOLTAGE = 13.3  # below this with no current flowing, the panel is on battery
 POWER_EVERY_N_IDLE = 1  # voltages and currents every keep-alive (~30 s)
 
 # Log event types the driver reacts to (numbering as in texecom2mqtt).
@@ -273,6 +274,7 @@ class ConnectPanel(TexecomPanel):
             power = await self.client.system_power()
             if power:
                 self.extra["power"] = power
+                self._mains_from_power(power)
                 self.notify()
 
     def _apply_area(self, number: int, state: str, part_arm: int | None, changed_by: str | None = None) -> None:
@@ -401,6 +403,25 @@ class ConnectPanel(TexecomPanel):
         if active:
             self._log.warning("Connect: %s", name)
             self.on_event("tamper", {"source": name, "log_type": m["type"]})
+
+    def _mains_from_power(self, power: P.SystemPower) -> None:
+        """Mains on or off from the power readings. Seen on a real panel: on
+        battery both currents read 0 and the voltage falls below 13 V; with
+        mains, ~300 mA flows at ~13.6 V. The panel logs the mains failing at
+        once but didn't log it coming back, so this clears (or confirms) it,
+        and gives the right answer after a restart."""
+        on_battery = power.panel_current == 0 and power.panel_voltage < MAINS_VOLTAGE
+        mains_ok = power.panel_current > 0 or power.panel_voltage >= MAINS_VOLTAGE
+        faults: set[str] = self.extra.setdefault("faults", set())
+        if on_battery and "AC Fail" not in faults:
+            faults.add("AC Fail")
+            self._log.warning("Connect: running on battery (no mains current, %.2f V)", power.panel_voltage)
+            self.on_event("fault", {"source": "AC Fail", "log_type": None})
+        elif mains_ok and faults & P.MAINS_FAULTS:
+            for name in sorted(faults & P.MAINS_FAULTS):
+                faults.discard(name)
+                self._log.info("Connect: mains back (%d mA, %.2f V)", power.panel_current, power.panel_voltage)
+                self.on_event("fault_cleared", {"source": name, "log_type": None})
 
     def _on_fault(self, m: dict[str, Any]) -> None:
         """Mains, battery, communication and other faults from the panel log."""

@@ -290,6 +290,26 @@ async def test_mains_fault_and_restore(fake):
         await panel.stop()
 
 
+async def test_mains_restore_comes_from_power_readings(fake):
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        fake.on_battery = True
+        fake.send_log(47, 9, 0, areas=0)  # AC Fail; this panel never logs the restore
+        await wait_for(lambda: panel.extra.get("faults") == {"AC Fail"})
+        await panel.read_power()
+        assert panel.extra["faults"] == {"AC Fail"}
+        fake.on_battery = False
+        await panel.read_power()
+        assert panel.extra["faults"] == set()
+        assert [t for t, _d in events] == ["fault", "fault_cleared"]
+        fake.on_battery = True  # e.g. after a restart, with no log entry at all
+        await panel.read_power()
+        assert panel.extra["faults"] == {"AC Fail"}
+    finally:
+        await panel.stop()
+
+
 async def test_auth_failure_stops_retrying(fake):
     calls = []
     info, zones, areas = await probe("127.0.0.1", fake.port, "1234")
