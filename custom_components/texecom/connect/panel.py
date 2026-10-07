@@ -42,6 +42,7 @@ GROUP_TAMPER_ALARM = 11
 FIRE_ALARM = 129
 FIRE_ALARM_END = 130
 USER_CHANGE_WINDOW = 60.0  # a keypad logon this recent explains an arm/disarm
+ZONE_ALARM_REPEAT = 30.0
 
 
 async def discover(client: ConnectClient) -> tuple[PanelInfo, list[PanelZone], list[PanelArea]]:
@@ -113,6 +114,7 @@ class ConnectPanel(TexecomPanel):
         self._closed_event = asyncio.Event()
         self._last_part_arm: int | None = None
         self._last_user: tuple[str, float] | None = None
+        self._recent_alarms: dict[tuple[int, bool], float] = {}
         self._idle_count = 0
         self._refresh_handle: asyncio.TimerHandle | None = None
         self.last_error: str | None = None
@@ -298,6 +300,14 @@ class ConnectPanel(TexecomPanel):
             if m["group"] in (GROUP_ALARM, GROUP_TAMPER_ALARM) or raw_group == FIRE_ALARM:
                 zone = self.zones.get(m["parameter"])
                 tamper = m["group"] == GROUP_TAMPER_ALARM
+                # The panel logs an alarm twice (seen on a real panel, the second
+                # time once it has been reported): only the first one counts.
+                key, now = (m["parameter"], tamper), time.monotonic()
+                if self._recent_alarms.get(key, -ZONE_ALARM_REPEAT) > now - ZONE_ALARM_REPEAT:
+                    return
+                self._recent_alarms[key] = now
+                if zone:  # the area's "changed by" names the zone that set it off
+                    self._last_user = (zone.name.title() if zone.name.isupper() else zone.name, now)
                 _LOGGER.warning(
                     "Connect: zone %s (%s) in %s",
                     m["parameter"],

@@ -209,8 +209,10 @@ async def test_reconnects_after_the_panel_hangs_up(fake):
         await wait_for(lambda: not panel.connected)
         await wait_for(lambda: panel.connected and panel.areas[1].state == TRIGGERED)
         fake.send_log(4, 3, 2)  # zone 2 alarm
+        fake.send_log(4, 0x83, 2)  # logged again once reported
         await wait_for(lambda: events)
-        assert events[0] == ("zone_alarm", {"zone": 2, "zone_name": "Lounge", "tamper": False})
+        await asyncio.sleep(0.1)
+        assert events == [("zone_alarm", {"zone": 2, "zone_name": "Lounge", "tamper": False})]
     finally:
         await panel.stop()
 

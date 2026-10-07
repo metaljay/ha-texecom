@@ -111,7 +111,45 @@ To change the SmartCom's address or the UDL code, use **⋮ → Reconfigure**.
 
 ## ⚡ Automations
 
-The alarm and zones work in any automation. The integration also fires a `texecom_event` for things that aren't states:
+The alarm and zones work in any automation.
+
+### 🚗 Arm automatically when everyone leaves
+
+This is the most useful one, and Home Assistant does it more safely than Apple Home can. Home Assistant can **arm** on its own when the house empties, and leave **disarming** to you: at the keypad as usual, or in Home Assistant with the optional alarm code (**Configure → Home Assistant alarm code**). Apple Home has no code entry for an alarm, so a "disarm when I arrive" automation there trusts your phone's location alone. A glitch, or a stolen unlocked phone, would open the house.
+
+1. Go to **Settings → Automations & scenes → Create automation → Create new automation**.
+2. Open **⋮ → Edit in YAML**, paste the example below, and change the entity names to yours.
+3. **Save** it as *Alarm: arm when everyone leaves*.
+
+```yaml
+alias: "Alarm: arm when everyone leaves"
+description: Sets the alarm to Away when nobody has been home for 5 minutes.
+triggers:
+  - trigger: numeric_state
+    entity_id: zone.home        # how many people are home (needs the companion app)
+    below: 1
+    for: { minutes: 5 }
+conditions:
+  - condition: state
+    entity_id: alarm_control_panel.texecom_house
+    state: disarmed
+actions:
+  - action: alarm_control_panel.alarm_arm_away
+    target:
+      entity_id: alarm_control_panel.texecom_house
+  - action: notify.notify       # or persistent_notification.create
+    data:
+      message: "Everyone's out, so the alarm is set to Away."
+mode: single
+```
+
+- **Who's home?** The example uses `zone.home`, which counts the people whose phones run the Home Assistant app. If you track presence another way (for example an *Occupancy* toggle that Apple Home switches when the last person leaves), use that instead: `trigger: state`, `entity_id: input_boolean.occupancy`, `to: "off"`.
+- **The 5 minutes** stop a quick trip to the bins from arming the house. The exit delay still runs as usual.
+- **We suggest not adding an automatic disarm.** If you do, require something besides phone location (for example the front door being unlocked with a code).
+
+### 📣 Events
+
+The integration also fires a `texecom_event` for things that aren't states:
 
 | `type` | When | Data |
 |---|---|---|
@@ -232,6 +270,7 @@ To set a COM port to Crestron at the keypad: engineer code → *UDL/Digi Options
 - Disable the Homebridge Texecom plugin (or stop texecom2mqtt) first: they can't share the SmartCom.
 - Nothing needs copying across: zones, names and areas come from the panel. Choose Night and Home part arms as you had them.
 - For the Home app, expose the alarm through Home Assistant's HomeKit Bridge. It appears as a new accessory, so set its room and notifications again.
+- If you armed and disarmed from Apple Home automations (for example a dummy switch that follows who's home), move the arming into Home Assistant (see [Arm automatically when everyone leaves](#automations)) and delete the Apple Home ones, so the two don't fight.
 
 </details>
 
