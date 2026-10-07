@@ -255,7 +255,7 @@ class ConnectPanel(TexecomPanel):
         self._idle_count += 1
         await self.refresh()
         await self.read_display()
-        if self._idle_count % POWER_EVERY_N_IDLE == 1:
+        if (self._idle_count - 1) % POWER_EVERY_N_IDLE == 0:
             await self.read_power()
 
     async def read_display(self) -> None:
