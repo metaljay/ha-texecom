@@ -1,0 +1,68 @@
+The Texecom Connect protocol support in this repository was written for this
+project. The framing, CRC parameters, command numbers and message layouts
+follow the publicly released Python implementation:
+
+  texecom-connect - Copyright (C) 2018 Joseph Heenan
+  https://github.com/davidMbrooke/texecom-connect
+  Licensed under the Apache License, Version 2.0
+  http://www.apache.org/licenses/LICENSE-2.0
+
+That implementation was written using information Texecom provided under
+NDA; Texecom confirmed (8 June 2018) that the program could be released.
+No Texecom documentation is reproduced here.
+
+Arming, disarming, resetting and the zone-state / area-flag reads (command
+numbers, arm types, area bitmap and flag layouts, and the "reset before
+disarm when in alarm" behaviour) are adapted from texecom2mqtt 1.3.1:
+
+  texecom2mqtt - Copyright (c) 2020 Daniel Chesterton
+  https://github.com/dchesterton/texecom2mqtt-hassio
+  MIT License - see LICENSE-texecom2mqtt in this repository
+
+The arm/disarm/reset and zone-state / area-flag command layouts were also
+cross-checked against an independently maintained, Apache-2.0 licensed
+fork of texecom-connect (https://github.com/Sjoerdfc/texecom-connect), whose
+idle-time state re-read is the model for the keep-alive here. Area flag
+numbers beyond texecom2mqtt's (17/18 Entry, 19 Exit, 24 Part Arming) and the
+behaviour of firmware that refuses bulk area-flag reads come from a further
+Apache-2.0 fork: https://github.com/southseaboy/texecom-connect
+
+Handling of NAK replies to reads (the panel refuses commands right after a
+burst of events; taken as data a 0x15 reads as "zone active" or "area in
+alarm") follows real-panel observations published by michaelmarconi/
+texecom_alarm (MIT): https://github.com/michaelmarconi/texecom_alarm
+
+Other behaviour (timings, session drops during alarm reporting, unknown
+area state 6, event type 137) was observed on a real Premier Elite panel
+during testing for this project.
+
+The Crestron support (custom_components/texecom/crestron) is a Python port of
+the Crestron code in the Homebridge plugin homebridge-texecom (MIT), by Kieran
+Jones, max-christian and Chris Posthumus, as revised in
+https://github.com/metaljay/homebridge-texecom. The binary UDL part-arm, arm
+and disarm frames follow ricol99/casa (MIT) and shuckc/pytexalarm, and were
+confirmed on a real panel.
+
+Licence of texecom2mqtt follows.
+
+MIT License
+
+Copyright (c) 2020 Daniel Chesterton
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.

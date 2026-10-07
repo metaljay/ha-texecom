@@ -1,0 +1,217 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "How does Home Assistant reach your panel?",
+        "description": "Most people have a **SmartCom** (the box the Texecom app uses): choose **Texecom Connect**.\n\nChoose **Crestron** only if one of the panel's COM ports is set to *Crestron System* and you reach it through a serial-to-network adapter or a cable.",
+        "menu_options": {
+          "connect": "Texecom Connect (SmartCom or ComIP) — recommended",
+          "crestron": "Crestron (COM port, adapter or cable)"
+        }
+      },
+      "connect": {
+        "title": "Your SmartCom",
+        "description": "Find the SmartCom in your router's list of devices and reserve its address so it never changes.\n\nWhile Home Assistant is connected, the **Texecom app** can't connect to the same SmartCom (it allows one connection at a time). Stop anything else using it first, such as Homebridge or texecom2mqtt.",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "udl": "UDL code"
+        },
+        "data_description": {
+          "host": "For example 192.168.1.50.",
+          "port": "Leave at 10001 unless your installer changed it.",
+          "udl": "The panel's remote-access code (not your keypad code). Texecom's default is 1234, and most panels keep it."
+        }
+      },
+      "crestron": {
+        "title": "How is the Crestron port connected?",
+        "menu_options": {
+          "crestron_network": "Over the network (an adapter or a SmartCom in Crestron mode)",
+          "crestron_serial": "Serial cable or USB adapter on this machine"
+        }
+      },
+      "crestron_network": {
+        "title": "Crestron over the network",
+        "description": "The COM port must be set to **Crestron System** in Wintex or at the keypad.",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "udl": "UDL code",
+          "zone_count": "Number of zones",
+          "area_count": "Number of areas"
+        },
+        "data_description": {
+          "udl": "Needed to arm and disarm from Home Assistant. Leave empty for sensors only.",
+          "zone_count": "Crestron can't read zone names: zones appear as \"Zone 1\", \"Zone 2\"… and you can rename them in Home Assistant.",
+          "area_count": "Usually 1."
+        }
+      },
+      "crestron_serial": {
+        "title": "Crestron over a serial cable",
+        "description": "The COM port must be set to **Crestron System** in Wintex or at the keypad.",
+        "data": {
+          "serial_device": "Serial device",
+          "baud_rate": "Speed (baud)",
+          "udl": "UDL code",
+          "zone_count": "Number of zones",
+          "area_count": "Number of areas"
+        },
+        "data_description": {
+          "serial_device": "For example /dev/ttyUSB0, or a /dev/serial/by-id/… path.",
+          "baud_rate": "As set for the COM port (often 19200).",
+          "udl": "Needed to arm and disarm from Home Assistant. Leave empty for sensors only.",
+          "zone_count": "Zones appear as \"Zone 1\", \"Zone 2\"… and you can rename them in Home Assistant.",
+          "area_count": "Usually 1."
+        }
+      },
+      "arm_modes": {
+        "title": "Found your panel",
+        "description": "**Areas:** {areas}\n**Zones:** {zones}\n\nAway always sets the whole alarm. Your installer may also have set up **part arms** that leave some zones off: for example Part Arm 1 at night, so you can move around upstairs. Pick the part arm for each Home Assistant mode, or *Not used* to hide that button.\n\nUnsure? Ask your installer, or check which zones each part arm omits in Wintex.",
+        "data": {
+          "night_part_arm": "Night uses",
+          "home_part_arm": "Home uses",
+          "create_dashboard": "Add an Alarm dashboard to the sidebar"
+        },
+        "data_description": {
+          "create_dashboard": "Built from Home Assistant's own cards: the alarm with its arm buttons, recent activity, and every zone grouped by type. You can edit or delete it like any dashboard."
+        }
+      },
+      "arm_modes_crestron": {
+        "title": "Arm modes",
+        "description": "Away always sets the whole alarm. Pick the part arm for Night and Home, or *Not used* to hide that button. Over Crestron, part arms work for area 1 only.\n\nCrestron doesn't say whether the panel was fully or part armed when it's set at the keypad: choose how that should show.",
+        "data": {
+          "night_part_arm": "Night uses",
+          "home_part_arm": "Home uses",
+          "keypad_arm_mode": "When armed at the keypad, show as",
+          "create_dashboard": "Add an Alarm dashboard to the sidebar"
+        },
+        "data_description": {
+          "create_dashboard": "Built from Home Assistant's own cards: the alarm with its arm buttons, recent activity, and every zone grouped by type. You can edit or delete it like any dashboard."
+        }
+      },
+      "reauth_confirm": {
+        "title": "The panel refused the UDL code",
+        "description": "Enter the panel's current UDL code.",
+        "data": {
+          "udl": "UDL code"
+        }
+      },
+      "reconfigure": {
+        "title": "Change connection",
+        "data": {
+          "host": "IP address",
+          "port": "Port",
+          "serial_device": "Serial device",
+          "udl": "UDL code"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Couldn't connect. Check the address and port, and that nothing else (the Texecom app, Homebridge, texecom2mqtt) is connected to the SmartCom right now.",
+      "invalid_auth": "The panel refused the UDL code.",
+      "invalid_udl": "The UDL code is 4 to 8 digits.",
+      "no_zones": "Connected, but the panel reported no zones in use.",
+      "no_reply": "Connected, but the panel didn't answer. Check the COM port is set to Crestron System and the speed matches.",
+      "same_part_arm": "Night and Home can't use the same part arm."
+    },
+    "abort": {
+      "already_configured": "This panel is already set up.",
+      "reauth_successful": "Updated the UDL code.",
+      "reconfigure_successful": "Updated the connection."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Texecom options",
+        "data": {
+          "night_part_arm": "Night uses",
+          "home_part_arm": "Home uses",
+          "alarm_code": "Home Assistant alarm code (optional)",
+          "code_arm_required": "Ask for the code when arming too",
+          "time_sync": "Keep the panel clock right",
+          "rediscover": "Read zones and areas from the panel again",
+          "create_dashboard": "Create or refresh the Alarm dashboard"
+        },
+        "data_description": {
+          "alarm_code": "A code Home Assistant asks for before disarming. It's checked by Home Assistant, not the panel. Leave empty for no code.",
+          "time_sync": "Checks the panel clock once a day, using Home Assistant's time zone, and corrects it if it's more than a minute out.",
+          "rediscover": "After your installer changes zones or names. (This also happens by itself when engineer programming ends.)",
+          "create_dashboard": "Rebuilds the Alarm dashboard from the current zones (any changes you made to it are replaced)."
+        }
+      },
+      "init_crestron": {
+        "title": "Texecom options",
+        "data": {
+          "night_part_arm": "Night uses",
+          "home_part_arm": "Home uses",
+          "keypad_arm_mode": "When armed at the keypad, show as",
+          "alarm_code": "Home Assistant alarm code (optional)",
+          "code_arm_required": "Ask for the code when arming too",
+          "status_poll": "Check the panel every",
+          "create_dashboard": "Create or refresh the Alarm dashboard"
+        },
+        "data_description": {
+          "alarm_code": "A code Home Assistant asks for before disarming. It's checked by Home Assistant, not the panel. Leave empty for no code.",
+          "status_poll": "Asks the panel whether it's armed (corrects missed events, and reconnects if the panel goes quiet). 0 turns it off.",
+          "create_dashboard": "Rebuilds the Alarm dashboard from the current zones (any changes you made to it are replaced)."
+        }
+      }
+    },
+    "error": {
+      "same_part_arm": "Night and Home can't use the same part arm.",
+      "invalid_code_format": "Use digits only.",
+      "rediscover_failed": "Couldn't read the panel. Try again in a minute.",
+      "dashboard_failed": "Couldn't create the dashboard on this version of Home Assistant. The README has a version you can paste in."
+    }
+  },
+  "selector": {
+    "part_arm": {
+      "options": {
+        "0": "Not used",
+        "1": "Part Arm 1",
+        "2": "Part Arm 2",
+        "3": "Part Arm 3"
+      }
+    },
+    "keypad_arm_mode": {
+      "options": {
+        "away": "Away",
+        "home": "Home",
+        "night": "Night"
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "connection": {
+        "name": "Panel connection"
+      },
+      "zone_tamper": {
+        "name": "Tamper"
+      }
+    },
+    "sensor": {
+      "panel_voltage": {
+        "name": "Panel voltage"
+      },
+      "battery_voltage": {
+        "name": "Battery voltage"
+      },
+      "panel_current": {
+        "name": "Panel current"
+      },
+      "battery_current": {
+        "name": "Battery current"
+      }
+    }
+  },
+  "exceptions": {
+    "invalid_code": {
+      "message": "Wrong alarm code."
+    },
+    "command_failed": {
+      "message": "The panel didn't accept the request: {error}"
+    }
+  }
+}

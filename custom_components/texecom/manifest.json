@@ -1,0 +1,13 @@
+{
+  "domain": "texecom",
+  "name": "Texecom Premier Elite",
+  "codeowners": ["@metaljay"],
+  "config_flow": true,
+  "documentation": "https://github.com/metaljay/ha-texecom",
+  "integration_type": "hub",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/metaljay/ha-texecom/issues",
+  "loggers": ["custom_components.texecom"],
+  "requirements": ["pyserial-asyncio-fast>=0.11"],
+  "version": "0.1.0"
+}
