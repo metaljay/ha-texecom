@@ -13,7 +13,7 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 
-from .const import CONF_CREATE_DASHBOARD, CONF_PROTOCOL, DOMAIN, PROTOCOL_CRESTRON
+from .const import CONF_CREATE_DASHBOARD, CONF_PROTOCOL, DOMAIN, HELP_PART_ARMS, PROTOCOL_CRESTRON
 from .entity import nice_name
 from .flows.connect import ConnectSteps
 from .flows.crestron import CrestronSteps
@@ -48,12 +48,10 @@ class TexecomConfigFlow(ConnectSteps, CrestronSteps, ReauthReconfigureSteps, Con
                 # The dashboard is built once the entities exist (in setup).
                 data = {**self._data, CONF_CREATE_DASHBOARD: bool(user_input.get(CONF_CREATE_DASHBOARD))}
                 return self.async_create_entry(title=self._title(), data=data, options=arm_mode_options(user_input))
-        placeholders = {"zones": "", "areas": ""}
+        placeholders = {"zones": "", "areas": "", "help": HELP_PART_ARMS}
         if not crestron:
-            placeholders = {
-                "zones": ", ".join(nice_name(z["name"]) for z in self._data["zones"]),
-                "areas": ", ".join(nice_name(a["name"]) for a in self._data["areas"]),
-            }
+            placeholders["zones"] = ", ".join(nice_name(z["name"]) for z in self._data["zones"])
+            placeholders["areas"] = ", ".join(nice_name(a["name"]) for a in self._data["areas"])
         return self.async_show_form(
             step_id="arm_modes_crestron" if crestron else "arm_modes",
             data_schema=with_dashboard_choice(arm_modes_schema(user_input or {}, crestron)),

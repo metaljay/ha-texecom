@@ -39,3 +39,12 @@ DEFAULT_UDL = "1234"
 DEFAULT_STATUS_POLL = 60
 TIME_SYNC_HOURS = 24
 CLOCK_DRIFT_LIMIT = 300  # seconds; more than this raises a Repairs notice (clock sync off)
+
+# Help pages linked from the screens (links can't be written into strings.json).
+DOCS_URL = "https://github.com/metaljay/ha-texecom/blob/main/docs/user/"
+HELP_SETUP = DOCS_URL + "setup.md"
+HELP_PART_ARMS = DOCS_URL + "setup.md#part-arms-explained"
+HELP_CRESTRON = DOCS_URL + "crestron.md"
+HELP_OPTIONS = DOCS_URL + "using.md#options"
+HELP_DASHBOARD = DOCS_URL + "using.md#build-the-dashboard-yourself"
+HELP_OFFLINE = DOCS_URL + "troubleshooting.md#the-panel-is-unreachable"

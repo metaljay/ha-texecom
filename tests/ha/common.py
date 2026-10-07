@@ -69,6 +69,14 @@ def free_port() -> int:
         return s.getsockname()[1]
 
 
+async def after_progress(hass, result, flows=None):
+    """Waits out a progress screen ("Connecting to your panel…") and returns
+    the step that follows it."""
+    assert result["type"] is FlowResultType.SHOW_PROGRESS, result
+    await hass.async_block_till_done()
+    return await (flows or hass.config_entries.flow).async_configure(result["flow_id"])
+
+
 async def start(hass, choice: str, sub_choice: str | None = None):
     result = await hass.config_entries.flow.async_init(DOMAIN, context={"source": config_entries.SOURCE_USER})
     assert result["type"] is FlowResultType.MENU

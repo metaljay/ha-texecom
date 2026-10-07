@@ -32,6 +32,7 @@ from ..const import (
     DEFAULT_BAUD_RATE,
     DEFAULT_CRESTRON_PORT,
     DEFAULT_UDL,
+    HELP_CRESTRON,
     PROTOCOL_CRESTRON,
 )
 from .validation import PORT_SELECTOR, UDL_SELECTOR, udl_valid, validate_crestron_network, validate_serial
@@ -92,7 +93,12 @@ class CrestronSteps(ConfigFlow):
                 **self._crestron_common(defaults),
             }
         )
-        return self.async_show_form(step_id="crestron_network", data_schema=schema, errors=errors)
+        return self.async_show_form(
+            step_id="crestron_network",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"help": HELP_CRESTRON},
+        )
 
     async def async_step_crestron_serial(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
@@ -126,4 +132,9 @@ class CrestronSteps(ConfigFlow):
                 **self._crestron_common(defaults),
             }
         )
-        return self.async_show_form(step_id="crestron_serial", data_schema=schema, errors=errors)
+        return self.async_show_form(
+            step_id="crestron_serial",
+            data_schema=schema,
+            errors=errors,
+            description_placeholders={"help": HELP_CRESTRON},
+        )
