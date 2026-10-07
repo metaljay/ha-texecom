@@ -1,12 +1,12 @@
 # Using it
 
-**On this page:** [What you'll see](#what-youll-see) · [The alarm](#the-alarm) · [The Alarm dashboard](#the-alarm-dashboard) · [Options](#options) · [Notifications](#notifications) · [The activity list](#the-activity-list) · [Codes](#codes) · [Good to know](#good-to-know) · [Build the dashboard yourself](#build-the-dashboard-yourself)
+**On this page:** [What you'll see](#what-youll-see) · [The alarm](#the-alarm) · [Ready to arm](#ready-to-arm) · [The Alarm dashboard](#the-alarm-dashboard) · [Options](#options) · [Notifications](#notifications) · [The activity list](#the-activity-list) · [Codes](#codes) · [Good to know](#good-to-know) · [Build the dashboard yourself](#build-the-dashboard-yourself)
 
 ## What you'll see
 
 | Device | What it has |
 |---|---|
-| **House Alarm** (one per area, named after it) | The alarm: arm and disarm, and its state |
+| **House Alarm** (one per area, named after it) | The alarm: arm and disarm, and its state. **Ready to arm** says whether it would set now |
 | **Premier Elite 24 panel** (your panel's size) | **Panel connection**, **Mains power**, **Problem**, **Tamper**, **Keypad display**, battery and panel voltages (current readings are there too, switched off until you want them) |
 | One device per zone, e.g. **Front Door** | Whether the zone is open or sees movement. Each also has a **Tamper** sensor, switched off until you want it |
 
@@ -31,11 +31,20 @@ Home Assistant's own **Overview** picks the alarm up as well: its **Security** s
 - **Arms and disarms at the keypad** show straight away.
 - **Switching mode** (for example Night to Away) shows *Arming…* while the panel switches over; you won't see *Off* in between, so automations that run on *Off* don't fire.
 
+## Ready to arm
+
+**Ready to arm** (on the alarm's device, and on the Alarm dashboard) says whether the panel would let the alarm set right now:
+
+- **Ready**: nothing is open that would stop it.
+- **Not ready**: something is. Its **open zones** (in the sensor's attributes) list what's open, e.g. *Front Door*.
+
+It's the panel's own answer, checked a moment after doors and sensors change while the alarm is off. Texecom Connect only.
+
 ## The Alarm dashboard
 
 <img src="../images/dashboard.png" width="760" alt="The Alarm dashboard: the alarm with Away, Night, Home and Off buttons, recent activity, panel health, and every zone grouped by type">
 
-If you left the box ticked during setup, **Alarm** is in the sidebar: the arm buttons, the last day's activity, panel health and every zone grouped by type. It's built from Home Assistant's own cards, so you can edit it like any dashboard.
+If you left the box ticked during setup, **Alarm** is in the sidebar: the arm buttons, **Ready to arm**, the last day's activity, panel health and every zone grouped by type. It's built from Home Assistant's own cards, so you can edit it like any dashboard.
 
 To build it again (for example after adding zones), use **Configure → Create or refresh the Alarm dashboard**. That replaces any changes you made to it.
 

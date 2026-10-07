@@ -34,8 +34,8 @@ Run one compartment's tests while you work, e.g. `pytest tests/ha/test_flows_opt
 
 | Suite | Where | What it covers |
 |---|---|---|
-| **Driver tests** (35) | `tests/test_connect.py`, `tests/test_crestron.py` | Layers 1 and 2: decoding, and each driver against a simulated panel over real sockets. Fast, and need no Home Assistant |
-| **Home Assistant tests** (67) | `tests/ha/` | Layer 3: the integration running inside a real Home Assistant (setup screens, options, entities, services, events, notifications, the activity list, Repairs, diagnostics, the dashboard, the blueprints), against the same simulated panels |
+| **Driver tests** (38) | `tests/test_connect.py`, `tests/test_crestron.py` | Layers 1 and 2: decoding, and each driver against a simulated panel over real sockets. Fast, and need no Home Assistant |
+| **Home Assistant tests** (71) | `tests/ha/` | Layer 3: the integration running inside a real Home Assistant (setup screens, options, entities, services, events, notifications, the activity list, Repairs, diagnostics, the dashboard, the blueprints), against the same simulated panels |
 
 The Home Assistant tests have one file per module (see [Architecture](architecture.md#tests)). `tests/ha/common.py` holds shared helpers:
 
@@ -65,6 +65,8 @@ The Home Assistant tests have one file per module (see [Architecture](architectu
 | `ignore_next[command] = n` | Not answering the next *n* |
 | `on_battery = True` / `power_override = bytes` | Power readings on battery, or any raw reading |
 | `clock_offset` / `clock_raw` | The panel's clock wrong, or holding an impossible date |
+| `ready` | The Ready flag (16): `None` (the default) sets it while disarmed with no zone open; `True`/`False` force it |
+| `system_flags` | The 8 bytes the panel returns for *get system flags* |
 | `udl` | A different UDL code (for reauth tests) |
 | `commands` / `connections` / `clock_set_to` | What it received, for assertions |
 

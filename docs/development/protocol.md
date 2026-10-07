@@ -4,7 +4,7 @@ What the panel and its modules actually do, as seen on a real **Premier Elite 24
 
 **Add to this page** whenever you learn something new on a real panel: what you saw, how, the panel and firmware, and the date. The [live test plan](../testing/live-test-plan.md) lists what's still to find out.
 
-**On this page:** [Texecom Connect](#texecom-connect-smartcom-or-comip) · [Crestron](#crestron) · [Still unknown](#still-unknown)
+**On this page:** [Texecom Connect](#texecom-connect-smartcom-or-comip) · [Area flags](#area-flags) · [Seen by other projects](#seen-by-other-projects) · [Crestron](#crestron) · [Still unknown](#still-unknown)
 
 ## Texecom Connect (SmartCom or ComIP)
 
@@ -37,7 +37,8 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 6 | Arm area | Arm type (0 full, 1–3 part arm) + area bitmap |
 | 8 | Disarm area | Area bitmap |
 | 9 | Reset area | Sent before disarming when in alarm |
-| 11 | Get area flags | Bulk: 72 flags in 0.4 s on the Elite 24. Some firmware (Elite 48, V4.02.01) answers a bulk read with one byte: then flags are read one at a time |
+| 10 | Get system flags | 8 bytes, meaning not mapped yet. Only read for diagnostics, as an *optional* command: sent once, and no answer doesn't end the session |
+| 11 | Get area flags | Bulk: 72 flags in 0.4 s on the Elite 24 (see [Area flags](#area-flags)). Some firmware (Elite 48, V4.02.01) answers a bulk read with one byte: then flags are read one at a time |
 | 13 | Get LCD display | The keypad's two 16-character lines, with the clock (e.g. `HOME 13:48.52 Wed 07`), which the driver strips |
 | 22 | Get panel identification | e.g. `Elite 24     V6.05.03LS1` |
 | 23 / 24 | Get / set date and time | Day, month, 2-digit year, hours, minutes, seconds |
@@ -72,6 +73,23 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 78–80, 204–209 | Part Arm 1–3 (says which part arm a "part armed" area message means) | `connect/events.py` |
 | 85 | **Arm failed**: one entry per zone still active at the end of the exit time | `connect/events.py` |
 
+### Area flags
+
+`Get area flags` returns one area bitmap per flag. Texecom's protocol specification names all 73; the names are in `connect/protocol.py` (`AREA_FLAG_NAMES`, from the texecom-connect forks), and the debug log and diagnostics show the flags set for each area by name, so the rest can be mapped on a real panel ([live test plan](../testing/live-test-plan.md#part-d--mapping-the-protocol), D12).
+
+| Flag | Name | Used for | Status |
+|---|---|---|---|
+| 0 | Alarm | *Alarm!* on a re-read | Used from the start (texecom2mqtt's layout). Another project saw it act as alarm *memory* on V4 firmware (below): check on this panel (D15) |
+| 16 | Ready | **Ready to arm** | New: confirm on a real panel (D12) |
+| 17, 18 / 19 | Entry, Second Entry / Exit | *Entry delay* / *Arming…* on a re-read | Used. This panel showed a stale Exit flag just after a remote arm (the driver ignores it while armed) |
+| 21, 22, 23, 26 | Armed, Full Armed, Part Armed, Force Armed | the armed states on a re-read | Used |
+| 24 | Part Arming | *Arming…* on a re-read | Used |
+| 50–52 | Part Arm 1–3 | which part arm | Used |
+| 14 | Tamper Alarm | — | Candidate for tampers already open when Home Assistant connects (D11) |
+| 28, 29, 30 | Bell SAB, Bell SCB, Strobe | — | Candidates for "the siren is sounding" |
+| 36 | Reset Required | — | Candidate for *System Alerts!* |
+| 64, 65, 66 | Detector Fault, Detector Masked, Fault Present | — | Candidates for faults already present when Home Assistant connects (D11) |
+
 ### Arming, alarms and the keypad
 
 - **Every arm path works**: Away, Part Arm 1 and 2, switching mode, keypad arms (with the user number), and Apple Home through Home Assistant's HomeKit Bridge.
@@ -93,6 +111,19 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 - A **total power loss** (mains and battery) reset the clock to **31 Oct 2023**.
 - The clock can hold an **impossible date** (day 0, month 0): treated as "not set".
 - The panel keeps local wall-clock time; the integration uses Home Assistant's time zone, not the computer's (a Docker container on UTC would otherwise put the panel an hour out in summer).
+
+## Seen by other projects
+
+Reported by other Texecom projects on their panels, not yet seen on this one. Useful to know, and worth checking (sources in [Other projects](other-projects.md)):
+
+- **Busy NAKs can last**: after a burst of events (~50 s of them), an Elite 88 (V6.02.02, ComIP) answered the keep-alive with a NAK on every retry. Not a dead session. The driver here treats a NAK as "busy, change nothing", so it doesn't reconnect.
+- **One connection, enforced at TCP**: a second connection is refused outright while one is live. After a session ends, a ComIP accepted a new login after 2 s (this SmartCom: 10–70 s).
+- **A client holding its own dead socket can't log in again** until that socket is closed. The driver closes a dropped session's socket straight away and keeps hold of the task that does it.
+- **The alarm-time drop is the SmartCom's**: on a dedicated ComIP the session stayed up through an alarm. A SmartCom session can also carry modem commands (`ATH0`, `ATZ`) when the SmartCom reports.
+- **"Disarmed" not always sent**: after disarming Part Arm 2 on an Elite 88, the area message didn't always arrive. The keep-alive re-read corrects it here within 30 s.
+- **Flag 0 as alarm memory**: on an Elite 48 (V4.02.01) flag 0 was clear while the alarm sounded and set after the disarm; flags 5, 28, 30, 44, 61 and 62 were the ones set while it sounded. If this panel did the same, a re-read after a keypad disarm would show *Alarm!* again (D15).
+- **Arm and disarm "as a user"** (commands 29 and 30) apply that user's rights: an "Arm Only" user's code armed but couldn't disarm. Not used here.
+- **Get user** (command 27) returns a user's name **and code** and tag. Never log or keep its reply.
 
 ## Crestron
 
@@ -122,7 +153,10 @@ Things to find out on real panels (each is a task in the [live test plan](../tes
 - **Output messages**: which outputs (bell, strobe, others) report, and what their states mean.
 - **Log event types** not in the tables above, including **type 137** (observed during testing, meaning unknown).
 - Whether a remote **arm is refused** (NAK) with a zone open or a fault present, and what the panel sends then.
-- Commands not used yet that could help: **reading the event log** (to catch up after a reconnect), **user names**, **zone bypass**, **outputs**.
+- Commands not used yet that could help: **reading the event log** (to catch up after a reconnect), **user names** (its reply includes the code), **zone bypass**, **outputs**, **the keypad text** (command 14).
+- What the **system flags** (command 10) mean, and which **area flags** show tampers and faults that are already there when Home Assistant connects (D11–D13).
+- Whether **Ready** (flag 16) is set exactly when the area can be armed, and what it shows while armed.
+- Whether Home Assistant's own login writes **Download Start** (log 53) to the panel's log, before log 53/54 (remote access) and 58 (engineer programming) are shown in the activity list.
 - The exact **refusal window** after a session closes, and what affects it.
 - The SmartCom's **network name (DHCP hostname)**, which could let Home Assistant discover it automatically.
 - Whether the panel changes its own clock for **summer time**, and how that interacts with clock sync (UK clocks change on 25 October 2026 and 28 March 2027).

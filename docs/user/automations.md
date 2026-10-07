@@ -1,8 +1,8 @@
 # Automations
 
-The alarm and every zone work in Home Assistant's automations like any other device. The two most useful automations come ready-made (Home Assistant calls them *blueprints*): click a button, pick your alarm, save.
+The alarm and every zone work in Home Assistant's automations like any other device. The most useful automations come ready-made (Home Assistant calls them *blueprints*): click a button, pick your alarm, save.
 
-**On this page:** [Arm automatically when everyone leaves](#arm-automatically-when-everyone-leaves) · [Tell me about the alarm on my phone](#tell-me-about-the-alarm-on-my-phone) · [Events](#events) · [More ideas](#more-ideas)
+**On this page:** [Arm automatically when everyone leaves](#arm-automatically-when-everyone-leaves) · [Or ask me first](#or-ask-me-first) · [Tell me about the alarm on my phone](#tell-me-about-the-alarm-on-my-phone) · [Events](#events) · [More ideas](#more-ideas)
 
 ## Arm automatically when everyone leaves
 
@@ -20,6 +20,7 @@ It sets the alarm to **Away** when nobody has been home for 5 minutes, as long a
 - **If someone is still inside**, the arm fails at the end of the exit time (the panel sounds its "fail to set" warning), and Home Assistant shows an **Alarm not set** notification naming the zone.
 - **Then also** lets you add something, such as a notification to your phone saying the alarm is set.
 - **We suggest not adding an automatic disarm.** If you do, require something besides phone location (for example the front door being unlocked with a code).
+- **Rather decide each time?** Use [Or ask me first](#or-ask-me-first) instead.
 
 <details>
 <summary>Prefer to write it yourself? The same thing in YAML</summary>
@@ -46,6 +47,19 @@ mode: single
 ```
 
 </details>
+
+## Or ask me first
+
+[![Open your Home Assistant and import the "ask to set the alarm when everyone leaves" blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https%3A%2F%2Fgithub.com%2Fmetaljay%2Fha-texecom%2Fblob%2Fmain%2Fblueprints%2Fautomation%2Ftexecom%2Fask_when_everyone_leaves.yaml)
+
+The same idea, but your phone asks first: when nobody has been home for a few minutes and the alarm is off, it shows **Set the alarm?** with a **Set the alarm** button. Only that tap sets it to **Away**.
+
+1. Click the button above, then **Preview** and **Import blueprint**.
+2. Go to **Settings → Automations & scenes → Blueprints**, and click **Texecom: ask to set the alarm when everyone leaves**.
+3. Choose your **Alarm**, your **Phone** (it needs the Home Assistant app) and **Who's home**, and **Save** it.
+
+- **The button works for 30 minutes** (you can change that), so an old notification can't set the alarm hours later.
+- **If someone comes home** or sets the alarm meanwhile, tapping it does nothing.
 
 ## Tell me about the alarm on my phone
 

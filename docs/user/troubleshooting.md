@@ -28,6 +28,8 @@
 | **"Alarm panel on battery" notification** | The panel has no mains power: check for a power cut, and the panel's fused spur. The alarm still works on its battery for now. The notification goes within half a minute of the mains coming back |
 | **"Alarm tamper" notification** | It says where: *the panel's lid is open*, *a detector's cover is open*, the bell box… Put it right and it goes by itself. *Auxiliary Tamper* means one of the detectors on the shared tamper circuit, so check each one's cover |
 | **Keypad users show as *User 3*** | Give them names in **Configure → Names for keypad users** |
+| **Ready to arm says *Not ready*** | Its *open zones* (in the sensor's attributes) list what's open: close it, or keep out of the sensor's view. If nothing is listed, look at the keypad |
+| **A zone your installer removed is still listed** | Once Home Assistant has read the zones again (**Configure → Read zones and areas from the panel again**), open the old zone's device and use **⋮ → Delete** |
 | **A zone shows the wrong icon or wording** | Open it, then **⚙️ Settings → Show as** |
 | **The alarm takes about a minute to come back after restarting Home Assistant** | Normal: the SmartCom waits a while before it lets a new connection in |
 | **Keypad says "System Alerts!" after an alarm** | The panel wants the alarm acknowledged at the keypad. On some panels this needs the engineer code |
@@ -60,7 +62,7 @@ logger:
 
 Then look in **Settings → System → Logs** (**Show raw logs**) for lines with *Connect* or *Crestron*. Remove it again afterwards: it's chatty.
 
-**Diagnostics:** on the panel's device page, **⋮ → Download diagnostics** gives a report of the panel's state with the codes and address removed. Attach it to bug reports.
+**Diagnostics:** on the panel's device page, **⋮ → Download diagnostics** gives a report of the panel's state, including the status flags it reports, with the codes and address removed. Attach it to bug reports.
 
 ## Reporting a problem
 
@@ -79,6 +81,7 @@ What the panel does and doesn't tell Home Assistant, found by testing on a real 
 - **Mains coming back** isn't reported by the panel, only the failure. Home Assistant reads the panel's power every 30 seconds instead, so *Mains power* turns back on within half a minute.
 - **Which detector was tampered with** usually isn't known: most installs wire every detector's tamper switch to one shared circuit, which the panel reports as *Auxiliary Tamper*.
 - **Keypad lights** (e.g. the spanner) aren't sent; **Keypad display** shows the screen text instead.
+- **Ready to arm** isn't announced by the panel: Home Assistant asks a moment after zones change while the alarm is off (and every 30 seconds).
 - **Tampers and faults that started before Home Assistant connected** (for example during a restart) show only once the panel next reports them: the panel tells Home Assistant when they start and end, and there's no way yet to ask what's open now. Mains power is the exception: it's worked out from the power readings within half a minute.
 - **The panel's clock resets** if it loses all power (see [above](#the-panel-clock-is-wrong)).
 - **Zones active at the end of an exit time** make the arm fail, and the panel sounds its "fail to set" warning (see *Alarm not set* above).

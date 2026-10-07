@@ -22,4 +22,5 @@ Start with [AGENTS.md](../AGENTS.md): the rules, and how to make a change safely
 | [Making changes](development/making-changes.md) | Where each kind of change goes, step-by-step recipes, fixing a bug, releasing |
 | [Testing](development/testing.md) | The test suites, the simulated panels, running everything locally |
 | [What we know about the panel](development/protocol.md) | Texecom Connect and Crestron as seen on a real panel, and what's still unknown |
+| [Other projects](development/other-projects.md) | Other Texecom projects and alarm integrations: what they offer, what we took, ideas not done yet |
 | [Live test plan](testing/live-test-plan.md) | Testing on a real panel: safety rules, test cases, protocol mapping, fringe cases |

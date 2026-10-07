@@ -95,6 +95,10 @@ Keep a findings log (a file outside the repository while it may contain anything
 | B15 | **⋮ → Reconfigure**: an address where nothing answers, then close the dialog during *Connecting…* | The entry comes back with its old address, Panel connection on within a minute |
 | B16 | Look at the icons | **Mains power** off: a crossed-out plug; **Keypad display**: a keypad; battery voltage: a battery |
 | B17 | On a Crestron entry (if you have one): open **Configure** | *Checking the panel* instead of *Notifications*, *Panel clock* and *Read zones…*; the activity list shows keypad users only |
+| B18 | **Ready to arm**: with the alarm off, send `zone 1 open`, then `zone 1 closed` | *House Alarm Ready to arm* goes to *Not ready* within about 2 s with *open zones* naming Front Door, and back to *Ready*. The Alarm dashboard shows it under the alarm (refresh the dashboard first) |
+| B19 | **Deleting old zones**: with the entry set up on the `--demo` simulated panel (8 zones), restart the simulated panel **without** `--demo` (5 zones), then **Configure → Read zones and areas from the panel again** | Zones 6–8 (Garage, Landing, Smoke Detector in the demo's numbering) keep their devices; each can now be deleted (**⋮ → Delete**), while a current zone's device and the panel's can't |
+| B20 | **Ask to set the alarm when everyone leaves** blueprint, with an *Occupancy* toggle, 1 minute, and a phone (as B14) | Turning the toggle off: after a minute, the phone asks *Set the alarm?*. Tapping **Set the alarm** sets Away; not tapping, or tapping after the time you chose, does nothing |
+| B21 | **Download diagnostics**, then look in the debug log | `area_flags` lists the flags set for each area by name (e.g. `16 Ready`); `system_flags` shows 8 bytes; the log has lines like `area 1 flags: …` and log events by name |
 
 ## Part C — Real panel, read-only
 
@@ -112,6 +116,7 @@ Keep a findings log (a file outside the repository while it may contain anything
 | C8 | Try to open the Texecom app while Home Assistant is connected | What the app shows; whether Home Assistant's session survives |
 | C9 | Leave it connected for 24 hours | Reconnects (count `logged in` lines), errors, warnings; memory use of the test instance |
 | C10 | Crestron: add a Crestron entry over the network (the bridge), **without a UDL code**, zone and area counts as the panel has | Zones update when walked past; the alarm shows its state with no arm buttons; no warnings in the log at each status poll |
+| C11 | **Ready to arm on the real panel** (alarm off): open a door, close it; walk past a detector | *Not ready* within about 2 s, naming the zone; *Ready* again once everything's closed and still. Note anything that disagrees with the keypad |
 
 ## Part D — Mapping the protocol
 
@@ -130,6 +135,10 @@ Most of this is listening: run it **alongside** Parts C and E, with debug loggin
 | D9 | **Crestron lines** | During C10 and (🔴, with the owner) an arm and disarm from Home Assistant over Crestron: every line, how long the held-back burst takes after the UDL session, and how often the UDL login gets an `OK` |
 | D10 | **Summer time** | On the night the clocks change (UK: 25 October 2026, then 28 March 2027): read the panel clock (diagnostics) before 01:00 and after 02:00 GMT, once with **Keep the panel clock right** on and once off. Does the panel change its own clock? Does clock sync fight it? |
 | D11 | **Asking what's open now** | Tampers and faults are only known from log events, so after a restart an open cover or a fault isn't shown until it changes. Look for a read-only command that reports the current system tampers and faults (system flags, or reading the last few log entries on connecting) with `ConnectClient.command()`, while E8 has a cover open |
+| D12 | **What the area flags mean** (no script needed) | With debug logging on, the log names the flags set for each area whenever they change (`area 1 flags: …`), and **Download diagnostics** lists them (`area_flags`). Record them in each state: disarmed with nothing open, a door open, exit delay, armed, part armed, entry delay, alarm (E6), the lid open and a detector cover open (E8), mains off (E9), and after a keypad disarm. Is 16 *Ready* set exactly when the keypad would let you arm? What does it show while armed? Which flags show a tamper or a fault (14, 64–66)? |
+| D13 | **What the system flags mean** | Download diagnostics in the same states as D12 and compare `system_flags` (8 bytes). If you can, also download Texecom's *Texecom Connect API Help* PDF from Crestron's application market and read what it says about the system and area flags (facts only into the repository, never its text) |
+| D14 | **Does Home Assistant's own login appear in the panel's log?** | After a reload or reconnect, look in the debug log for *Download Start (53)* or *Download End (54)*. Also note what's logged when Wintex connects, and when the installer enters engineer programming (58) |
+| D15 | 🔴 **Is flag 0 alarm memory?** | During E6: download diagnostics while the alarm sounds, and again after the owner's keypad disarm. Then wait 30 s (a re-read): does the alarm stay *Off*, or show *Alarm!* again? (Another project saw flag 0 set only after the disarm on V4 firmware) |
 
 Write every confirmed result into [protocol.md](../development/protocol.md), with the panel, firmware and date. Add a simulated-panel test for anything the code should now rely on.
 

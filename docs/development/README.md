@@ -10,6 +10,7 @@ This project is maintained through AI coding agents: the owner doesn't write cod
 | [Making changes](making-changes.md) | Before changing anything: where each kind of change goes, recipes (fix a bug, add a sensor, add an option, decode a new message…), the checklist before pushing, releasing |
 | [Testing](testing.md) | To run the checks, use the simulated panels, and write tests |
 | [What we know about the panel](protocol.md) | When the change involves how the panel behaves. Add what you learn |
+| [Other projects](other-projects.md) | Before researching other Texecom projects or alarm integrations: what they offer, what we took, ideas not done yet |
 | [Live test plan](../testing/live-test-plan.md) | Before testing on a real panel |
 
 ## In one minute

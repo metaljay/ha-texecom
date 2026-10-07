@@ -26,6 +26,7 @@ All code paths are under `custom_components/texecom/`; test paths are under `tes
 | …or a new Crestron line or frame | `crestron/protocol.py` | `test_crestron.py` |
 | React to a panel event: alarms, who armed, failed arms | `connect/events.py` | `test_connect.py`, then `ha/test_alarm_control_panel.py` |
 | Tamper, faults, mains power | `connect/conditions.py` | `test_connect.py`, `ha/test_binary_sensor.py` |
+| Ready to arm | `connect/panel.py` (`_update_ready`, `_check_ready_soon`), `binary_sensor.py` (`TexecomReadySensor`) | `test_connect.py`, `ha/test_binary_sensor.py` |
 | The panel clock | `connect/clock.py` | `test_connect.py`, `ha/test_issues.py`, `ha/test_repairs.py` |
 | Reading zones and areas from the panel | `connect/discovery.py` | `test_connect.py`, `ha/test_flows_options.py` |
 | Connecting, reconnecting, timings, arm/disarm (Connect) | `connect/panel.py`, `connect/client.py` | `test_connect.py` |
@@ -70,6 +71,15 @@ You'll see it in a debug log: `Connect: message {...}` with `kind: unknown`, an 
 2. **Act on it** in the driver compartment it belongs to: alarms and users → `connect/events.py`; tampers, faults, power → `connect/conditions.py`; area state → `_apply_area` in `connect/panel.py`. Add a driver test that sends it from `FakeConnectPanel` (e.g. `fake.send_log(type, group, parameter)`).
 3. **Show it in Home Assistant** only through the `TexecomPanel` interface: update `zones`/`areas`/`extra` and call `notify()`, or fire `on_event`. Then the entity or event code in layer 3 picks it up.
 4. **Write it down** in [protocol.md](protocol.md): what it is, when it was seen, which panel and firmware.
+
+### Start using another area flag
+
+The panel reports 73 area flags, named in `AREA_FLAG_NAMES` (`connect/protocol.py`); the driver relies on a few. Before relying on another:
+
+1. **See what it does on a real panel.** With debug logging on, the log names the flags set for each area whenever they change (`area 1 flags: 16 Ready, …`), and diagnostics list them. Write what you saw in [protocol.md](protocol.md#area-flags).
+2. Add a `FLAG_…` constant, and add it to `AREA_FLAGS` so panels that need one-at-a-time reads read it too.
+3. Use it in the driver (as `_update_ready` uses flag 16), and teach the simulated panel (`GET_AREA_FLAGS` in `tests/fake_connect_panel.py`) to set it.
+4. Test the driver in `test_connect.py`, and what users see in `tests/ha/`.
 
 ### Add a sensor
 
@@ -120,6 +130,8 @@ Setup, reauth, reconfigure and *read zones again* talk to the panel, which can t
 See `flows/connect.py` (`async_step_connect_check`) for the pattern.
 
 ### Add or change a ready-made automation (blueprint)
+
+A blueprint that waits (for a tap, say) keeps its automation running, and `hass.async_block_till_done()` would wait for it. In its tests, move time on with `jump()` (in `test_blueprints.py`) and poll with `wait_for`.
 
 1. Edit the YAML in `blueprints/automation/texecom/`. Input names are a [contract](architecture.md#the-contracts): people's automations store them. Add new inputs with a default.
 2. Test it in `tests/ha/test_blueprints.py`: `install()` puts the blueprint in a test config folder, `use()` makes an automation from it, then drive the simulated panel and check what happened. A phone notification can't run in tests, so `alerts_for_test()` swaps it for an event the test can see.

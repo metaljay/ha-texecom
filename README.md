@@ -12,12 +12,12 @@ Use your Texecom **Premier Elite** alarm from **Home Assistant** (and Apple Home
 
 ## ✨ What you get
 
-- 🛡️ **An alarm** you can set to **Away**, **Night** or **Home**, or turn off, and see when it's arming, waiting for you to come in, or going off. Changes at the keypad show straight away.
+- 🛡️ **An alarm** you can set to **Away**, **Night** or **Home**, or turn off, and see when it's arming, waiting for you to come in, or going off, and whether it's **ready to arm**. Changes at the keypad show straight away.
 - 🚪 **A sensor for every zone**, named as on your panel: doors, windows, motion, smoke and gas.
 - 📋 **A ready-made Alarm dashboard**, built for you at the end of setup.
 - 🔋 **Panel health**: connection, mains power, battery, tampers, and what the keypad says.
 - 🔔 **Notifications** in Home Assistant when the alarm couldn't arm, the panel is on battery, or a tamper opens, saying what to check.
-- ⚡ **One-click automations**: arm when everyone leaves, and tell your phone when the alarm goes off. [Add them →](https://github.com/metaljay/ha-texecom/blob/main/docs/user/automations.md)
+- ⚡ **One-click automations**: arm when everyone leaves (or ask you first), and tell your phone when the alarm goes off. [Add them →](https://github.com/metaljay/ha-texecom/blob/main/docs/user/automations.md)
 - 🍏 **Apple Home** too, through Home Assistant's built-in HomeKit Bridge.
 
 ## 🧰 What you need
