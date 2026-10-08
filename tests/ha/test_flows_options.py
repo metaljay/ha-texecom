@@ -120,10 +120,10 @@ async def test_names_can_be_filled_in_from_the_panel(hass, fake, caplog):
     )
     assert result["type"] is FlowResultType.FORM and result["errors"] == {}
     text = next(f for f in result["data_schema"].schema if f == "user_names").description["suggested_value"]
-    assert text == "1 = Master\n3 = Alex"
+    assert text == "0 = Engineer\n1 = Master\n3 = Alex"
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"user_names": text})
     assert result["type"] is FlowResultType.CREATE_ENTRY
-    assert entry.options["user_names"] == {"1": "Master", "3": "Alex"}
+    assert entry.options["user_names"] == {"0": "Engineer", "1": "Master", "3": "Alex"}
     for _name, code in FAKE_USERS.values():
         assert code not in caplog.text and code not in str(entry.options)
     assert await hass.config_entries.async_unload(entry.entry_id)

@@ -255,6 +255,7 @@ class FakeConnectPanel:
             reply(self.system_flags)
         elif cmd == P.CMD_GET_USER:
             number = args[0] if args else 0
+            # A Premier Elite 24 refuses user 0 (the engineer code has no user record).
             reply(user_record(*self.users.get(number, ("", ""))) if 1 <= number <= USER_COUNT else bytes([P.NAK]))
         else:
             reply(bytes([P.NAK]))
