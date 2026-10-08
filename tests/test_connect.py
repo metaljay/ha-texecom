@@ -512,6 +512,35 @@ async def test_mains_restore_comes_from_power_readings(fake):
         await panel.stop()
 
 
+async def test_mains_from_a_real_panels_readings(fake):
+    """Readings from a Premier Elite 24 with its mains switched off: both
+    currents read 0 mA on battery (13.1 V falling to 12.2 V), against 297 and
+    18 mA at 13.63 V on mains. After a restart on battery, 13.07 V at 0 mA
+    could be a panel that never reports current, so only a clearly low
+    voltage counts; once current has been seen, 0 mA is enough."""
+    mains, battery, battery_low = bytes([100, 99, 98, 33, 2]), bytes([100, 91, 92, 0, 0]), bytes([100, 79, 81, 0, 0])
+    events = []
+    fake.power_override = battery
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        assert panel.extra["power"].panel_voltage == pytest.approx(13.07)
+        assert not panel.extra.get("faults")
+        fake.power_override = battery_low
+        await panel.read_power()
+        assert panel.extra["faults"] == {"AC Fail"}
+        fake.power_override = mains
+        await panel.read_power()
+        power = panel.extra["power"]
+        assert (power.panel_current, power.battery_current, power.panel_voltage) == (297, 18, pytest.approx(13.63))
+        assert panel.extra["faults"] == set()
+        fake.power_override = battery
+        await panel.read_power()
+        assert panel.extra["faults"] == {"AC Fail"}
+        assert [t for t, _d in events] == ["fault", "fault_cleared", "fault"]
+    finally:
+        await panel.stop()
+
+
 async def test_a_remote_psu_mains_failure_waits_for_its_own_restore(fake):
     """PSU AC Fail is a remote power supply losing its mains: the panel's own
     healthy readings say nothing about it, so only its restore clears it."""
