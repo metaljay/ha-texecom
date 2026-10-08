@@ -10,6 +10,7 @@ affected.
 from __future__ import annotations
 
 import inspect
+import json
 import logging
 from typing import Any
 
@@ -27,6 +28,7 @@ GROUPS = (
     ("Other zones", "mdi:shield-outline", None),
 )
 MODES = {2: "armed_away", 4: "armed_night", 1: "armed_home"}  # feature bit -> mode
+URL_PATH = "texecom-alarm"
 
 
 def _tile(entity_id: str, **extra: Any) -> dict[str, Any]:
@@ -119,14 +121,37 @@ def build_config(hass: HomeAssistant, entry: ConfigEntry) -> dict[str, Any]:
     }
 
 
+async def _url_path(hass: HomeAssistant, entry: ConfigEntry, dashboards: dict[str, Any]) -> str:
+    """This panel's dashboard. The first panel's is "texecom-alarm"; with
+    more than one panel, the others' end with part of their entry ID. It's
+    looked for rather than worked out again: a panel added since doesn't
+    change which one the first panel has."""
+    own = f"{URL_PATH}-{entry.entry_id[-6:].lower()}"
+    if own in dashboards:
+        return own
+    others = [e for e in hass.config_entries.async_entries(entry.domain) if e.entry_id != entry.entry_id]
+    if not others or (URL_PATH in dashboards and await _shows_entry(hass, entry, dashboards[URL_PATH])):
+        return URL_PATH
+    return own
+
+
+async def _shows_entry(hass: HomeAssistant, entry: ConfigEntry, dashboard: Any) -> bool:
+    """Whether a saved dashboard shows any of this panel's entities."""
+    try:
+        text = json.dumps(await dashboard.async_load(False))
+    except HomeAssistantError:  # never saved
+        return False
+    registry = er.async_get(hass)
+    return any(f'"{e.entity_id}"' in text for e in er.async_entries_for_config_entry(registry, entry.entry_id))
+
+
 async def async_create_dashboard(hass: HomeAssistant, entry: ConfigEntry) -> str:
     """Adds (or refreshes) the Alarm dashboard; returns its URL path."""
-    others = [e for e in hass.config_entries.async_entries(entry.domain) if e.entry_id != entry.entry_id]
-    url_path = "texecom-alarm" if not others else f"texecom-alarm-{entry.entry_id[-6:].lower()}"
     try:
         handler = hass.data["websocket_api"]["lovelace/dashboards/create"][0]
         collection = inspect.unwrap(handler).__self__.storage_collection
         lovelace = hass.data["lovelace"]
+        url_path = await _url_path(hass, entry, lovelace.dashboards)
         if url_path not in lovelace.dashboards:
             await collection.async_create_item(
                 {

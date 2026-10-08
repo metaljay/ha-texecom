@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -14,7 +15,16 @@ from custom_components.texecom.connect import protocol as P
 from custom_components.texecom.connect.client import ConnectClient, LoginRejected, PanelBusyError, Timing
 from custom_components.texecom.connect.discovery import probe
 from custom_components.texecom.connect.panel import ConnectPanel
-from custom_components.texecom.panel import ARMED_AWAY, ARMED_HOME, ARMED_NIGHT, DISARMED, TRIGGERED, PanelError
+from custom_components.texecom.panel import (
+    ARMED_AWAY,
+    ARMED_HOME,
+    ARMED_NIGHT,
+    ARMING,
+    DISARMED,
+    PENDING,
+    TRIGGERED,
+    PanelError,
+)
 
 FAST = Timing(command_timeout=0.3, command_attempts=2, keepalive=30, login_delay=0)
 
@@ -193,6 +203,29 @@ async def test_arm_night_uses_mapped_part_arm_then_disarm(fake):
         await panel.stop()
 
 
+async def test_a_refused_request_doesnt_name_home_assistant(fake):
+    """Home Assistant is named as who armed or disarmed only when the panel
+    took the request: after a refusal, the next change (a fob, say) isn't."""
+    from fake_connect_panel import run_command
+
+    panel = await make_panel(fake)
+    try:
+        run_command(fake, "refuse arm")
+        with pytest.raises(PanelError, match="refused"):
+            await panel.arm(1, "away")
+        run_command(fake, "area armed")
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        assert panel.areas[1].changed_by is None
+        run_command(fake, "refuse disarm")
+        with pytest.raises(PanelError, match="refused"):
+            await panel.disarm(1)
+        run_command(fake, "area off")
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        assert panel.areas[1].changed_by is None
+    finally:
+        await panel.stop()
+
+
 async def test_switching_mode_disarms_first_and_unmapped_mode_is_refused(fake):
     panel = await make_panel(fake, part_arms={"night": 1, "home": 2})
     try:
@@ -223,6 +256,40 @@ async def test_switching_mode_never_shows_disarmed(fake):
         await panel.stop()
 
 
+async def test_a_mode_switch_hides_only_its_own_disarm(fake):
+    """Switching mode hides the panel's one brief "disarmed", not a real
+    disarm: a panel with no exit time arms straight away, and a disarm just
+    after shows at once."""
+    panel = await make_panel(fake)
+    try:
+        await panel.arm(1, "night")
+        await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
+        fake.exit_delay = 0
+        await panel.arm(1, "away")
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        fake.set_area(0)  # disarmed at a keypad straight after
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+    finally:
+        await panel.stop()
+
+
+async def test_a_reread_of_the_old_mode_doesnt_end_a_mode_switch(fake):
+    """A re-read the panel answered before it disarmed for the switch still
+    shows the old mode: the switch's own "disarmed" must stay hidden."""
+    panel = await make_panel(fake)
+    try:
+        await panel.arm(1, "night")
+        await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
+        panel._switching[1] = time.monotonic() + 10  # as arm() does when switching to Away
+        panel._apply_area(1, "part armed", 1)  # the re-read
+        panel._apply_area(1, "disarmed", None)  # the switch's own disarm
+        assert panel.areas[1].state == ARMED_NIGHT
+        panel._apply_area(1, "in exit", None)
+        assert panel.areas[1].state == ARMING
+    finally:
+        await panel.stop()
+
+
 async def test_keypad_part_arm_not_mapped_shows_as_home(fake):
     panel = await make_panel(fake, part_arms={"night": 1, "home": 0})
     try:
@@ -242,6 +309,33 @@ async def test_stale_exit_flag_is_ignored_while_armed(fake):
         await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
         panel._apply_area(1, "in exit", None)
         assert panel.areas[1].state == ARMED_AWAY
+    finally:
+        await panel.stop()
+
+
+async def test_an_alarm_stays_an_alarm_when_the_panel_goes_back_to_entry(fake):
+    """After an alarm a real panel reported "in entry" again (the entry zone
+    seen again) while the sirens sounded, then "in alarm" again: Home
+    Assistant shows the alarm throughout, until it's disarmed."""
+    from fake_connect_panel import run_command
+
+    panel = await make_panel(fake)
+    seen = []
+    try:
+        run_command(fake, "area armed")
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        run_command(fake, "area entry")
+        await wait_for(lambda: panel.areas[1].state == PENDING)
+        panel.add_listener(lambda: seen.append(panel.areas[1].state))
+        run_command(fake, "area alarm")
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        run_command(fake, "area entry")
+        await panel.refresh_areas()  # a re-read meanwhile says "in entry" too
+        assert panel.areas[1].state == TRIGGERED
+        run_command(fake, "area alarm")
+        run_command(fake, "area off")
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        assert PENDING not in seen
     finally:
         await panel.stop()
 
@@ -350,6 +444,26 @@ async def test_simulated_panel_commands(fake):
         await panel.stop()
 
 
+async def test_simulated_zone_alarm_is_logged_as_a_real_panel_logs_it(fake):
+    """`zone N alarm` sends the zone-alarm log too, typed as on a real panel:
+    1 for the entry/exit zone, 3 for the others."""
+    from fake_connect_panel import run_command
+
+    logged, send_log = [], fake.send_log
+    fake.send_log = lambda *args, **kwargs: (logged.append(args), send_log(*args, **kwargs))
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        run_command(fake, "zone 1 alarm")
+        run_command(fake, "zone 3 alarm")
+        await wait_for(lambda: len(events) == 2)
+        assert logged == [(1, 3, 1), (3, 3, 3)]
+        assert [d["zone_name"] for _t, d in events] == ["Hallway", "Kitchen"]
+        assert panel.zones[3].active
+    finally:
+        await panel.stop()
+
+
 def test_flag_and_log_names():
     flags = bytearray(72)
     flags[P.FLAG_ARMED] = flags[P.FLAG_FULL_ARMED] = 0b01  # area 1
@@ -414,6 +528,52 @@ async def test_mains_restore_comes_from_power_readings(fake):
         fake.on_battery = True  # e.g. after a restart, with no log entry at all
         await panel.read_power()
         assert panel.extra["faults"] == {"AC Fail"}
+    finally:
+        await panel.stop()
+
+
+async def test_mains_from_a_real_panels_readings(fake):
+    """Readings from a Premier Elite 24 with its mains switched off: both
+    currents read 0 mA on battery (13.1 V falling to 12.2 V), against 297 and
+    18 mA at 13.63 V on mains. After a restart on battery, 13.07 V at 0 mA
+    could be a panel that never reports current, so only a clearly low
+    voltage counts; once current has been seen, 0 mA is enough."""
+    mains, battery, battery_low = bytes([100, 99, 98, 33, 2]), bytes([100, 91, 92, 0, 0]), bytes([100, 79, 81, 0, 0])
+    events = []
+    fake.power_override = battery
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        assert panel.extra["power"].panel_voltage == pytest.approx(13.07)
+        assert not panel.extra.get("faults")
+        fake.power_override = battery_low
+        await panel.read_power()
+        assert panel.extra["faults"] == {"AC Fail"}
+        fake.power_override = mains
+        await panel.read_power()
+        power = panel.extra["power"]
+        assert (power.panel_current, power.battery_current, power.panel_voltage) == (297, 18, pytest.approx(13.63))
+        assert panel.extra["faults"] == set()
+        fake.power_override = battery
+        await panel.read_power()
+        assert panel.extra["faults"] == {"AC Fail"}
+        assert [t for t, _d in events] == ["fault", "fault_cleared", "fault"]
+    finally:
+        await panel.stop()
+
+
+async def test_a_remote_psu_mains_failure_waits_for_its_own_restore(fake):
+    """PSU AC Fail is a remote power supply losing its mains: the panel's own
+    healthy readings say nothing about it, so only its restore clears it."""
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        fake.send_log(107, 9, 0, areas=0)  # PSU AC Fail
+        await wait_for(lambda: panel.extra.get("faults") == {"PSU AC Fail"})
+        await panel.read_power()  # the panel itself is on mains
+        assert panel.extra["faults"] == {"PSU AC Fail"}
+        fake.send_log(107, 10, 0, areas=0)  # the remote PSU's mains is back
+        await wait_for(lambda: panel.extra.get("faults") == set())
+        assert [t for t, _d in events] == ["fault", "fault_cleared"]
     finally:
         await panel.stop()
 
