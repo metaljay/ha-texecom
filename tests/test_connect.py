@@ -512,6 +512,23 @@ async def test_mains_restore_comes_from_power_readings(fake):
         await panel.stop()
 
 
+async def test_a_remote_psu_mains_failure_waits_for_its_own_restore(fake):
+    """PSU AC Fail is a remote power supply losing its mains: the panel's own
+    healthy readings say nothing about it, so only its restore clears it."""
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        fake.send_log(107, 9, 0, areas=0)  # PSU AC Fail
+        await wait_for(lambda: panel.extra.get("faults") == {"PSU AC Fail"})
+        await panel.read_power()  # the panel itself is on mains
+        assert panel.extra["faults"] == {"PSU AC Fail"}
+        fake.send_log(107, 10, 0, areas=0)  # the remote PSU's mains is back
+        await wait_for(lambda: panel.extra.get("faults") == set())
+        assert [t for t, _d in events] == ["fault", "fault_cleared"]
+    finally:
+        await panel.stop()
+
+
 async def test_clock_drift_is_reported_when_not_syncing(fake):
     drifts = []
     fake.clock_offset = timedelta(days=-700)

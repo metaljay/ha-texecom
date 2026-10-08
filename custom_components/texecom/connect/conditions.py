@@ -8,7 +8,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from ..panel import MAINS_FAULTS, PanelZone, nice_name
+from ..panel import PanelZone, nice_name
 from . import protocol as P
 from .client import HostLog
 from .events import GROUP_TAMPER_ALARM
@@ -64,11 +64,12 @@ class ConditionsMixin:
             faults.add("AC Fail")
             self._log.warning("Connect: running on battery (no mains current, %.2f V)", power.panel_voltage)
             self.on_event("fault", {"source": "AC Fail", "log_type": None})
-        elif mains_ok and faults & MAINS_FAULTS:
-            for name in sorted(faults & MAINS_FAULTS):
-                faults.discard(name)
-                self._log.info("Connect: mains back (%d mA, %.2f V)", power.panel_current, power.panel_voltage)
-                self.on_event("fault_cleared", {"source": name, "log_type": None})
+        elif mains_ok and "AC Fail" in faults:
+            # Only the panel's own mains: a remote power supply's (PSU AC
+            # Fail) isn't in these readings, so it waits for its own restore.
+            faults.discard("AC Fail")
+            self._log.info("Connect: mains back (%d mA, %.2f V)", power.panel_current, power.panel_voltage)
+            self.on_event("fault_cleared", {"source": "AC Fail", "log_type": None})
 
     def _on_fault(self, m: dict[str, Any]) -> None:
         """Mains, battery, communication and other faults from the panel log."""
