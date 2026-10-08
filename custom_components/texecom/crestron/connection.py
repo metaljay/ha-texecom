@@ -169,7 +169,7 @@ class ConnectionMixin:
             if future.done():
                 return True
             if kind == "closed":
-                future.set_exception(CommandFailed("connection closed"))
+                future.set_exception(PanelNotConnected("the connection to the panel closed"))
                 return True
             result = match(kind, value)
             if result == "ok":
