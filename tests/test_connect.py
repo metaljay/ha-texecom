@@ -201,6 +201,29 @@ async def test_arm_night_uses_mapped_part_arm_then_disarm(fake):
         await panel.stop()
 
 
+async def test_a_refused_request_doesnt_name_home_assistant(fake):
+    """Home Assistant is named as who armed or disarmed only when the panel
+    took the request: after a refusal, the next change (a fob, say) isn't."""
+    from fake_connect_panel import run_command
+
+    panel = await make_panel(fake)
+    try:
+        run_command(fake, "refuse arm")
+        with pytest.raises(PanelError, match="refused"):
+            await panel.arm(1, "away")
+        run_command(fake, "area armed")
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        assert panel.areas[1].changed_by is None
+        run_command(fake, "refuse disarm")
+        with pytest.raises(PanelError, match="refused"):
+            await panel.disarm(1)
+        run_command(fake, "area off")
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        assert panel.areas[1].changed_by is None
+    finally:
+        await panel.stop()
+
+
 async def test_switching_mode_disarms_first_and_unmapped_mode_is_refused(fake):
     panel = await make_panel(fake, part_arms={"night": 1, "home": 2})
     try:

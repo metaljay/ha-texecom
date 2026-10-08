@@ -359,7 +359,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         client = self._ready_client()
         current = self.areas[area].state
         self._requested_mode[area] = mode
-        self._last_user = ("Home Assistant", time.monotonic())
+        credit = self._last_user = ("Home Assistant", time.monotonic())
         try:
             if current not in (DISARMED, ARMING, PENDING, TRIGGERED):
                 # Switching mode: the panel reports "disarmed" for a moment
@@ -370,6 +370,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 await self._ok(client.disarm(area, self.panel_zones), "disarm before re-arm")
             await self._ok(client.arm(area, arm_type, self.panel_zones), f"arm ({mode})")
         except PanelError:
+            self._drop_credit(credit)
             self._requested_mode.pop(area, None)
             if self._switching.pop(area, None) is not None:
                 self._refresh_areas_soon()  # show whatever the panel is really in
@@ -378,10 +379,20 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
     async def disarm(self, area: int) -> None:
         """Resets first when in alarm (as texecom2mqtt does)."""
         client = self._ready_client()
-        self._last_user = ("Home Assistant", time.monotonic())
-        if self.areas[area].state == TRIGGERED:
-            await self._ok(client.reset(area, self.panel_zones), "reset")
-        await self._ok(client.disarm(area, self.panel_zones), "disarm")
+        credit = self._last_user = ("Home Assistant", time.monotonic())
+        try:
+            if self.areas[area].state == TRIGGERED:
+                await self._ok(client.reset(area, self.panel_zones), "reset")
+            await self._ok(client.disarm(area, self.panel_zones), "disarm")
+        except PanelError:
+            self._drop_credit(credit)
+            raise
+
+    def _drop_credit(self, credit: tuple[str, float]) -> None:
+        """A request the panel didn't take explains nothing that happens next
+        (unless a keypad code has come in since)."""
+        if self._last_user is credit:
+            self._last_user = None
 
     def _ready_client(self) -> ConnectClient:
         if not self.connected or not self.client:
