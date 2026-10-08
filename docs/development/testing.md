@@ -73,6 +73,7 @@ The Home Assistant tests have one file per module (see [Architecture](architectu
 | `clock_offset` / `clock_raw` | The panel's clock wrong, or holding an impossible date |
 | `ready` | The Ready flag (16): `None` (the default) sets it while disarmed with no zone open; `True`/`False` force it |
 | `system_flags` | The 8 bytes the panel returns for *get system flags* |
+| `display` | The keypads' text (command `display TEXT`); `None`: *Premier Elite* and the time |
 | `udl` | A different UDL code (for reauth tests) |
 | `commands` / `connections` / `clock_set_to` | What it received, for assertions |
 

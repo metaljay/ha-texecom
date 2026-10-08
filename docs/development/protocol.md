@@ -39,7 +39,7 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 9 | Reset area | Sent before disarming when in alarm |
 | 10 | Get system flags | 8 bytes, meaning not mapped yet ([first clues](#system-flags)). Only read for diagnostics, as an *optional* command: sent at most twice (a panel busy with a burst of events can miss one), and no answer doesn't end the session |
 | 11 | Get area flags | Bulk: 72 flags in 0.4 s on the Elite 24 (see [Area flags](#area-flags)). Some firmware (Elite 48, V4.02.01) answers a bulk read with one byte: then flags are read one at a time |
-| 13 | Get LCD display | The keypad's two 16-character lines, with the clock (e.g. `HOME 13:48.52 Wed 07`), which the driver strips. Seen: `HOME`, `Area in Entry > A.`, `Z003 Secure Kitchen`, `AUX 0,0 Tamper 08:40.38 08/10`, `System Alerts!`, `Alarm Engineer Working On Site.` Read every 30 s, so short messages such as *Area arm fail* are usually missed |
+| 13 | Get LCD display | The keypad's two 16-character lines, with the clock (e.g. `HOME 13:48.52 Wed 07`), which the driver strips. Seen: `HOME`, `Area in Entry > A.`, `Z003 Secure Kitchen`, `AUX 0,0 Tamper 08:40.38 08/10`, `System Alerts!`, `Alarm Engineer Working On Site.` Read every 30 s, and about 1 s after an area message, a failed arm, a tamper or a fault (at most every 5 s), so short messages such as *Area arm fail* are caught |
 | 22 | Get panel identification | e.g. `Elite 24     V6.05.03LS1` |
 | 23 / 24 | Get / set date and time | Day, month, 2-digit year, hours, minutes, seconds |
 | 25 | Get system power | Reference, panel volts, battery volts, panel current, battery current (formula below) |

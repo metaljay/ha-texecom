@@ -1001,3 +1001,31 @@ async def test_ready_to_arm_is_read_again_after_a_disarm(fake):
         await wait_for(lambda: panel.areas[1].ready is True, timeout=2)
     finally:
         await panel.stop()
+
+
+async def test_a_short_keypad_message_is_read_soon_after_what_caused_it(fake, monkeypatch):
+    """ "Area arm fail" shows for a few seconds: the 30 s read missed it. The
+    keypad is read a moment after the panel reports something it may show,
+    but not after zone changes."""
+    from fake_connect_panel import run_command
+
+    from custom_components.texecom.connect import panel as connect_panel
+
+    monkeypatch.setattr(connect_panel, "DISPLAY_SOON_DELAY", 0.05)
+    monkeypatch.setattr(connect_panel, "DISPLAY_SOON_EVERY", 0.2)
+    panel = await make_panel(fake)
+    try:
+        run_command(fake, "display Area arm fail")
+        run_command(fake, "armfail 3")
+        await wait_for(lambda: panel.extra["display"] == "Area arm fail", timeout=2)
+        await asyncio.sleep(0.3)
+        run_command(fake, "display Area in Entry > A.")
+        run_command(fake, "area entry")
+        await wait_for(lambda: panel.extra["display"] == "Area in Entry > A.", timeout=2)
+        await asyncio.sleep(0.3)
+        reads = sum(cmd == P.CMD_GET_LCD_DISPLAY for cmd, _args in fake.commands)
+        run_command(fake, "zone 2 open")
+        await asyncio.sleep(0.3)
+        assert sum(cmd == P.CMD_GET_LCD_DISPLAY for cmd, _args in fake.commands) == reads
+    finally:
+        await panel.stop()

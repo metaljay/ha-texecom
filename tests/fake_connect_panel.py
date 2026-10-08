@@ -104,6 +104,7 @@ class FakeConnectPanel:
         # Area flags 44 Internal Alarm and 62 Speaker Mimic: the internal sounder going off, as for a
         # tamper while disarmed (seen on a real panel); a code at the keypad silences it.
         self.internal_alarm = False
+        self.display: str | None = None  # the keypad's text; None: "Premier Elite" and the time
         # A SmartCom reports an alarm itself: about 1.5 s after the disarm that follows it, it hangs
         # up, and turns logins away for about 2 minutes (seen on a real panel). 0: never.
         self.busy_after_alarm = 0.0  # seconds logins are turned away
@@ -290,7 +291,10 @@ class FakeConnectPanel:
         elif cmd == P.CMD_GET_AREA_FLAGS:
             reply(bytes(self._area_flags()[args[0] : args[0] + args[1]]))
         elif cmd == P.CMD_GET_LCD_DISPLAY:
-            reply(b" Premier Elite  " + datetime.now().strftime(" %a %d %H:%M  ").encode())
+            if self.display is not None:
+                reply(self.display.encode("latin1").ljust(32)[:32])
+            else:
+                reply(b" Premier Elite  " + datetime.now().strftime(" %a %d %H:%M  ").encode())
         elif cmd == P.CMD_GET_SYSTEM_POWER:
             # ref, system V, battery V, system I, battery I (as a real panel:
             # on battery both currents read 0 and the voltage drops)
@@ -370,7 +374,8 @@ COMMANDS = """Commands, one per line:
   busy N                             from now on, after an alarm is disarmed: hang up and turn logins
                                      away for N seconds, as a SmartCom reporting the alarm (about 120)
   refuse arm|disarm                  say no to the next arm or disarm from Home Assistant
-  log TYPE GROUP PARAMETER [AREAS]   any event-log entry"""
+  log TYPE GROUP PARAMETER [AREAS]   any event-log entry
+  display TEXT                       the keypads show TEXT (up to 32 characters); display alone: the usual"""
 
 ZONE_BITS = {"open": 0x01, "closed": 0x00, "tamper": 0x02, "alarm": 0x11}
 AREA_STATES = {"off": 0, "exit": 1, "entry": 2, "armed": 3, "alarm": 5}
@@ -413,6 +418,8 @@ def run_command(panel: FakeConnectPanel, line: str) -> str:
                 panel.busy_after_alarm = float(seconds)
             case ["refuse", "arm" | "disarm" as what]:
                 panel.nak_next[P.CMD_ARM_AREA if what == "arm" else P.CMD_DISARM_AREA] = 1
+            case ["display", *_]:
+                panel.display = line.strip().split(maxsplit=1)[1] if len(words) > 1 else None
             case ["log", log_type, group, parameter, *areas] if len(areas) <= 1:
                 panel.send_log(int(log_type), int(group), int(parameter), *(int(a) for a in areas))
             case _:

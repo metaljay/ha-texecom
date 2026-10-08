@@ -91,6 +91,7 @@ class EventsMixin:
                 self._apply_area(m["area"], m["state"], None, self._recent_user(m["area"]))
             if m["state"] == "disarmed":
                 self._refresh_areas_soon()  # whether it's ready to arm (not announced)
+            self._read_display_soon()  # e.g. "Area in Entry"
             if m["state"] in ("disarmed", "armed", "part armed") and self._last_user:
                 # A code (or a request from Home Assistant) explains one arm
                 # or disarm in each area, not whatever happens next.
@@ -104,6 +105,12 @@ class EventsMixin:
             self._on_log(m)
 
     def _on_log(self, m: dict[str, Any]) -> None:
+        if (
+            m["type"] == LOG_ARM_FAILED
+            or m["type"] in P.FAULT_LOG_NAMES
+            or (m["type"] > 21 and m["group"] in (GROUP_TAMPER_ALARM, GROUP_TAMPER_RESTORE))
+        ):
+            self._read_display_soon()  # e.g. "Area arm fail", "AUX 0,0 Tamper"
         if m["type"] in PART_ARM_FROM_LOG:
             self._last_part_arm = PART_ARM_FROM_LOG[m["type"]]
         raw_group = m["group"] | (0x80 if m["communicated"] else 0) | (0x40 if m["comm_delayed"] else 0)

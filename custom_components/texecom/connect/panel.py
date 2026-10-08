@@ -44,6 +44,11 @@ RECONNECT_MAX = 30.0
 READY_CHECK_DELAY = 1.5  # after zones settle, re-read whether an area is ready to arm
 POWER_EVERY_N_IDLE = 1  # voltages and currents every keep-alive (~30 s)
 SWITCH_GRACE = 10.0  # longest a mode switch may sit between "disarmed" and the new exit delay
+# Short keypad messages (Area arm fail, Area in Entry) last seconds, so the
+# 30 s read misses them: the keypad is also read this long after something
+# it may show, at most once every DISPLAY_SOON_EVERY seconds.
+DISPLAY_SOON_DELAY = 1.0
+DISPLAY_SOON_EVERY = 5.0
 
 
 class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, TexecomPanel):
@@ -102,6 +107,8 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._logged_flags: dict[int, list[int]] = {}  # area -> flags last named in the debug log
         self._internal_alarms: dict[int, InternalAlarm] = {}  # area -> its internal alarm flag (conditions.py)
         self._internal_alarm_handle: asyncio.TimerHandle | None = None
+        self._display_handle: asyncio.TimerHandle | None = None
+        self._display_soon_at = float("-inf")  # when the keypad was last read for _read_display_soon
         self._last_cause_at = float("-inf")  # when a tamper, zone alarm or failed arm was last reported
         self.last_error: str | None = None
 
@@ -117,7 +124,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
 
     async def stop(self) -> None:
         self._stopped = True
-        for handle in (self._refresh_handle, self._ready_handle, self._internal_alarm_handle):
+        for handle in (self._refresh_handle, self._ready_handle, self._internal_alarm_handle, self._display_handle):
             if handle:
                 handle.cancel()
         for task in [self._task, *self._tasks]:
@@ -283,6 +290,20 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 self.extra["display"] = text
                 self.notify()
 
+    def _read_display_soon(self) -> None:
+        """Reads the keypad a moment after the panel reports something it may
+        show: an area changing, a failed arm, a tamper or a fault (not zones,
+        which change all the time)."""
+        if self._display_handle or time.monotonic() - self._display_soon_at < DISPLAY_SOON_EVERY:
+            return
+
+        def run() -> None:
+            self._display_handle = None
+            self._display_soon_at = time.monotonic()
+            self._spawn(self._quiet(self.read_display()))
+
+        self._display_handle = asyncio.get_running_loop().call_later(DISPLAY_SOON_DELAY, run)
+
     async def read_power(self) -> None:
         assert self.client
         with contextlib.suppress(PanelBusyError):
@@ -361,7 +382,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         try:
             await coro
         except ConnectError as err:
-            self._log.debug("Connect: area refresh skipped: %s", err)
+            self._log.debug("Connect: read skipped: %s", err)
 
     # ─── Arm / disarm ───────────────────────────────────────────────────────
 
