@@ -36,6 +36,10 @@ TAMPER_PLACES = {
     "Expander Tamper": "an expander",
     "PSU Tamper": "a power supply's box",
     "Code Tamper Alarm": "too many wrong codes were entered at a keypad",
+    "Internal Alarm": (
+        "the panel set off its internal sounders without saying why. The keypad shows what it is "
+        "(often a detector's cover or the panel's lid), and entering a code there silences it"
+    ),
 }
 
 

@@ -79,6 +79,9 @@ class FakeConnectPanel:
         self.clock_raw: bytes | None = None  # raw GET_DATE_TIME reply (e.g. an impossible date)
         self.system_flags = bytes(8)  # GET_SYSTEM_FLAGS reply (its meaning isn't mapped yet)
         self.ready: bool | None = None  # area flag 16; None: ready while disarmed with no zone open
+        # Area flags 44 Internal Alarm and 62 Speaker Mimic: the internal sounder going off, as for a
+        # tamper while disarmed (seen on a real panel); a code at the keypad silences it.
+        self.internal_alarm = False
         # GET_USER: {number: (name, code)} for users 1-24; the others are empty.
         # The codes are fakes, used to check that Home Assistant never keeps or logs one.
         self.users: dict[int, tuple[str, str]] = dict(FAKE_USERS)
@@ -137,7 +140,17 @@ class FakeConnectPanel:
         self.send_log(zone_type, 3, number)
 
     def send_user(self, user: int) -> None:
+        self.internal_alarm = False  # a code silences the internal sounder
         self.send(bytes([P.MSG_USER, user, 0]))
+
+    def open_tamper(self, log_type: int, logged: bool = True) -> None:
+        """A tamper opens (e.g. 60 the lid, 62 a detector's cover). While
+        disarmed the panel sounds its internal alarm. A real panel once
+        didn't log it (logged=False): only its internal alarm flag showed it."""
+        if self.area_state == 0:
+            self.internal_alarm = True
+        if logged:
+            self.send_log(log_type, 11, 0, areas=0)
 
     # ─── Commands ───────────────────────────────────────────────────────────
 
@@ -212,6 +225,8 @@ class FakeConnectPanel:
             )
             if ready:
                 flags[P.FLAG_READY] = 1
+            if self.internal_alarm:
+                flags[P.FLAG_INTERNAL_ALARM] = flags[62] = 1  # 62: Speaker Mimic
             if s == 5:
                 flags[P.FLAG_ALARM] = 1
             elif s == 1:
@@ -267,8 +282,10 @@ COMMANDS = """Commands, one per line:
   area part N                        the area is part armed with part arm N
   user N                             user N enters a code at a keypad
   mains off|on                       mains fails (logged at once), or comes back (seen in the power readings)
-  lid open|closed                    the panel's lid (Panel Box Tamper)
-  aux open|closed                    a detector's cover (Auxiliary Tamper, the shared circuit)
+  lid open|closed                    the panel's lid (Panel Box Tamper); while disarmed it sounds the
+                                     internal alarm until a code is entered (user N)
+  aux open|closed                    a detector's cover (Auxiliary Tamper, the shared circuit), the same
+  lid|aux open unlogged              the same, but the panel doesn't log it (seen once on a real panel)
   armfail N                          arming failed: zone N was active when the exit time ended
   drop                               hang up, as when the panel reports an alarm
   refuse arm|disarm                  say no to the next arm or disarm from Home Assistant
@@ -277,7 +294,6 @@ COMMANDS = """Commands, one per line:
 ZONE_BITS = {"open": 0x01, "closed": 0x00, "tamper": 0x02, "alarm": 0x11}
 AREA_STATES = {"off": 0, "exit": 1, "entry": 2, "armed": 3, "alarm": 5}
 TAMPER_LOGS = {"lid": 60, "aux": 62}
-TAMPER_GROUPS = {"open": 11, "closed": 12}
 
 
 def run_command(panel: FakeConnectPanel, line: str) -> str:
@@ -300,8 +316,10 @@ def run_command(panel: FakeConnectPanel, line: str) -> str:
                 panel.send_log(47, 9, 0, areas=0)  # AC Fail, as a real panel logs it
             case ["mains", "on"]:
                 panel.on_battery = False  # a real panel doesn't log the restore
-            case [place, state] if place in TAMPER_LOGS and state in TAMPER_GROUPS:
-                panel.send_log(TAMPER_LOGS[place], TAMPER_GROUPS[state], 0, areas=0)
+            case [place, "open", *how] if place in TAMPER_LOGS and how in ([], ["unlogged"]):
+                panel.open_tamper(TAMPER_LOGS[place], logged=not how)
+            case [place, "closed"] if place in TAMPER_LOGS:
+                panel.send_log(TAMPER_LOGS[place], 12, 0, areas=0)
             case ["armfail", n]:
                 panel.send_log(85, 0, int(n))
             case ["drop"]:

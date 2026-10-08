@@ -59,7 +59,9 @@ The Home Assistant tests have one file per module (see [Architecture](architectu
 | `set_zone(n, bits)` | A zone changing (`0x01` active, `0x02` tamper, `0x11` active and alarmed, `0x20` bypassed) |
 | `set_area(state, part_arm=None)` | The area changing (`0` disarmed, `1` exit, `2` entry, `3` armed, `4` part armed, `5` alarm) |
 | `send_zone_alarm(n)` | Zone *n*'s alarm log entry, typed as a real panel types it (1 for an entry/exit zone, 3 for an interior one) |
-| `send_user(n)` | A user entering a code at a keypad |
+| `send_user(n)` | A user entering a code at a keypad (which also silences the internal alarm) |
+| `open_tamper(type, logged=True)` | A tamper opening (`60` the lid, `62` a detector's cover): logged, and while disarmed the internal alarm goes off (area flags 44 and 62) until a code is entered. `logged=False` leaves the log out, as a real panel once did |
+| `internal_alarm` | Area flags 44 *Internal Alarm* and 62 *Speaker Mimic* on or off |
 | `send_log(type, group, parameter, areas=1)` | An event-log entry (e.g. `send_log(85, 0, 3)`: arm failed, zone 3 active) |
 | `drop_all(alarm=True)` | Hanging up, as when the SmartCom reports an alarm |
 | `exit_delay` | Seconds from an arm to armed; `0` arms at once, with no exit time |
@@ -80,7 +82,7 @@ python tests/fake_connect_panel.py 10001 --clock-reset   # its clock says 31 Oct
 python tests/fake_connect_panel.py 10001 --demo --commands   # and take commands (below)
 ```
 
-With `--commands` you type what the panel should do next: `lid open`, `mains off`, `user 3`, `armfail 4`, `zone 4 alarm`, `area alarm`, `drop`… (it prints the full list, `COMMANDS` in the file). That's how to try notifications, the activity list and the blueprints on a test Home Assistant without touching a real alarm. To send commands while it runs in the background, feed it from a file:
+With `--commands` you type what the panel should do next: `lid open`, `aux open unlogged`, `mains off`, `user 3`, `armfail 4`, `zone 4 alarm`, `area alarm`, `drop`… (it prints the full list, `COMMANDS` in the file). That's how to try notifications, the activity list and the blueprints on a test Home Assistant without touching a real alarm. To send commands while it runs in the background, feed it from a file:
 
 ```bash
 touch fake.in

@@ -33,7 +33,7 @@ from ..panel import (
 from . import protocol as P
 from .client import ConnectClient, ConnectError, HostLog, LoginRejected, PanelBusyError, Timing
 from .clock import ClockMixin
-from .conditions import ConditionsMixin
+from .conditions import ConditionsMixin, InternalAlarm
 from .discovery import RediscoveryMixin
 from .events import USER_CHANGE_WINDOW, EventsMixin
 
@@ -104,6 +104,9 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._refresh_handle: asyncio.TimerHandle | None = None
         self._ready_handle: asyncio.TimerHandle | None = None
         self._logged_flags: dict[int, list[int]] = {}  # area -> flags last named in the debug log
+        self._internal_alarms: dict[int, InternalAlarm] = {}  # area -> its internal alarm flag (conditions.py)
+        self._internal_alarm_handle: asyncio.TimerHandle | None = None
+        self._last_cause_at = float("-inf")  # when a tamper, zone alarm or failed arm was last reported
         self.last_error: str | None = None
 
     @property
@@ -118,7 +121,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
 
     async def stop(self) -> None:
         self._stopped = True
-        for handle in (self._refresh_handle, self._ready_handle):
+        for handle in (self._refresh_handle, self._ready_handle, self._internal_alarm_handle):
             if handle:
                 handle.cancel()
         for task in [self._task, *self._tasks]:
@@ -227,6 +230,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
             self._apply_area(number, state, part_arm)
         self._log_area_flags()
         self._update_ready()
+        self._check_internal_alarm()
 
     def _update_ready(self) -> None:
         flags = self.client.last_area_flags if self.client else None

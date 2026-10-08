@@ -40,6 +40,8 @@ class EventsMixin:
     _last_user: tuple[str, float] | None
     _recent_alarms: dict[tuple[int, bool], float]
     _alarm_zone: tuple[str, float] | None
+    _internal_alarms: dict[int, Any]
+    _last_cause_at: float
 
     def _recent_user(self) -> str | None:
         if self._last_user and time.monotonic() - self._last_user[1] < USER_CHANGE_WINDOW:
@@ -76,6 +78,8 @@ class EventsMixin:
         elif kind == "user":
             self._last_user = (f"User {m['user']}", time.monotonic())
             self.on_event("user", {"user": m["user"], "method": m["method"]})
+            if any(a.since is not None for a in self._internal_alarms.values()):
+                self._refresh_areas_soon()  # a code silences the internal alarm (conditions.py)
         elif kind == "log":
             self._on_log(m)
 
@@ -94,6 +98,7 @@ class EventsMixin:
                 if self._recent_alarms.get(key, -ZONE_ALARM_REPEAT) > now - ZONE_ALARM_REPEAT:
                     return
                 self._recent_alarms[key] = now
+                self._last_cause_at = now
                 self._credit_alarm_zone(m["parameter"])
                 self._log.warning(
                     "Connect: zone %s (%s) in %s",
@@ -114,6 +119,7 @@ class EventsMixin:
             if m["type"] == LOG_ARM_FAILED:
                 # One log per zone that stopped the arm (seen on a real panel:
                 # zones active at the end of the exit time).
+                self._last_cause_at = time.monotonic()  # the panel's fail-to-set warning sounds
                 zone = self.zones.get(m["parameter"])
                 self._log.warning(
                     "Connect: arming failed: zone %s (%s) active", m["parameter"], zone.name if zone else "unknown"

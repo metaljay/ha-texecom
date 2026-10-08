@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from fake_connect_panel import DEMO_ZONES, FakeConnectPanel  # noqa: E402
 
 from custom_components.texecom.connect import client as connect_client  # noqa: E402
+from custom_components.texecom.connect import conditions as connect_conditions  # noqa: E402
 from custom_components.texecom.connect import discovery as connect_discovery  # noqa: E402
 from custom_components.texecom.connect import panel as connect_panel  # noqa: E402
 
@@ -30,6 +31,7 @@ def fast_timings(monkeypatch):
     monkeypatch.setattr(connect_client, "KEEPALIVE", 3600)
     monkeypatch.setattr(connect_panel, "RECONNECT_MIN", 0.05)
     monkeypatch.setattr(connect_panel, "READY_CHECK_DELAY", 0.05)
+    monkeypatch.setattr(connect_conditions, "INTERNAL_ALARM_CONFIRM", 0.05)
     monkeypatch.setattr(connect_discovery, "PROBE_PATIENCE", 0)
 
 

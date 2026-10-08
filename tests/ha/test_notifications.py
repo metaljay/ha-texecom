@@ -62,6 +62,22 @@ async def test_tamper_notice_says_what_to_check(hass, fake):
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
+async def test_a_tamper_the_panel_doesnt_log_is_explained(hass, fake):
+    """Seen on a real panel: a detector's cover opened, the internal sounder
+    went off, but no tamper was logged. The notice says to look at the keypad."""
+    entry = await setup_connect(hass, fake)
+    fake.open_tamper(62, logged=False)
+    await entry.runtime_data.refresh_areas()  # the next regular read
+    await wait_for(lambda: _notice(hass, "tamper", entry) is not None)
+    note = _notice(hass, "tamper", entry)
+    assert "**Internal Alarm**" in note["message"] and "The keypad shows what it is" in note["message"]
+    assert hass.states.get("binary_sensor.texecom_tamper").attributes["sources"] == ["Internal Alarm"]
+    fake.send_user(1)  # a code at the keypad silences it
+    await wait_for(lambda: _notice(hass, "tamper", entry) is None)
+    assert hass.states.get("binary_sensor.texecom_tamper").state == "off"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_notices_can_be_turned_off(hass, fake):
     entry = await setup_connect(hass, fake, options={"notify_mains": False, "notify_tamper": False})
     fake.on_battery = True

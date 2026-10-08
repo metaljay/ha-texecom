@@ -59,7 +59,7 @@ All paths are under `custom_components/texecom/`.
 | `connect/panel.py` | `ConnectPanel`: keeps one session open and reconnects with back-off; the start-up reads; zone and area state (`refresh`, `_apply_area`, the mode-switch grace); **Ready to arm** (flag 16, re-read when zones settle); naming the area flags in the debug log; arm/disarm; diagnostics |
 | `connect/discovery.py` | Reading the panel's layout: `discover()` (identity, zones, areas), `probe()` (a one-off login for setup, patient with a busy SmartCom), and re-reading over the open session (`RediscoveryMixin`) |
 | `connect/events.py` | What the panel's messages mean (`EventsMixin`): zone, area and user messages; the event log (zone alarms and the zone that set the alarm off, failed arms, part arms, engineer programming ending) |
-| `connect/conditions.py` | Tampers that aren't zones, faults from the log, and mains power worked out from the power readings (`ConditionsMixin`) |
+| `connect/conditions.py` | Tampers that aren't zones, the panel's internal alarm with nothing reported to explain it (area flag 44, shown as the tamper *Internal Alarm*), faults from the log, and mains power worked out from the power readings (`ConditionsMixin`) |
 | `connect/clock.py` | The panel clock (`ClockMixin`): checked on connecting, set once a day with clock sync on. Also `async_diagnostics`, the diagnostics that need asking: the clock, and the system flags |
 | `crestron/connection.py` | The Crestron connection (`ConnectionMixin`): opening the port (network or serial), reading and reconnecting, the ASTATUS poll, sending commands and the UDL session for arming |
 | `crestron/panel.py` | `CrestronPanel`: turning lines into zone and area states (event coalescing, ASTATUS corrections), arm/disarm |
