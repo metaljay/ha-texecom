@@ -721,9 +721,13 @@ async def test_diagnostics_name_the_flags_and_read_the_system_flags(fake, caplog
         assert diagnostics["area_flags"] == {1: ["21 Armed", "22 Full Armed"]}
         assert diagnostics["system_flags"] == "00 04 00 00 00 00 00 00"
         assert "area 1 flags: 21 Armed, 22 Full Armed" in caplog.text
+        # One request missed (a panel busy with a burst of events can): asked again.
+        fake.ignore_next[P.CMD_GET_SYSTEM_FLAGS] = 1
+        diagnostics = await panel.async_diagnostics()
+        assert diagnostics["system_flags"] == "00 04 00 00 00 00 00 00"
         # A panel that doesn't answer it: diagnostics say so, and the session carries on.
         connections = fake.connections
-        fake.ignore_next[P.CMD_GET_SYSTEM_FLAGS] = 1
+        fake.ignore_next[P.CMD_GET_SYSTEM_FLAGS] = 2
         diagnostics = await panel.async_diagnostics()
         assert diagnostics["system_flags"].startswith("unreadable")
         assert panel.connected and fake.connections == connections
