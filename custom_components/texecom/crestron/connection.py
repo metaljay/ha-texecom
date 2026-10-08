@@ -24,6 +24,9 @@ LOGIN_TIMEOUT = 8.0
 CONNECT_TIMEOUT = 10.0
 RECONNECT_MIN = 5.0
 RECONNECT_MAX = 30.0
+# A bridge that's down fails every attempt: the first few failures in a row
+# are logged at debug level, then one warning.
+QUIET_FAILURES = 3
 # Measured: the text feed resumes ~30 s after a Wintex logout.
 POST_LOGOUT_BLACKOUT = 35.0
 SILENT_POLLS_BEFORE_RECONNECT = 3
@@ -70,14 +73,20 @@ class ConnectionMixin:
 
     async def _run(self) -> None:
         delay = self.reconnect_min
+        failures = 0
         while not self._stopped:
             self._splitter.reset()
             try:
                 reader, writer = await self._open()
             except (OSError, TimeoutError, ImportError) as err:
                 self.last_error = f"cannot open {self.description}: {err}"
-                _LOGGER.warning("Crestron: %s", self.last_error)
+                failures += 1
+                if failures == QUIET_FAILURES + 1:
+                    _LOGGER.warning("Crestron: %s; still trying", self.last_error)
+                else:
+                    _LOGGER.debug("Crestron: %s; retrying", self.last_error)
             else:
+                failures = 0
                 self._writer = writer
                 self._last_data = time.monotonic()
                 self.last_error = None
@@ -93,7 +102,7 @@ class ConnectionMixin:
                         self._last_data = time.monotonic()
                         self._splitter.push(data)
                 except OSError as err:
-                    _LOGGER.warning("Crestron: connection error: %s", err)
+                    _LOGGER.info("Crestron: connection error: %s", err)
                 finally:
                     poller.cancel()
                     self._writer = None
@@ -104,7 +113,7 @@ class ConnectionMixin:
                     for waiter in list(self._waiters):
                         waiter("closed", None)
                 if not self._stopped:
-                    _LOGGER.warning("Crestron: connection to %s closed", self.description)
+                    _LOGGER.info("Crestron: connection to %s closed; reconnecting", self.description)
             if self._stopped:
                 break
             await asyncio.sleep(delay)
@@ -160,7 +169,7 @@ class ConnectionMixin:
             if future.done():
                 return True
             if kind == "closed":
-                future.set_exception(CommandFailed("connection closed"))
+                future.set_exception(PanelNotConnected("the connection to the panel closed"))
                 return True
             result = match(kind, value)
             if result == "ok":

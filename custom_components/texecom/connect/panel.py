@@ -43,11 +43,11 @@ RECONNECT_MIN = 5.0
 RECONNECT_MAX = 30.0
 READY_CHECK_DELAY = 1.5  # after zones settle, re-read whether an area is ready to arm
 POWER_EVERY_N_IDLE = 1  # voltages and currents every keep-alive (~30 s)
-SWITCH_GRACE = 10.0
+SWITCH_GRACE = 10.0  # longest a mode switch may sit between "disarmed" and the new exit delay
 # A SmartCom refuses a new session for about a minute after the last one
 # closed (setup's check, a restart, an alarm report): the first few retries
 # are expected, so only later ones are logged as warnings.
-QUIET_FAILURES = 3  # longest a mode switch may sit between "disarmed" and the new exit delay
+QUIET_FAILURES = 3
 
 
 class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, TexecomPanel):

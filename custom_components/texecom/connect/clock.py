@@ -40,8 +40,12 @@ class ClockMixin:
             self.on_clock_drift(None)
             return
         if clock:
-            now = datetime.now(self.time_zone).replace(tzinfo=None, microsecond=0)
-            self.on_clock_drift(int((datetime(*clock) - now).total_seconds()))
+            self.on_clock_drift(self._drift(clock))
+
+    def _drift(self, clock: tuple[int, int, int, int, int, int], now: datetime | None = None) -> int:
+        """Seconds the panel clock is ahead of local time (behind: negative)."""
+        now = (now or datetime.now(self.time_zone)).replace(tzinfo=None, microsecond=0)
+        return int((datetime(*clock) - now).total_seconds())
 
     async def _time_sync_loop(self) -> None:
         await asyncio.sleep(5)  # soon after connecting, e.g. after a power cut
@@ -69,7 +73,7 @@ class ClockMixin:
         else:
             if not panel:
                 return False
-            drift = (datetime(*panel) - datetime(*want)).total_seconds()
+            drift = self._drift(panel, now)
             if abs(drift) <= 60:
                 self._log.debug("Connect: panel clock within %.0f s", abs(drift))
                 return False
@@ -98,7 +102,6 @@ class ClockMixin:
                 result["panel_clock"] = f"unreadable: {err}"
             else:
                 if clock:
-                    now = datetime.now(self.time_zone).replace(tzinfo=None, microsecond=0)
                     result["panel_clock"] = datetime(*clock).isoformat(sep=" ")
-                    result["panel_clock_drift_s"] = int((datetime(*clock) - now).total_seconds())
+                    result["panel_clock_drift_s"] = self._drift(clock)
         return result

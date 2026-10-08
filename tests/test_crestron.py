@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import socket
 
 import _paths  # noqa: F401
 import pytest
@@ -19,6 +20,7 @@ from custom_components.texecom.panel import (
     TRIGGERED,
     PanelArea,
     PanelError,
+    PanelNotConnected,
     PanelZone,
 )
 
@@ -48,9 +50,10 @@ class FakeCrestronPort:
     """Answers like a panel's Crestron port. text_error makes text commands
     inside a UDL session get ERROR (seen when the login gets no OK)."""
 
-    def __init__(self, login_ok: bool = True, text_error: bool = False) -> None:
+    def __init__(self, login_ok: bool = True, text_error: bool = False, close_on_login: bool = False) -> None:
         self.login_ok = login_ok
         self.text_error = text_error
+        self.close_on_login = close_on_login
         self.armed = False
         self.received: list[bytes] = []
         self.writers: set[asyncio.StreamWriter] = set()
@@ -84,6 +87,9 @@ class FakeCrestronPort:
                         cmd, buf = buf[1 : end - 1], buf[end:]
                         self.received.append(cmd)
                         if cmd.startswith(b"W"):
+                            if self.close_on_login:
+                                writer.close()
+                                return
                             if self.login_ok:
                                 writer.write(b"OK\r\n")
                         else:
@@ -230,3 +236,41 @@ async def test_arming_without_udl_is_refused(port):
             await panel.arm(1, "away")
     finally:
         await panel.stop()
+
+
+async def test_a_bridge_thats_down_gives_one_warning_not_one_per_attempt(caplog):
+    caplog.set_level("DEBUG", logger="custom_components.texecom")
+    with socket.socket() as s:  # a port nothing listens on
+        s.bind(("127.0.0.1", 0))
+        number = s.getsockname()[1]
+    panel = CrestronPanel(
+        part_arms={"night": 1, "home": 0},
+        zones=[],
+        areas=[PanelArea(1, "Area A")],
+        udl=None,
+        host="127.0.0.1",
+        port=number,
+        status_poll=0,
+        reconnect_min=0.01,
+    )
+    await panel.start()
+    try:
+        await wait_for(lambda: sum("cannot open" in r.getMessage() for r in caplog.records) >= 6)
+        warnings = [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+        assert len(warnings) == 1 and "still trying" in warnings[0]
+    finally:
+        await panel.stop()
+
+
+async def test_the_connection_closing_during_a_command_says_not_connected():
+    """Not "the panel didn't accept the request": the link dropped, and it
+    reconnects by itself."""
+    fake = FakeCrestronPort(close_on_login=True)
+    number = await fake.start()
+    panel = await make_panel(number)
+    try:
+        with pytest.raises(PanelNotConnected):
+            await panel.arm(1, "away")
+    finally:
+        await panel.stop()
+        await fake.close()
