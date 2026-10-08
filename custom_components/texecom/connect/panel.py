@@ -310,6 +310,13 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 return
             self.set_area(number, ARMING, None, changed_by)
         elif state == "in entry":
+            if area.state == TRIGGERED:
+                # After an alarm the panel can go back to "in entry" when the
+                # entry zone is seen again, while the sirens keep sounding
+                # (seen on a real panel): it's an alarm until it's disarmed
+                # (or the panel re-arms itself after the bell time).
+                self._log.debug("Connect: area %s: in entry again during an alarm; still in alarm", number)
+                return
             self.set_area(number, PENDING, area.part_arm, changed_by)
         elif state == "armed":
             self.set_area(number, ARMED_AWAY, None, changed_by)

@@ -14,7 +14,15 @@ from custom_components.texecom.connect import protocol as P
 from custom_components.texecom.connect.client import ConnectClient, LoginRejected, PanelBusyError, Timing
 from custom_components.texecom.connect.discovery import probe
 from custom_components.texecom.connect.panel import ConnectPanel
-from custom_components.texecom.panel import ARMED_AWAY, ARMED_HOME, ARMED_NIGHT, DISARMED, TRIGGERED, PanelError
+from custom_components.texecom.panel import (
+    ARMED_AWAY,
+    ARMED_HOME,
+    ARMED_NIGHT,
+    DISARMED,
+    PENDING,
+    TRIGGERED,
+    PanelError,
+)
 
 FAST = Timing(command_timeout=0.3, command_attempts=2, keepalive=30, login_delay=0)
 
@@ -242,6 +250,33 @@ async def test_stale_exit_flag_is_ignored_while_armed(fake):
         await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
         panel._apply_area(1, "in exit", None)
         assert panel.areas[1].state == ARMED_AWAY
+    finally:
+        await panel.stop()
+
+
+async def test_an_alarm_stays_an_alarm_when_the_panel_goes_back_to_entry(fake):
+    """After an alarm a real panel reported "in entry" again (the entry zone
+    seen again) while the sirens sounded, then "in alarm" again: Home
+    Assistant shows the alarm throughout, until it's disarmed."""
+    from fake_connect_panel import run_command
+
+    panel = await make_panel(fake)
+    seen = []
+    try:
+        run_command(fake, "area armed")
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        run_command(fake, "area entry")
+        await wait_for(lambda: panel.areas[1].state == PENDING)
+        panel.add_listener(lambda: seen.append(panel.areas[1].state))
+        run_command(fake, "area alarm")
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        run_command(fake, "area entry")
+        await panel.refresh_areas()  # a re-read meanwhile says "in entry" too
+        assert panel.areas[1].state == TRIGGERED
+        run_command(fake, "area alarm")
+        run_command(fake, "area off")
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        assert PENDING not in seen
     finally:
         await panel.stop()
 
