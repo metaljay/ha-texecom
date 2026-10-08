@@ -2,7 +2,9 @@
 (SmartCom/ComIP) or a COM port set to Crestron.
 
 Setting up and unloading a config entry. The panel driver is built in
-factory.py; the notices it raises are in notifications.py and issues.py."""
+factory.py; the notices it raises are in notifications.py and issues.py.
+Changing an option the driver uses reloads the entry; the others apply at
+once. A zone or area the panel no longer has can have its device deleted."""
 
 from __future__ import annotations
 
@@ -14,12 +16,12 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
 
-from .const import CONF_CREATE_DASHBOARD, CONF_TIME_SYNC
+from .const import CONF_CREATE_DASHBOARD, CONF_TIME_SYNC, DOMAIN, DRIVER_OPTIONS
 from .dashboard import async_create_dashboard
 from .entity import panel_device_info
 from .factory import create_panel
 from .issues import clear_clock_issue, watch_connection
-from .notifications import dismiss_when_armed
+from .notifications import dismiss_when_armed, watch_conditions
 from .panel import TexecomPanel
 
 PLATFORMS = [Platform.ALARM_CONTROL_PANEL, Platform.BINARY_SENSOR, Platform.SENSOR]
@@ -39,20 +41,40 @@ async def async_setup_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> b
         clear_clock_issue(hass, entry)
     entry.async_on_unload(watch_connection(hass, entry, panel))
     entry.async_on_unload(dismiss_when_armed(hass, entry, panel))
+    entry.async_on_unload(watch_conditions(hass, entry, panel))
     if entry.data.get(CONF_CREATE_DASHBOARD):
         # Asked for at the end of setup; done once the entities exist.
         with contextlib.suppress(HomeAssistantError):
             await async_create_dashboard(hass, entry)
         data = {k: v for k, v in entry.data.items() if k != CONF_CREATE_DASHBOARD}
         hass.config_entries.async_update_entry(entry, data=data)
-    options = dict(entry.options)
+    driver_options = {key: entry.options.get(key) for key in DRIVER_OPTIONS}
 
     async def options_updated(hass: HomeAssistant, entry: TexecomConfigEntry) -> None:
-        if dict(entry.options) != options:  # data-only updates don't need a reload
+        # Reconnecting costs up to a minute (the SmartCom is slow to let a new
+        # session in), so only when the driver uses what changed. Codes, names
+        # and notifications apply straight away.
+        if {key: entry.options.get(key) for key in DRIVER_OPTIONS} != driver_options:
             await hass.config_entries.async_reload(entry.entry_id)
+        else:
+            panel.notify()
 
     entry.async_on_unload(entry.add_update_listener(options_updated))
     return True
+
+
+async def async_remove_config_entry_device(
+    hass: HomeAssistant, entry: TexecomConfigEntry, device: dr.DeviceEntry
+) -> bool:
+    """Whether a device may be deleted (its ⋮ → Delete): only a zone or area
+    the panel no longer has, e.g. after the installer removed a zone."""
+    panel = getattr(entry, "runtime_data", None)
+    if panel is None:
+        return False
+    current = {entry.entry_id}
+    current |= {f"{entry.entry_id}_zone_{number}" for number in panel.zones}
+    current |= {f"{entry.entry_id}_area_{number}" for number in panel.areas}
+    return not any(domain == DOMAIN and key in current for domain, key in device.identifiers)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> bool:

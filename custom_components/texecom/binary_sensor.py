@@ -1,4 +1,5 @@
-"""Zone sensors, zone tamper sensors and the panel connection sensor."""
+"""Zone sensors, zone tamper sensors, the panel's tamper, problem, mains and
+connection sensors, and each area's "Ready to arm"."""
 
 from __future__ import annotations
 
@@ -12,10 +13,9 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import TexecomConfigEntry
-from .connect.protocol import MAINS_FAULTS
 from .const import CONF_PROTOCOL, PROTOCOL_CONNECT
-from .entity import TexecomEntity, child_device_info
-from .panel import TexecomPanel
+from .entity import TexecomEntity, child_device_info, nice_name
+from .panel import MAINS_FAULTS, TexecomPanel
 
 # Texecom zone types (as reported over Connect).
 ZONE_TYPE_FIRE = 9
@@ -62,6 +62,13 @@ async def async_setup_entry(
             TexecomProblemSensor(entry, panel),
             TexecomMainsSensor(entry, panel),
         ]
+    if panel.reports_ready:
+        for number, area in panel.areas.items():
+            # The same device as the area's alarm (alarm_control_panel.py).
+            device = child_device_info(
+                hass, entry, f"area_{number}", f"{nice_name(area.name)} Alarm", f"Alarm area {number}"
+            )
+            entities.append(TexecomReadySensor(entry, panel, number, device))
     for number, zone in panel.zones.items():
         # Crestron zones are only "Zone 1"… until renamed, so no room match.
         device = child_device_info(
@@ -165,6 +172,34 @@ class TexecomMainsSensor(TexecomBinarySensor):
     @property
     def is_on(self) -> bool:
         return not (self.panel.extra.get("faults", set()) & MAINS_FAULTS)
+
+
+class TexecomReadySensor(TexecomBinarySensor):
+    """Whether the panel would let this area arm now (nothing open that
+    stops it), with the zones that are open."""
+
+    _attr_translation_key = "ready_to_arm"
+
+    def __init__(self, entry: TexecomConfigEntry, panel: TexecomPanel, number: int, device: DeviceInfo) -> None:
+        super().__init__(entry, panel, f"area_{number}_ready", device, f"{panel.areas[number].name} ready to arm")
+        self.number = number
+
+    @property
+    def available(self) -> bool:
+        return super().available and self.panel.areas[self.number].ready is not None
+
+    @property
+    def is_on(self) -> bool:
+        return bool(self.panel.areas[self.number].ready)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        open_zones = [
+            nice_name(zone.name)
+            for zone in self.panel.zones.values()
+            if zone.state != "secure" and (not zone.areas or self.number in zone.areas)
+        ]
+        return {"open_zones": open_zones}
 
 
 class TexecomConnectionSensor(TexecomBinarySensor):

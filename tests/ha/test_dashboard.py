@@ -17,8 +17,10 @@ async def test_dashboard_layout(hass, fake):
     assert headings == ["Doors and windows", "Motion", "Fire and safety"]
     tiles = [c["entity"] for c in right["cards"] if c["type"] == "tile"]
     assert tiles[:2] == ["binary_sensor.texecom_front_door", "binary_sensor.texecom_patio_door"]
-    panel_tiles = [c.get("name") for c in left["cards"] if c["type"] == "tile" and "name" in c]
-    assert panel_tiles == ["Connection", "Mains", "Faults", "Tamper", "Keypad", "Battery"]
+    named_tiles = [c.get("name") for c in left["cards"] if c["type"] == "tile" and "name" in c]
+    assert named_tiles == ["Ready to arm", "Connection", "Mains", "Faults", "Tamper", "Keypad", "Battery"]
+    activity = next(c for c in left["cards"] if c["type"] == "logbook")
+    assert activity["target"]["entity_id"] == ["alarm_control_panel.texecom_house"]  # not every door opening
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

@@ -35,6 +35,9 @@ ARM_MODES = ("away", "home", "night")
 # visible; the panel connection sensor shows the real link state throughout.
 OFFLINE_GRACE = 180.0
 
+# Fault names (in extra["faults"]) that mean the panel has no mains power.
+MAINS_FAULTS = {"AC Fail", "PSU AC Fail"}
+
 
 # Kept in capitals when a panel name is title-cased ("HALL PIR" -> "Hall PIR").
 ACRONYMS = {"PIR", "PA", "CO", "CO2", "GSM", "UPS", "LED", "AC", "DC", "CCTV", "WC", "PSU", "UDL", "RF", "IR", "ATS"}
@@ -49,6 +52,14 @@ def nice_name(name: str) -> str:
 
 class PanelError(Exception):
     """An arm/disarm request failed or the panel refused it."""
+
+
+class PanelNotConnected(PanelError):
+    """There's no connection to the panel just now (it reconnects by itself)."""
+
+
+class PanelRefused(PanelError):
+    """The panel answered, but refused the request."""
 
 
 @dataclass
@@ -78,6 +89,7 @@ class PanelArea:
     part_arm: int | None = None  # 1-3 while part armed, when known
     changed_by: str | None = None
     known: bool = False
+    ready: bool | None = None  # ready to arm, as the panel says (None: it doesn't say)
 
 
 @dataclass
@@ -156,6 +168,15 @@ class TexecomPanel(ABC):
     @property
     def ever_connected(self) -> bool:
         return any(a.known for a in self.areas.values()) or any(z.known for z in self.zones.values())
+
+    # Whether the panel says when an area is ready to arm (PanelArea.ready).
+    reports_ready = False
+
+    def set_area_ready(self, number: int, ready: bool) -> None:
+        area = self.areas.get(number)
+        if area is not None and area.ready != ready:
+            area.ready = ready
+            self.notify()
 
     # ─── Mode helpers ───────────────────────────────────────────────────────
 

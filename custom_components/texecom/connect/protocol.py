@@ -32,6 +32,7 @@ CMD_GET_ZONE_DETAILS = 3
 CMD_ARM_AREA = 6
 CMD_DISARM_AREA = 8
 CMD_RESET_AREA = 9
+CMD_GET_SYSTEM_FLAGS = 10
 CMD_GET_AREA_FLAGS = 11
 CMD_GET_LCD_DISPLAY = 13
 CMD_GET_PANEL_IDENTIFICATION = 22
@@ -64,6 +65,7 @@ ARM_PART_3 = 3
 
 # Indices into the GET_AREA_FLAGS response (one bitmap of areas per flag).
 FLAG_ALARM = 0
+FLAG_READY = 16  # ready to arm (official name; confirm on a real panel)
 FLAG_ENTRY = 17
 FLAG_SECOND_ENTRY = 18
 FLAG_EXIT = 19
@@ -77,6 +79,7 @@ FLAG_PART_ARM_2 = 51
 FLAG_PART_ARM_3 = 52
 AREA_FLAGS = (
     FLAG_ALARM,
+    FLAG_READY,
     FLAG_ENTRY,
     FLAG_SECOND_ENTRY,
     FLAG_EXIT,
@@ -485,9 +488,285 @@ FAULT_LOG_NAMES = {
     119: "Battery Charger Fault",
     122: "Radio Config. Failure",
 }
-MAINS_FAULTS = {"AC Fail", "PSU AC Fail"}
 ZONE_FAULT_LOGS = {104, 105}  # Zone Fault, Zone Masked: the zone is in `parameter`
 # Groups: 1 priority alarm, 3 alarm, 9 maintenance alarm, 11 tamper, 20 fault
 # start one; 2, 4, 10, 12 are the matching restores.
 GROUPS_STARTING = {1, 3, 9, 11, 20}
 GROUPS_RESTORING = {2, 4, 10, 12}
+
+
+# ─── Names, for debug logs and diagnostics ─────────────────────────────────
+# Every area flag, by number (the index into a GET_AREA_FLAGS reply), from the
+# Texecom Connect protocol specification (section 4.11.5) as published in the
+# texecom-connect project (Apache-2.0). The driver only relies on the flags in
+# AREA_FLAGS; the rest are named in debug logs and diagnostics until they're
+# confirmed on a real panel (docs/development/protocol.md).
+AREA_FLAG_NAMES = (
+    "Alarm",  # 0
+    "Guard Alarm",  # 1
+    "Guard Access Alarm",  # 2
+    "Entry Alarm",  # 3
+    "Confirmed Alarm",  # 4
+    "24hr audible Alarm",  # 5
+    "24hr Silent Alarm",  # 6
+    "24hr Gas Alarm",  # 7
+    "PA Alarm",  # 8
+    "PA Silent Alarm",  # 9
+    "Duress Alarm",  # 10
+    "Fire Alarm",  # 11
+    "Medical Alarm",  # 12
+    "Auxiliary Alarm",  # 13
+    "Tamper Alarm",  # 14
+    "Abort",  # 15
+    "Ready",  # 16
+    "Entry",  # 17
+    "Second Entry",  # 18
+    "Exit",  # 19
+    "Entry/Exit",  # 20
+    "Armed",  # 21
+    "Full Armed",  # 22
+    "Part Armed",  # 23
+    "Part Arming",  # 24
+    "Force Armable",  # 25
+    "Force Armed",  # 26
+    "Arm Failed",  # 27
+    "Bell SAB",  # 28
+    "Bell SCB",  # 29
+    "Strobe",  # 30
+    "Detector Latch",  # 31
+    "Detector Reset",  # 32
+    "Walk Test",  # 33
+    "Omitted",  # 34
+    "24hr Omit",  # 35
+    "Reset Required",  # 36
+    "Door Strike",  # 37
+    "Chime Mimic",  # 38
+    "Chime Enabled",  # 39
+    "Double Knock Active",  # 40
+    "Beam Pair",  # 41
+    "Zone on test",  # 42
+    "Test Failed",  # 43
+    "Internal Alarm",  # 44
+    "Auto Arming",  # 45
+    "Time Arming",  # 46
+    "1st Code Entered",  # 47
+    "2nd Code Entered",  # 48
+    "Area Secured",  # 49
+    "Part Arm 1",  # 50
+    "Part Arm 2",  # 51
+    "Part Arm 3",  # 52
+    "Custom Alarm",  # 53
+    "Zone Warning",  # 54
+    "Arm Fail Warning",  # 55
+    "Forced Entry",  # 56
+    "Zones Locked Out",  # 57
+    "All Armed",  # 58
+    "Time Arm Disabled",  # 59
+    "Armed/Alarm",  # 60
+    "Intruder Alarm",  # 61
+    "Speaker Mimic",  # 62
+    "Full Armed/Exit",  # 63
+    "Detector Fault",  # 64
+    "Detector Masked",  # 65
+    "Fault Present",  # 66
+    "LED control",  # 67
+    "Full Armed Entry",  # 68
+    "Fire Sounder",  # 69
+    "PA Confirmed",  # 70
+    "Confirmed Intruder",  # 71
+    "Seismic Alarm",  # 72
+)
+
+# Event-log types and groups, by number (texecom-connect, Apache-2.0; 204-209
+# as seen on panels by michaelmarconi/texecom_alarm, MIT).
+LOG_EVENT_NAMES = {
+    1: "Entry/Exit 1",
+    2: "Entry/Exit 2",
+    3: "Interior",
+    4: "Perimeter",
+    5: "24hr Audible",
+    6: "24hr Silent",
+    7: "Audible PA",
+    8: "Silent PA",
+    9: "Fire Alarm",
+    10: "Medical",
+    11: "24Hr Gas Alarm",
+    12: "Auxiliary Alarm",
+    13: "24hr Tamper Alarm",
+    14: "Exit Terminator",
+    15: "Keyswitch - Momentary",
+    16: "Keyswitch - Latching",
+    17: "Security Key",
+    18: "Omit Key",
+    19: "Custom Alarm",
+    20: "Confirmed PA Audible",
+    21: "Confirmed PA Silent",
+    22: "Keypad Medical",
+    23: "Keypad Fire",
+    24: "Keypad Audible PA",
+    25: "Keypad Silent PA",
+    26: "Duress Code Alarm",
+    27: "Alarm Active",
+    28: "Bell Active",
+    29: "Re-arm",
+    30: "Verified Cross Zone Alarm",
+    31: "User Code",
+    32: "Exit Started",
+    33: "Exit Error (Arming Failed)",
+    34: "Entry Started",
+    35: "Part Arm Suite",
+    36: "Armed with Line Fault",
+    37: "Open/Close (Away Armed)",
+    38: "Part Armed",
+    39: "Auto Open/Close",
+    40: "Auto Arm Deferred",
+    41: "Open After Alarm (Alarm Abort)",
+    42: "Remote Open/Close",
+    43: "Quick Arm",
+    44: "Recent Closing",
+    45: "Reset After Alarm",
+    46: "Power O/P Fault",
+    47: "AC Fail",
+    48: "Low Battery",
+    49: "System Power Up",
+    50: "Mains Over Voltage",
+    51: "Telephone Line Fault",
+    52: "Fail to Communicate",
+    53: "Download Start",
+    54: "Download End",
+    55: "Log Capacity Alert (80%)",
+    56: "Date Changed",
+    57: "Time Changed",
+    58: "Installer Programming Start",
+    59: "Installer Programming End",
+    60: "Panel Box Tamper",
+    61: "Bell Tamper",
+    62: "Auxiliary Tamper",
+    63: "Expander Tamper",
+    64: "Keypad Tamper",
+    65: "Expander Trouble (Network error)",
+    66: "Remote Keypad Trouble (Network error)",
+    67: "Fire Zone Tamper",
+    68: "Zone Tamper",
+    69: "Keypad Lockout",
+    70: "Code Tamper Alarm",
+    71: "Soak Test Alarm",
+    72: "Manual Test Transmission",
+    73: "Automatic Test Transmission",
+    74: "User Walk Test Start/End",
+    75: "NVM Defaults Loaded",
+    76: "First Knock",
+    77: "Door Access",
+    78: "Part Arm 1",
+    79: "Part Arm 2",
+    80: "Part Arm 3",
+    81: "Auto Arming Started",
+    82: "Confirmed Alarm",
+    83: "Prox Tag",
+    84: "Access Code Changed/Deleted",
+    85: "Arm Failed",
+    86: "Log Cleared",
+    87: "iD Loop Shorted",
+    88: "Communication Port",
+    89: "TAG System Exit (Batt. OK)",
+    90: "TAG System Exit (Batt. LOW)",
+    91: "TAG System Entry (Batt. OK)",
+    92: "TAG System Entry (Batt. LOW)",
+    93: "Microphone Activated",
+    94: "AV Cleared Down",
+    95: "Monitored Alarm",
+    96: "Expander Low Voltage",
+    97: "Supervision Fault",
+    98: "PA from Remote FOB",
+    99: "RF Device Low Battery",
+    100: "Site Data Changed",
+    101: "Radio Jamming",
+    102: "Test Call Passed",
+    103: "Test Call Failed",
+    104: "Zone Fault",
+    105: "Zone Masked",
+    106: "Faults Overridden",
+    107: "PSU AC Fail",
+    108: "PSU Battery Fail",
+    109: "PSU Low Output Fail",
+    110: "PSU Tamper",
+    111: "Door Access",
+    112: "CIE Reset",
+    113: "Remote Command",
+    114: "User Added",
+    115: "User Deleted",
+    116: "Confirmed PA",
+    117: "User Acknowledged",
+    118: "Power Unit Failure",
+    119: "Battery Charger Fault",
+    120: "Confirmed Intruder",
+    121: "GSM Tamper",
+    122: "Radio Config. Failure",
+    204: "Quick Part Arm 1",
+    205: "Quick Part Arm 2",
+    206: "Quick Part Arm 3",
+    207: "Remote Part Arm 1",
+    208: "Remote Part Arm 2",
+    209: "Remote Part Arm 3",
+}
+LOG_GROUP_NAMES = {
+    0: "Not Reported",
+    1: "Priority Alarm",
+    2: "Priority Alarm Restore",
+    3: "Alarm",
+    4: "Restore",
+    5: "Open",
+    6: "Close",
+    7: "Bypassed",
+    8: "Unbypassed",
+    9: "Maintenance Alarm",
+    10: "Maintenance Restore",
+    11: "Tamper Alarm",
+    12: "Tamper Restore",
+    13: "Test Start",
+    14: "Test End",
+    15: "Disarmed",
+    16: "Armed",
+    17: "Tested",
+    18: "Started",
+    19: "Ended",
+    20: "Fault",
+    21: "Omitted",
+    22: "Reinstated",
+    23: "Stopped",
+    24: "Start",
+    25: "Deleted",
+    26: "Active",
+    27: "Not Used",
+    28: "Changed",
+    29: "Low Battery",
+    30: "Radio",
+    31: "Deactivated",
+    32: "Added",
+    33: "Bad Action",
+    34: "PA Timer Reset",
+    35: "PA Zone Lockout",
+}
+
+
+def area_flags_set(flags: bytes, area: int, panel_zones: int | None) -> list[int]:
+    """The flags set for one area in a GET_AREA_FLAGS reply that starts at flag 0."""
+    size = area_bytes(panel_zones)
+    return [
+        flag
+        for flag in range(len(flags) // size)
+        if int.from_bytes(flags[flag * size : flag * size + size], "little") & (1 << (area - 1))
+    ]
+
+
+def flag_names(flags: list[int]) -> list[str]:
+    """E.g. [16, 39] -> ["16 Ready", "39 Chime Enabled"]."""
+    return [f"{f} {AREA_FLAG_NAMES[f]}" if f < len(AREA_FLAG_NAMES) else str(f) for f in flags]
+
+
+def describe_log(m: dict[str, Any]) -> str:
+    """A decoded log message in words, e.g. "Arm Failed (85), group Not
+    Reported (0), parameter 3, areas 0x1"."""
+    name = LOG_EVENT_NAMES.get(m["type"], "unknown")
+    group = LOG_GROUP_NAMES.get(m["group"], "unknown")
+    return f"{name} ({m['type']}), group {group} ({m['group']}), parameter {m['parameter']}, areas {m['areas']:#x}"

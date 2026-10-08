@@ -6,9 +6,10 @@ from homeassistant import config_entries
 from homeassistant.data_entry_flow import FlowResultType
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
+from custom_components.texecom.connect import protocol as P
 from custom_components.texecom.const import DOMAIN
 
-from .common import UDL, free_port, setup_connect, wait_for
+from .common import UDL, after_progress, free_port, setup_connect, wait_for
 
 
 async def test_reauth_after_the_udl_changes(hass, fake):
@@ -31,7 +32,11 @@ async def test_reauth_after_the_udl_changes(hass, fake):
     await hass.config_entries.async_setup(entry.entry_id)
     await wait_for(lambda: any(f["context"]["source"] == "reauth" for f in hass.config_entries.flow.async_progress()))
     flow = next(f for f in hass.config_entries.flow.async_progress() if f["context"]["source"] == "reauth")
+    result = await hass.config_entries.flow.async_configure(flow["flow_id"], {"udl": "1111"})
+    result = await after_progress(hass, result)
+    assert result["step_id"] == "reauth_confirm" and result["errors"] == {"base": "invalid_auth"}
     result = await hass.config_entries.flow.async_configure(flow["flow_id"], {"udl": "5678"})
+    result = await after_progress(hass, result)
     assert result["type"] is FlowResultType.ABORT and result["reason"] == "reauth_successful"
     assert entry.data["udl"] == "5678"
     await hass.async_block_till_done()
@@ -51,6 +56,9 @@ async def test_reconfigure_to_a_new_address(hass, fake):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"host": "127.0.0.1", "port": moved.port, "udl": UDL}
         )
+        assert result["type"] is FlowResultType.SHOW_PROGRESS
+        assert entry.state is config_entries.ConfigEntryState.NOT_LOADED  # paused while it checks
+        result = await after_progress(hass, result)
         assert result["type"] is FlowResultType.ABORT and result["reason"] == "reconfigure_successful"
         assert entry.data["port"] == moved.port and entry.unique_id == f"127.0.0.1:{moved.port}"
         await hass.async_block_till_done()
@@ -67,10 +75,35 @@ async def test_reconfigure_failure_keeps_the_old_connection(hass, fake):
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"host": "127.0.0.1", "port": free_port(), "udl": UDL}
     )
-    assert result["errors"] == {"base": "cannot_connect"}
+    result = await after_progress(hass, result)
+    assert result["step_id"] == "reconfigure_connect" and result["errors"] == {"base": "cannot_connect"}
     assert entry.state is config_entries.ConfigEntryState.LOADED
     await wait_for(lambda: entry.runtime_data.connected)
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_closing_reconfigure_during_the_check_resumes(hass, fake):
+    from fake_connect_panel import DEMO_ZONES, FakeConnectPanel
+
+    entry = await setup_connect(hass, fake)
+    silent = FakeConnectPanel(zones=DEMO_ZONES)  # accepts the connection but never answers the login
+    silent.ignore_next[P.CMD_LOGIN] = 100
+    await silent.start()
+    try:
+        result = await entry.start_reconfigure_flow(hass)
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"host": "127.0.0.1", "port": silent.port, "udl": UDL}
+        )
+        assert result["type"] is FlowResultType.SHOW_PROGRESS
+        assert entry.state is config_entries.ConfigEntryState.NOT_LOADED
+        hass.config_entries.flow.async_abort(result["flow_id"])  # the screen is closed
+        await hass.async_block_till_done()
+        await wait_for(lambda: entry.state is config_entries.ConfigEntryState.LOADED)
+        await wait_for(lambda: entry.runtime_data.connected)
+        assert entry.data["port"] == fake.port  # nothing changed
+        assert await hass.config_entries.async_unload(entry.entry_id)
+    finally:
+        await silent.close()
 
 
 async def test_reconfigure_refuses_another_panels_address(hass, fake):

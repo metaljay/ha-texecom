@@ -1,0 +1,109 @@
+blueprint:
+  name: "Texecom: ask to set the alarm when everyone leaves"
+  description: >-
+    When nobody has been home for a few minutes and the alarm is off, your
+    phone asks whether to set it to **Away**, with a **Set the alarm** button.
+    Nothing happens unless you tap it. Use this instead of "arm when everyone
+    leaves" if you'd rather decide each time.
+  domain: automation
+  author: metaljay
+  source_url: https://github.com/metaljay/ha-texecom/blob/main/blueprints/automation/texecom/ask_when_everyone_leaves.yaml
+  homeassistant:
+    min_version: 2025.3.0
+  input:
+    alarm:
+      name: Alarm
+      description: The alarm to set.
+      selector:
+        entity:
+          filter:
+            - integration: texecom
+              domain: alarm_control_panel
+    notify_device:
+      name: Phone
+      description: The phone to ask. It needs the Home Assistant app.
+      selector:
+        device:
+          filter:
+            - integration: mobile_app
+    occupancy:
+      name: Who's home
+      description: >-
+        What tells Home Assistant whether anyone's home. **Home** counts the
+        people whose phones run the Home Assistant app. You can also choose a
+        person, a group of people, or a toggle such as "Occupancy". The house
+        counts as empty when this isn't home, on, or a number above 0.
+      default: zone.home
+      selector:
+        entity:
+          filter:
+            - domain: [zone, person, group, input_boolean, binary_sensor, device_tracker]
+    minutes:
+      name: Wait before asking
+      description: How long the house must be empty first, so a quick trip to the bins doesn't ask.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: minutes
+    answer_within:
+      name: The button works for
+      description: After this, tapping it does nothing (so an old notification can't set the alarm later).
+      default: 30
+      selector:
+        number:
+          min: 5
+          max: 240
+          unit_of_measurement: minutes
+
+mode: single
+max_exceeded: silent
+
+trigger_variables:
+  occupancy: !input occupancy
+
+triggers:
+  - trigger: template
+    # Empty: not "home"/"on" and not a count above 0. Unknown or unavailable
+    # (e.g. a restart) never counts as empty.
+    value_template: >-
+      {% set s = states(occupancy) | lower %}
+      {{ s not in ['home', 'on', 'unknown', 'unavailable', 'none', ''] and (s | int(0)) == 0 }}
+    for:
+      minutes: !input minutes
+
+conditions:
+  - condition: state
+    entity_id: !input alarm
+    state: disarmed
+
+actions:
+  - variables:
+      alarm: !input alarm
+      # A new button each time, so an old notification's button does nothing.
+      button: "{{ 'TEXECOM_SET_ALARM_' ~ (as_timestamp(now()) | int) }}"
+  - domain: mobile_app
+    type: notify
+    device_id: !input notify_device
+    title: "Set the alarm?"
+    message: "Everyone's out, and {{ state_attr(alarm, 'friendly_name') }} is off."
+    data:
+      actions:
+        - action: "{{ button }}"
+          title: "Set the alarm"
+  - wait_for_trigger:
+      - trigger: event
+        event_type: mobile_app_notification_action
+        event_data:
+          action: "{{ button }}"
+    timeout:
+      minutes: !input answer_within
+    continue_on_timeout: false
+  # Someone may have come home, or set it, in the meantime.
+  - condition: state
+    entity_id: !input alarm
+    state: disarmed
+  - action: alarm_control_panel.alarm_arm_away
+    target:
+      entity_id: !input alarm

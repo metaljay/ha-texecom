@@ -26,6 +26,9 @@ idle-time state re-read is the model for the keep-alive here. Area flag
 numbers beyond texecom2mqtt's (17/18 Entry, 19 Exit, 24 Part Arming) and the
 behaviour of firmware that refuses bulk area-flag reads come from a further
 Apache-2.0 fork: https://github.com/southseaboy/texecom-connect
+That fork is also the source of the names of every area flag, event-log type
+and log group (connect/protocol.py: AREA_FLAG_NAMES, LOG_EVENT_NAMES,
+LOG_GROUP_NAMES) and of the "get system flags" command number.
 
 Handling of NAK replies to reads (the panel refuses commands right after a
 burst of events; taken as data a 0x15 reads as "zone active" or "area in

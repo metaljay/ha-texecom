@@ -135,6 +135,24 @@ async def test_zone_events_and_initial_state(fake):
         await panel.stop()
 
 
+async def test_ready_to_arm_follows_the_panel(fake, monkeypatch):
+    from custom_components.texecom.connect import panel as connect_panel
+
+    monkeypatch.setattr(connect_panel, "READY_CHECK_DELAY", 0.05)
+    panel = await make_panel(fake)
+    try:
+        assert panel.reports_ready and panel.areas[1].ready is True  # disarmed, nothing open
+        fake.set_zone(2, 1)  # a door opens: re-read once zones settle
+        await wait_for(lambda: panel.areas[1].ready is False)
+        fake.set_zone(2, 0)
+        await wait_for(lambda: panel.areas[1].ready is True)
+        fake.ready = False  # whatever the panel says goes
+        fake.set_zone(3, 0)
+        await wait_for(lambda: panel.areas[1].ready is False)
+    finally:
+        await panel.stop()
+
+
 async def test_arm_night_uses_mapped_part_arm_then_disarm(fake):
     panel = await make_panel(fake)
     try:
@@ -274,6 +292,69 @@ async def test_system_tampers(fake):
         assert events[0] == ("tamper", {"source": "Panel Box Tamper", "log_type": 60})
         fake.send_log(60, 12, 0, areas=0)  # lid back on
         await wait_for(lambda: panel.extra.get("tampers") == {"Auxiliary Tamper"})
+    finally:
+        await panel.stop()
+
+
+async def test_simulated_panel_commands(fake):
+    """The --commands mode of the simulated panel, used to try things on a test
+    Home Assistant: each command reaches the driver as a real panel's would."""
+    from fake_connect_panel import run_command
+
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        assert run_command(fake, "zone 2 open") == "ok: zone 2 open"
+        await wait_for(lambda: panel.zones[2].active)
+        run_command(fake, "lid open")
+        await wait_for(lambda: panel.extra.get("tampers") == {"Panel Box Tamper"})
+        run_command(fake, "Mains Off")
+        await wait_for(lambda: panel.extra.get("faults") == {"AC Fail"})
+        run_command(fake, "user 3")
+        run_command(fake, "armfail 3")
+        await wait_for(lambda: [t for t, _d in events] == ["tamper", "fault", "user", "arm_failed"])
+        run_command(fake, "area part 2")
+        await wait_for(lambda: panel.areas[1].state == ARMED_HOME)
+        run_command(fake, "refuse disarm")
+        with pytest.raises(PanelError, match="refused"):
+            await panel.disarm(1)
+        assert run_command(fake, "zone two open") == "? numbers only: 'zone two open'"
+        assert run_command(fake, "sound the bells").startswith("? 'sound the bells'\nCommands")
+    finally:
+        await panel.stop()
+
+
+def test_flag_and_log_names():
+    flags = bytearray(72)
+    flags[P.FLAG_ARMED] = flags[P.FLAG_FULL_ARMED] = 0b01  # area 1
+    flags[39] = 0b10  # area 2: chime enabled
+    assert P.area_flags_set(bytes(flags), 1, 24) == [21, 22]
+    assert P.flag_names([21, 22]) == ["21 Armed", "22 Full Armed"]
+    assert P.flag_names(P.area_flags_set(bytes(flags), 2, 24)) == ["39 Chime Enabled"]
+    assert len(P.AREA_FLAG_NAMES) == 73 and P.AREA_FLAG_NAMES[16] == "Ready"
+    m = {"type": 85, "group": 0, "parameter": 3, "areas": 1}
+    assert P.describe_log(m) == "Arm Failed (85), group Not Reported (0), parameter 3, areas 0x1"
+    assert P.describe_log({**m, "type": 137}).startswith("unknown (137)")
+
+
+async def test_diagnostics_name_the_flags_and_read_the_system_flags(fake, caplog):
+    caplog.set_level("DEBUG", logger="custom_components.texecom")
+    fake.system_flags = bytes([0, 4, 0, 0, 0, 0, 0, 0])
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        await panel.refresh_areas()
+        diagnostics = await panel.async_diagnostics()
+        assert diagnostics["area_flags"] == {1: ["21 Armed", "22 Full Armed"]}
+        assert diagnostics["system_flags"] == "00 04 00 00 00 00 00 00"
+        assert "area 1 flags: 21 Armed, 22 Full Armed" in caplog.text
+        # A panel that doesn't answer it: diagnostics say so, and the session carries on.
+        connections = fake.connections
+        fake.ignore_next[P.CMD_GET_SYSTEM_FLAGS] = 1
+        diagnostics = await panel.async_diagnostics()
+        assert diagnostics["system_flags"].startswith("unreadable")
+        assert panel.connected and fake.connections == connections
     finally:
         await panel.stop()
 

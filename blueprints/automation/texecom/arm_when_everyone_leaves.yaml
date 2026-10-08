@@ -1,0 +1,74 @@
+blueprint:
+  name: "Texecom: arm when everyone leaves"
+  description: >-
+    Sets the alarm to **Away** when nobody has been home for a few minutes, as
+    long as it's off. It never disarms: do that at the keypad, or in Home
+    Assistant with its alarm code.
+  domain: automation
+  author: metaljay
+  source_url: https://github.com/metaljay/ha-texecom/blob/main/blueprints/automation/texecom/arm_when_everyone_leaves.yaml
+  homeassistant:
+    min_version: 2025.3.0
+  input:
+    alarm:
+      name: Alarm
+      description: The alarm to arm.
+      selector:
+        entity:
+          filter:
+            - integration: texecom
+              domain: alarm_control_panel
+    occupancy:
+      name: Who's home
+      description: >-
+        What tells Home Assistant whether anyone's home. **Home** counts the
+        people whose phones run the Home Assistant app. You can also choose a
+        person, a group of people, or a toggle such as "Occupancy". The house
+        counts as empty when this isn't home, on, or a number above 0.
+      default: zone.home
+      selector:
+        entity:
+          filter:
+            - domain: [zone, person, group, input_boolean, binary_sensor, device_tracker]
+    minutes:
+      name: Wait before arming
+      description: How long the house must be empty first, so a quick trip to the bins doesn't arm it.
+      default: 5
+      selector:
+        number:
+          min: 1
+          max: 60
+          unit_of_measurement: minutes
+    then:
+      name: Then also (optional)
+      description: For example, send a notification to your phone saying the alarm is set.
+      default: []
+      selector:
+        action: {}
+
+mode: single
+
+trigger_variables:
+  occupancy: !input occupancy
+
+triggers:
+  - trigger: template
+    # Empty: not "home"/"on" and not a count above 0. Unknown or unavailable
+    # (e.g. a restart) never counts as empty.
+    value_template: >-
+      {% set s = states(occupancy) | lower %}
+      {{ s not in ['home', 'on', 'unknown', 'unavailable', 'none', ''] and (s | int(0)) == 0 }}
+    for:
+      minutes: !input minutes
+
+conditions:
+  - condition: state
+    entity_id: !input alarm
+    state: disarmed
+
+actions:
+  - action: alarm_control_panel.alarm_arm_away
+    target:
+      entity_id: !input alarm
+  - choose: []
+    default: !input then

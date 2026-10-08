@@ -89,3 +89,17 @@ async def test_zone_activity_and_bypass(hass, fake):
     await wait_for(lambda: not is_on(hass, "binary_sensor.texecom_hallway"))
     assert hass.states.get("binary_sensor.texecom_hallway").attributes["bypassed"] is True
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_ready_to_arm(hass, fake):
+    entry = await setup_connect(hass, fake)
+    ready = "binary_sensor.texecom_house_ready_to_arm"
+    assert hass.states.get(ready).state == "on"
+    assert hass.states.get(ready).attributes["friendly_name"] == "House Alarm Ready to arm"
+    assert hass.states.get(ready).attributes["open_zones"] == []
+    fake.set_zone(1, 1)  # the front door opens
+    await wait_for(lambda: hass.states.get(ready).state == "off")
+    assert hass.states.get(ready).attributes["open_zones"] == ["Front Door"]
+    fake.set_zone(1, 0)
+    await wait_for(lambda: hass.states.get(ready).state == "on")
+    assert await hass.config_entries.async_unload(entry.entry_id)

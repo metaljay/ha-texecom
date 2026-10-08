@@ -102,3 +102,34 @@ async def test_alarm_memory_doesnt_blame_a_zone_for_a_later_alarm(hass, fake):
     fake.set_zone(2, 0x11)  # the Hallway sets it off
     await wait_for(lambda: hass.states.get(ALARM).attributes["changed_by"] == "Hallway")
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_arming_while_not_connected_says_so(hass, fake):
+    entry = await setup_connect(hass, fake)
+    entry.runtime_data.set_connected(False)  # e.g. while the SmartCom reports an alarm
+    with pytest.raises(HomeAssistantError) as err:
+        await call(hass, "alarm_arm_away")
+    assert err.value.translation_key == "not_connected"
+    entry.runtime_data.set_connected(True)
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_a_refusal_says_so(hass, fake):
+    entry = await setup_connect(hass, fake)
+    fake.nak_next[P.CMD_ARM_AREA] = 1  # the panel says no
+    with pytest.raises(HomeAssistantError) as err:
+        await call(hass, "alarm_arm_away")
+    assert err.value.translation_key == "refused"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_changed_by_uses_keypad_user_names(hass, fake):
+    entry = await setup_connect(hass, fake, options={"user_names": {"3": "Sam"}})
+    fake.send_user(3)
+    fake.set_area(3)
+    await wait_for(lambda: state(hass) == "armed_away")
+    assert hass.states.get(ALARM).attributes["changed_by"] == "Sam"
+    fake.send_user(4)  # no name given: stays "User 4"
+    fake.set_area(0)
+    await wait_for(lambda: hass.states.get(ALARM).attributes["changed_by"] == "User 4")
+    assert await hass.config_entries.async_unload(entry.entry_id)

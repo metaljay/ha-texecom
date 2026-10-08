@@ -13,7 +13,7 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.event import async_track_time_interval
 
-from .const import CLOCK_DRIFT_LIMIT, CONF_SERIAL_DEVICE, DOMAIN
+from .const import CLOCK_DRIFT_LIMIT, CONF_SERIAL_DEVICE, DOMAIN, HELP_OFFLINE
 from .panel import TexecomPanel
 
 OFFLINE_ISSUE_AFTER = 15 * 60  # seconds without a connection before Repairs says so
@@ -91,6 +91,7 @@ def watch_connection(hass: HomeAssistant, entry: ConfigEntry, panel: TexecomPane
                 "address": address,
                 "minutes": str(round(minutes)),
                 "error": getattr(panel, "last_error", None) or "no reply",
+                "help": HELP_OFFLINE,
             },
         )
 
