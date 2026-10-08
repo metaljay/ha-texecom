@@ -42,7 +42,7 @@ It's the panel's own answer, checked a moment after doors and sensors change whi
 
 ## The Alarm dashboard
 
-<img src="../images/dashboard.png" width="760" alt="The Alarm dashboard: the alarm with Away, Night, Home and Off buttons, recent activity, panel health, and every zone grouped by type">
+<img src="../images/dashboard.png" width="760" alt="The Alarm dashboard: the alarm with its Away, Night and Off buttons, Ready to arm, recent activity, panel health, and every zone grouped by type">
 
 If you left the box ticked during setup, **Alarm** is in the sidebar: the arm buttons, **Ready to arm**, the last day's activity, panel health and every zone grouped by type. It's built from Home Assistant's own cards, so you can edit it like any dashboard.
 
@@ -51,6 +51,8 @@ To build it again (for example after adding zones), use **Configure → Create o
 ## Options
 
 Open **Settings → Devices & services → Texecom → ⚙️ Configure**, and pick what to change:
+
+<img src="../images/options.png" width="420" alt="The Texecom options menu: Night and Home buttons, Home Assistant alarm code, Names for keypad users, Notifications, Panel clock, Read zones and areas from the panel again, Create or refresh the Alarm dashboard">
 
 | In the menu | What it does |
 |---|---|
@@ -61,6 +63,8 @@ Open **Settings → Devices & services → Texecom → ⚙️ Configure**, and p
 | **Panel clock** | **Keep the panel clock right**: once a day (and on connecting), sets the panel's clock if it's more than a minute out, in Home Assistant's time zone (so British Summer Time is handled). *Reconnects to the panel* |
 | **Read zones and areas from the panel again** | After your installer adds or renames zones. It happens by itself when engineer programming ends, too |
 | **Create or refresh the Alarm dashboard** | Builds the dashboard again from the current zones (it asks first, because any changes you made to it are replaced) |
+
+<img src="../images/keypad-names.png" width="420" alt="Names for keypad users: one per line, such as 3 = Sam, with the option to fill in the names stored in the panel">
 
 To change the SmartCom's address or the UDL code, use **⋮ → Reconfigure** on the same page.
 
@@ -74,6 +78,8 @@ Besides the **Alarm not set** notification (the alarm couldn't arm because a zon
 |---|---|---|
 | **Alarm panel on battery** | The panel has lost its mains power | The mains is back |
 | **Alarm tamper** | A tamper is open, with what to check (e.g. *the panel's lid is open*, or *a detector's cover is open*) | It's closed again |
+
+<img src="../images/notifications.png" width="420" alt="Home Assistant's notifications: Alarm not set (Kitchen was active when the exit time ended), Alarm panel on battery, and Alarm tamper (the panel's lid is open)">
 
 Turn either off in **Configure → Notifications**. These appear in Home Assistant itself; to be told on your phone, see [Automations](automations.md#tell-me-about-the-alarm-on-my-phone). All three need **Texecom Connect**: a [Crestron](crestron.md) connection doesn't report them.
 

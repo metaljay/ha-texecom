@@ -8,7 +8,7 @@ Use your Texecom **Premier Elite** alarm from **Home Assistant** (and Apple Home
 
 > **Unofficial.** Not made or supported by Texecom. Tested on a Premier Elite 24 (firmware V6.05.03) with a SmartCom. **Tried it on another panel? [Tell us how it went](https://github.com/metaljay/ha-texecom/issues/new?template=1-tested.yml)**, even if it all worked.
 
-<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/dashboard.png" width="760" alt="The Alarm dashboard: the alarm with Away, Night, Home and Off buttons, recent activity, panel health, and every zone grouped by type">
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/dashboard.png" width="760" alt="The Alarm dashboard: the alarm with its Away, Night and Off buttons, Ready to arm, recent activity, panel health, and every zone grouped by type">
 
 ## ✨ What you get
 
@@ -16,6 +16,7 @@ Use your Texecom **Premier Elite** alarm from **Home Assistant** (and Apple Home
 - 🚪 **A sensor for every zone**, named as on your panel: doors, windows, motion, smoke and gas.
 - 📋 **A ready-made Alarm dashboard**, built for you at the end of setup.
 - 🔋 **Panel health**: connection, mains power, battery, tampers, and what the keypad says.
+- 👤 **Who did it**: *changed by Sam* rather than *User 3*, with names you give keypad users (or fill in from the names stored in the panel), and an activity list in plain words: *didn't arm: Kitchen was active*, *reported a tamper*…
 - 🔔 **Notifications** in Home Assistant when the alarm couldn't arm, the panel is on battery, or a tamper opens, saying what to check.
 - ⚡ **One-click automations**: arm when everyone leaves (or ask you first), and tell your phone when the alarm goes off. [Add them →](https://github.com/metaljay/ha-texecom/blob/main/docs/user/automations.md)
 - 🍏 **Apple Home** too, through Home Assistant's built-in HomeKit Bridge.

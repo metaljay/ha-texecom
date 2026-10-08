@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="512" height="512">
+  <title>Texecom for Home Assistant</title>
+  <rect width="200" height="200" rx="46" fill="#17245A"/>
+  <path d="M100 26 C82 39 62 47 38 50 Q32 51 32 58 V98 C32 140 60 163 100 180 C140 163 168 140 168 98 V58 Q168 51 162 50 C138 47 118 39 100 26 Z" fill="#FFFFFF"/>
+  <rect x="115.5" y="65" width="9" height="20" rx="1.5" fill="#2756BC"/>
+  <path d="M98.5 57 L139.5 96 H129.5 V133 Q129.5 136 126.5 136 H70.5 Q67.5 136 67.5 133 V96 H57.5 Z" fill="#2756BC"/>
+  <g fill="#FFFFFF"><circle cx="86.5" cy="99" r="5"/><circle cx="98.5" cy="99" r="5"/><circle cx="110.5" cy="99" r="5"/><circle cx="86.5" cy="112" r="5"/><circle cx="98.5" cy="112" r="5"/><circle cx="110.5" cy="112" r="5"/><circle cx="86.5" cy="125" r="5"/><circle cx="98.5" cy="125" r="5"/><circle cx="110.5" cy="125" r="5"/></g>
+</svg>
