@@ -61,8 +61,9 @@ class ConnectClient:
 
     on_message(dict) gets each decoded unsolicited message; on_close(reason)
     is called once when the session ends for any reason other than close().
-    on_idle() runs when no command has been sent for `keepalive` seconds and
-    must send at least one (the panel drops idle sessions).
+    on_idle() runs every `keepalive` seconds (whether or not other commands
+    were sent meanwhile) and must send at least one (the panel drops idle
+    sessions).
     """
 
     def __init__(
@@ -239,8 +240,13 @@ class ConnectClient:
 
     async def _keepalive_loop(self) -> None:
         loop = asyncio.get_running_loop()
+        last_idle = loop.time()
         while not self._closed:
-            wait = self._last_command + self.timing.keepalive - loop.time()
+            # Every interval, even when other commands were sent meanwhile:
+            # re-reading "ready" as zones change (people moving about) would
+            # otherwise put off the state, power and keypad reads for as long
+            # as it lasts, and the mains coming back is only seen in those.
+            wait = min(self._last_command, last_idle) + self.timing.keepalive - loop.time()
             if wait > 0:
                 await asyncio.sleep(wait)
                 continue
@@ -256,7 +262,7 @@ class ConnectClient:
             except Exception:
                 self._log.exception("Connect: keep-alive error")
             # Whatever happened, don't spin: wait at least a full interval.
-            self._last_command = max(self._last_command, loop.time())
+            self._last_command = last_idle = max(self._last_command, loop.time())
 
     # ─── Reads ──────────────────────────────────────────────────────────────
 

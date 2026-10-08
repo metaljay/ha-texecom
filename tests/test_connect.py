@@ -43,9 +43,10 @@ async def make_panel(fake: FakeConnectPanel, **kwargs) -> ConnectPanel:
 
     info, zones, areas = await discover(client)
     await client.close()
+    timing = kwargs.pop("timing", FAST)
     opts = {"part_arms": {"night": 1, "home": 0}, **kwargs}
     panel = ConnectPanel(
-        "127.0.0.1", fake.port, "1234", info=info, zones=zones, areas=areas, timing=FAST, reconnect_min=0.05, **opts
+        "127.0.0.1", fake.port, "1234", info=info, zones=zones, areas=areas, timing=timing, reconnect_min=0.05, **opts
     )
     await panel.start()
     await wait_for(lambda: panel.connected)
@@ -149,6 +150,31 @@ async def test_ready_to_arm_follows_the_panel(fake, monkeypatch):
         fake.ready = False  # whatever the panel says goes
         fake.set_zone(3, 0)
         await wait_for(lambda: panel.areas[1].ready is False)
+    finally:
+        await panel.stop()
+
+
+async def test_zones_changing_dont_hold_up_the_regular_reads(fake, monkeypatch):
+    """Re-reading "ready" as zones change mustn't put off the regular reads
+    (the mains coming back is only seen in the power reading), as it did
+    while people moved about in front of the detectors."""
+    from custom_components.texecom.connect import panel as connect_panel
+
+    monkeypatch.setattr(connect_panel, "READY_CHECK_DELAY", 0.05)
+    panel = await make_panel(fake, timing=Timing(command_timeout=0.3, command_attempts=2, keepalive=0.5, login_delay=0))
+    try:
+        fake.on_battery = True
+        fake.send_log(47, 9, 0, areas=0)  # AC Fail
+        await wait_for(lambda: panel.extra.get("faults") == {"AC Fail"})
+        fake.on_battery = False  # mains back: not logged, only in the readings
+        loop = asyncio.get_running_loop()
+        end = loop.time() + 3
+        while panel.extra.get("faults") and loop.time() < end:
+            fake.set_zone(3, 1)  # someone walking about, disarmed
+            await asyncio.sleep(0.1)
+            fake.set_zone(3, 0)
+            await asyncio.sleep(0.1)
+        assert panel.extra["faults"] == set()
     finally:
         await panel.stop()
 
