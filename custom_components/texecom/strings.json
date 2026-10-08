@@ -194,7 +194,11 @@
         "title": "Names for keypad users",
         "description": "When someone uses a keypad, the alarm says who: *changed by User 3*. Give users names to see *changed by Sam* instead.\n\nOne user per line, the number then the name, for example:\n`1 = Sam`\n`3 = Alex`\n\nThe numbers are the ones your installer gave each code.",
         "data": {
-          "user_names": "Names"
+          "user_names": "Names",
+          "read_names": "Fill in the names stored in the panel"
+        },
+        "data_description": {
+          "read_names": "Adds the users your installer named, for you to check before saving. Names you've already given are kept. The panel sends each user's code along with the name: Home Assistant drops the codes at once, without keeping or logging them."
         }
       },
       "notices": {
@@ -233,7 +237,9 @@
     "error": {
       "same_part_arm": "Night and Home can't use the same part arm.",
       "invalid_code_format": "Use digits only.",
-      "invalid_user_names": "Use one user per line, the number then the name, like `3 = Sam`."
+      "invalid_user_names": "Use one user per line, the number then the name, like `3 = Sam`.",
+      "read_names_failed": "Couldn't read the users from the panel just now (it may be busy). Try again in a minute.",
+      "no_user_names": "The panel has no named users. Type the names in instead."
     },
     "abort": {
       "rediscovered": "Read the panel again. Zones in use: {zones}. Areas: {areas}. Home Assistant reconnects to use them, which can take up to a minute.",

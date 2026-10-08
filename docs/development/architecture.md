@@ -80,7 +80,7 @@ All paths are under `custom_components/texecom/`.
 | `dashboard.py` | Builds the Alarm dashboard from Home Assistant's own cards |
 | `diagnostics.py` | The diagnostics download (codes and address removed) |
 | `logbook.py` | Describes each `texecom_event` in plain words in the activity list (the Logbook), against the area's alarm: *House Alarm was set off by Kitchen* |
-| `users.py` | Names for keypad users: reading and writing the option's text (`3 = Sam`, one per line), and *User 3* → *Sam* |
+| `users.py` | Names for keypad users: reading and writing the option's text (`3 = Sam`, one per line), and *User 3* → *Sam*. Filling them in from the panel is `connect/discovery.py` (`async_read_user_names`), offered by the names form in `flows/options.py` |
 | `icons.json` | Entity icons, by translation key and state (e.g. *Mains power* off shows a crossed-out plug) |
 | `config_flow.py` | `TexecomConfigFlow`: the first menu, the arm modes step both protocols end on, and the flow class Home Assistant registers |
 | `flows/connect.py` | The Texecom Connect setup screen, and *Connecting to your panel…* (a progress screen) while it checks |

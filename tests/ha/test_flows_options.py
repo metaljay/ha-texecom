@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 
+from fake_connect_panel import FAKE_USERS
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -70,6 +71,8 @@ async def test_the_menu_for_crestron(hass):
     result = await options(hass, entry, "status_poll", status_poll=120)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == {"night_part_arm": 1, "home_part_arm": 0, "status_poll": 120}
+    result = await open_options(hass, entry, "user_names")
+    assert [str(k) for k in result["data_schema"].schema] == ["user_names"]  # can't read names over Crestron
 
 
 async def test_night_and_home_buttons_reconnect(hass, fake):
@@ -103,6 +106,38 @@ async def test_alarm_code_applies_without_reconnecting(hass, fake):
     assert hass.states.get(ALARM).attributes["code_format"] == "number"
     assert hass.states.get(ALARM).attributes["code_arm_required"] is True
     assert fake.connections == connections  # no reconnect
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_names_can_be_filled_in_from_the_panel(hass, fake, caplog):
+    caplog.set_level("DEBUG", logger="custom_components.texecom")
+    entry = await setup_connect(hass, fake)
+    result = await open_options(hass, entry, "user_names")
+    assert [str(k) for k in result["data_schema"].schema] == ["user_names", "read_names"]
+    # Names already given are kept; the panel's fill in the rest, to check before saving.
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"user_names": "3 = Alex", "read_names": True}
+    )
+    assert result["type"] is FlowResultType.FORM and result["errors"] == {}
+    text = next(f for f in result["data_schema"].schema if f == "user_names").description["suggested_value"]
+    assert text == "0 = Engineer\n1 = Master\n3 = Alex"
+    result = await hass.config_entries.options.async_configure(result["flow_id"], {"user_names": text})
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["user_names"] == {"0": "Engineer", "1": "Master", "3": "Alex"}
+    for _name, code in FAKE_USERS.values():
+        assert code not in caplog.text and code not in str(entry.options)
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_filling_in_names_when_the_panel_is_busy(hass, fake):
+    entry = await setup_connect(hass, fake)
+    fake.ignore_next[P.CMD_GET_USER] = 1
+    result = await options(hass, entry, "user_names", user_names="3 = Alex", read_names=True)
+    assert result["type"] is FlowResultType.FORM and result["errors"] == {"base": "read_names_failed"}
+    fake.users = {}
+    result = await options(hass, entry, "user_names", user_names="3 = Alex", read_names=True)
+    assert result["errors"] == {"base": "no_user_names"}
+    assert "user_names" not in entry.options  # nothing saved
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
