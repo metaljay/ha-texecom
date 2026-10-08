@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/icon.png" width="96" align="right" alt="">
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/icon.png?v=2" width="96" align="right" alt="">
 
 # Texecom Premier Elite for Home Assistant
 
@@ -8,7 +8,7 @@ Use your Texecom **Premier Elite** alarm from **Home Assistant** (and Apple Home
 
 > **Unofficial.** Not made or supported by Texecom. Tested on a Premier Elite 24 (firmware V6.05.03) with a SmartCom. **Tried it on another panel? [Tell us how it went](https://github.com/metaljay/ha-texecom/issues/new?template=1-tested.yml)**, even if it all worked.
 
-<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/dashboard.png" width="760" alt="The Alarm dashboard: the alarm with its Away, Night and Off buttons, Ready to arm, recent activity, panel health, and every zone grouped by type">
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/dashboard.png?v=2" width="760" alt="The Alarm dashboard: the alarm with its Away, Night and Off buttons, Ready to arm, recent activity, panel health, and every zone grouped by type">
 
 ## ✨ What you get
 
