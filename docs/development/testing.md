@@ -58,9 +58,11 @@ The Home Assistant tests have one file per module (see [Architecture](architectu
 |---|---|
 | `set_zone(n, bits)` | A zone changing (`0x01` active, `0x02` tamper, `0x11` active and alarmed, `0x20` bypassed) |
 | `set_area(state, part_arm=None)` | The area changing (`0` disarmed, `1` exit, `2` entry, `3` armed, `4` part armed, `5` alarm) |
+| `send_zone_alarm(n)` | Zone *n*'s alarm log entry, typed as a real panel types it (1 for an entry/exit zone, 3 for an interior one) |
 | `send_user(n)` | A user entering a code at a keypad |
 | `send_log(type, group, parameter, areas=1)` | An event-log entry (e.g. `send_log(85, 0, 3)`: arm failed, zone 3 active) |
 | `drop_all(alarm=True)` | Hanging up, as when the SmartCom reports an alarm |
+| `exit_delay` | Seconds from an arm to armed; `0` arms at once, with no exit time |
 | `nak_next[command] = n` | Refusing the next *n* of a command (a busy panel) |
 | `ignore_next[command] = n` | Not answering the next *n* |
 | `on_battery = True` / `power_override = bytes` | Power readings on battery, or any raw reading |

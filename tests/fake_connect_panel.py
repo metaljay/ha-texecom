@@ -114,6 +114,12 @@ class FakeConnectPanel:
         )
         self.send(bytes([P.MSG_LOG, log_type, group, parameter, areas]) + struct.pack("<I", ts))
 
+    def send_zone_alarm(self, number: int) -> None:
+        """The zone-alarm log entry. Its type is the zone's type, as on a real
+        panel: 1 for an entry/exit zone, 3 for an interior one..."""
+        zone_type = next((t for n, _name, t in self.zone_list if n == number), 3)
+        self.send_log(zone_type, 3, number)
+
     def send_user(self, user: int) -> None:
         self.send(bytes([P.MSG_USER, user, 0]))
 
@@ -236,7 +242,7 @@ class FakeConnectPanel:
 
 
 COMMANDS = """Commands, one per line:
-  zone N open|closed|tamper|alarm    zone N changes (alarm: active and alarmed)
+  zone N open|closed|tamper|alarm    zone N changes (alarm: active and alarmed, and logged)
   area off|exit|entry|armed|alarm    the area changes
   area part N                        the area is part armed with part arm N
   user N                             user N enters a code at a keypad
@@ -261,6 +267,8 @@ def run_command(panel: FakeConnectPanel, line: str) -> str:
         match words:
             case ["zone", n, state] if state in ZONE_BITS:
                 panel.set_zone(int(n), ZONE_BITS[state])
+                if state == "alarm":
+                    panel.send_zone_alarm(int(n))
             case ["area", "part", n]:
                 panel.set_area(4, int(n))
             case ["area", state] if state in AREA_STATES:

@@ -444,6 +444,26 @@ async def test_simulated_panel_commands(fake):
         await panel.stop()
 
 
+async def test_simulated_zone_alarm_is_logged_as_a_real_panel_logs_it(fake):
+    """`zone N alarm` sends the zone-alarm log too, typed as on a real panel:
+    1 for the entry/exit zone, 3 for the others."""
+    from fake_connect_panel import run_command
+
+    logged, send_log = [], fake.send_log
+    fake.send_log = lambda *args, **kwargs: (logged.append(args), send_log(*args, **kwargs))
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        run_command(fake, "zone 1 alarm")
+        run_command(fake, "zone 3 alarm")
+        await wait_for(lambda: len(events) == 2)
+        assert logged == [(1, 3, 1), (3, 3, 3)]
+        assert [d["zone_name"] for _t, d in events] == ["Hallway", "Kitchen"]
+        assert panel.zones[3].active
+    finally:
+        await panel.stop()
+
+
 def test_flag_and_log_names():
     flags = bytearray(72)
     flags[P.FLAG_ARMED] = flags[P.FLAG_FULL_ARMED] = 0b01  # area 1
