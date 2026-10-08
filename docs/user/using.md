@@ -117,6 +117,10 @@ The Home app can't ask for a code, and HomeKit Bridge only passes one on if it's
 - 🕐 **The panel clock** resets if the panel loses all power (mains and battery). Home Assistant notices and offers to fix it (see [Troubleshooting](troubleshooting.md#the-panel-clock-is-wrong)).
 - 📟 **Keypad display** shows what the keypads say (e.g. *System Alerts!*), without the clock.
 
+## More than one area
+
+If your panel has more than one area (the house and a garage, say), each gets its own alarm and **Ready to arm**, armed and disarmed on its own. *Changed by* and the zone that set an alarm off are worked out for each area, and **Alarm not set** stays until the area that didn't arm is armed. The **Night** and **Home** buttons use the same part arms in every area. Over [Crestron](crestron.md), only the first area can be part armed.
+
 ## Build the dashboard yourself
 
 The ready-made dashboard only uses built-in cards. If your Home Assistant can't create it (the option shows an error), add a dashboard, open **⋮ → Raw configuration editor**, and paste this, changing the entity names to yours:
