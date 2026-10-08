@@ -35,7 +35,7 @@ from .client import ConnectClient, ConnectError, HostLog, LoginRejected, PanelBu
 from .clock import ClockMixin
 from .conditions import ConditionsMixin, InternalAlarm
 from .discovery import RediscoveryMixin
-from .events import USER_CHANGE_WINDOW, EventsMixin
+from .events import USER_CHANGE_WINDOW, Credit, EventsMixin
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -90,7 +90,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._stopped = False
         self._closed_event = asyncio.Event()
         self._last_part_arm: int | None = None
-        self._last_user: tuple[str, float] | None = None
+        self._last_user: Credit | None = None  # who to name for the next arm or disarm (events.py)
         self._recent_alarms: dict[tuple[int, bool], float] = {}
         self._alarm_zones: dict[int, tuple[str, float]] = {}  # area -> the zone that set its alarm off, and when
         self._switching: dict[int, float] = {}  # area -> end of a mode switch's grace
@@ -379,7 +379,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         client = self._ready_client()
         current = self.areas[area].state
         self._requested_mode[area] = mode
-        credit = self._last_user = ("Home Assistant", time.monotonic())
+        credit = self._last_user = Credit("Home Assistant", time.monotonic(), area)
         try:
             if current not in (DISARMED, ARMING, PENDING, TRIGGERED):
                 # Switching mode: the panel reports "disarmed" for a moment
@@ -400,7 +400,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
     async def disarm(self, area: int) -> None:
         """Resets first when in alarm (as texecom2mqtt does)."""
         client = self._ready_client()
-        credit = self._last_user = ("Home Assistant", time.monotonic())
+        credit = self._last_user = Credit("Home Assistant", time.monotonic(), area)
         try:
             if self.areas[area].state == TRIGGERED:
                 await self._ok(client.reset(area, self.panel_zones), "reset")
@@ -409,7 +409,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
             self._drop_credit(credit)
             raise
 
-    def _drop_credit(self, credit: tuple[str, float]) -> None:
+    def _drop_credit(self, credit: Credit) -> None:
         """A request the panel didn't take explains nothing that happens next
         (unless a keypad code has come in since)."""
         if self._last_user is credit:

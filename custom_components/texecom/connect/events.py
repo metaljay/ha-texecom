@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import time
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 from ..panel import DISARMED, TRIGGERED, PanelArea, PanelZone, nice_name
@@ -28,6 +29,17 @@ USER_CHANGE_WINDOW = 60.0  # a keypad logon this recent explains an arm/disarm
 ZONE_ALARM_REPEAT = 30.0
 
 
+@dataclass
+class Credit:
+    """Who to name for the next arm or disarm: a keypad code (in any area,
+    once in each), or a request from Home Assistant (in its own area, once)."""
+
+    who: str
+    at: float
+    area: int | None = None  # Home Assistant's request: the area it was for
+    used: set[int] = field(default_factory=set)  # areas whose arm or disarm it has explained
+
+
 class EventsMixin:
     """Part of ConnectPanel: handles each message the panel sends."""
 
@@ -37,15 +49,21 @@ class EventsMixin:
     on_event: Callable[[str, dict[str, Any]], None]
     _log: HostLog
     _last_part_arm: int | None
-    _last_user: tuple[str, float] | None
+    _last_user: Credit | None
     _recent_alarms: dict[tuple[int, bool], float]
     _alarm_zones: dict[int, tuple[str, float]]  # area -> the zone that set its alarm off, and when
     _internal_alarms: dict[int, Any]
     _last_cause_at: float
 
-    def _recent_user(self) -> str | None:
-        if self._last_user and time.monotonic() - self._last_user[1] < USER_CHANGE_WINDOW:
-            return self._last_user[0]
+    def _recent_user(self, area: int) -> str | None:
+        credit = self._last_user
+        if (
+            credit
+            and time.monotonic() - credit.at < USER_CHANGE_WINDOW
+            and credit.area in (None, area)
+            and area not in credit.used
+        ):
+            return credit.who
         return None
 
     def _on_message(self, m: dict[str, Any]) -> None:
@@ -67,16 +85,16 @@ class EventsMixin:
                 self._log.debug("Connect: area %s reported state %s; re-reading", m["area"], m["state_code"])
                 self._refresh_areas_soon()
             elif m["state"] == "part armed":
-                self._apply_area(m["area"], "part armed", self._last_part_arm, self._recent_user())
+                self._apply_area(m["area"], "part armed", self._last_part_arm, self._recent_user(m["area"]))
                 self._refresh_areas_soon()  # confirm which part arm from the flags
             else:
-                self._apply_area(m["area"], m["state"], None, self._recent_user())
-            if m["state"] in ("disarmed", "armed", "part armed"):
+                self._apply_area(m["area"], m["state"], None, self._recent_user(m["area"]))
+            if m["state"] in ("disarmed", "armed", "part armed") and self._last_user:
                 # A code (or a request from Home Assistant) explains one arm
-                # or disarm, not whatever happens next.
-                self._last_user = None
+                # or disarm in each area, not whatever happens next.
+                self._last_user.used.add(m["area"])
         elif kind == "user":
-            self._last_user = (f"User {m['user']}", time.monotonic())
+            self._last_user = Credit(f"User {m['user']}", time.monotonic())
             self.on_event("user", {"user": m["user"], "method": m["method"]})
             if any(a.since is not None for a in self._internal_alarms.values()):
                 self._refresh_areas_soon()  # a code silences the internal alarm (conditions.py)

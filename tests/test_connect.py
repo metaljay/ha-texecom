@@ -962,3 +962,27 @@ async def test_each_area_names_the_zone_that_set_its_own_alarm_off(two_areas):
         assert panel.areas[1].changed_by == "Hallway"
     finally:
         await panel.stop()
+
+
+async def test_who_armed_or_disarmed_is_worked_out_for_each_area(two_areas):
+    """Home Assistant arming the house doesn't explain the garage arming at
+    the same time (a fob, say); one keypad code disarming both names the
+    user on both."""
+    fake = two_areas
+    fake.exit_delay = 1.0
+    panel = await make_panel(fake)
+    try:
+        await panel.arm(1, "away")  # the house: an exit delay
+        await wait_for(lambda: panel.areas[1].state == ARMING)
+        fake.set_area(3, area=2)  # meanwhile the garage arms, by a fob
+        await wait_for(lambda: panel.areas[2].state == ARMED_AWAY)
+        assert panel.areas[2].changed_by is None
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        assert panel.areas[1].changed_by == "Home Assistant"
+        fake.send_user(3)  # a code at a keypad disarms both
+        fake.set_area(0, area=1)
+        fake.set_area(0, area=2)
+        await wait_for(lambda: panel.areas[1].state == panel.areas[2].state == DISARMED)
+        assert (panel.areas[1].changed_by, panel.areas[2].changed_by) == ("User 3", "User 3")
+    finally:
+        await panel.stop()
