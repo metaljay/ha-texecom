@@ -64,6 +64,7 @@ The Home Assistant tests have one file per module (see [Architecture](architectu
 | `internal_alarm` | Area flags 44 *Internal Alarm* and 62 *Speaker Mimic* on or off |
 | `send_log(type, group, parameter, areas=1)` | An event-log entry (e.g. `send_log(85, 0, 3)`: arm failed, zone 3 active) |
 | `drop_all(alarm=True)` | Hanging up, as when the SmartCom reports an alarm |
+| `busy_after_alarm = seconds` (`report_after`) | Reporting an alarm as a real SmartCom does: `report_after` seconds (1.5) after the disarm that follows an alarm it hangs up, then turns logins away for `busy_after_alarm` seconds (about 120 on a real one) with frames the driver doesn't know and one with a bad CRC, then closes. `0` (the default): never |
 | `exit_delay` | Seconds from an arm to armed; `0` arms at once, with no exit time |
 | `nak_next[command] = n` | Refusing the next *n* of a command (a busy panel) |
 | `ignore_next[command] = n` | Not answering the next *n* |
@@ -82,7 +83,7 @@ python tests/fake_connect_panel.py 10001 --clock-reset   # its clock says 31 Oct
 python tests/fake_connect_panel.py 10001 --demo --commands   # and take commands (below)
 ```
 
-With `--commands` you type what the panel should do next: `lid open`, `aux open unlogged`, `mains off`, `user 3`, `armfail 4`, `zone 4 alarm`, `area alarm`, `drop`… (it prints the full list, `COMMANDS` in the file). That's how to try notifications, the activity list and the blueprints on a test Home Assistant without touching a real alarm. To send commands while it runs in the background, feed it from a file:
+With `--commands` you type what the panel should do next: `lid open`, `aux open unlogged`, `mains off`, `user 3`, `armfail 4`, `zone 4 alarm`, `area alarm`, `drop`, `busy 120`… (it prints the full list, `COMMANDS` in the file). That's how to try notifications, the activity list and the blueprints on a test Home Assistant without touching a real alarm. To send commands while it runs in the background, feed it from a file:
 
 ```bash
 touch fake.in

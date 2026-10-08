@@ -398,6 +398,30 @@ async def test_reconnects_after_the_panel_hangs_up(fake):
         await panel.stop()
 
 
+async def test_the_simulated_smartcom_is_busy_after_an_alarm(fake):
+    """As a real SmartCom: a moment after the disarm that follows an alarm it
+    hangs up to report the alarm, and turns logins away for a while (with
+    frames the driver doesn't know, then closing the connection)."""
+    from fake_connect_panel import run_command
+
+    run_command(fake, "busy 0.6")
+    fake.report_after = 0.05
+    panel = await make_panel(fake)
+    try:
+        run_command(fake, "area alarm")
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        connections = fake.connections
+        run_command(fake, "area off")
+        await wait_for(lambda: not panel.connected)
+        await asyncio.sleep(0.4)
+        assert not panel.connected and fake.connections > connections  # tried, and turned away
+        assert "closed the connection" in panel.last_error
+        await wait_for(lambda: panel.connected)  # let back in afterwards
+        assert panel.areas[1].state == DISARMED
+    finally:
+        await panel.stop()
+
+
 async def test_arm_failed_names_the_zone(fake):
     events = []
     panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))

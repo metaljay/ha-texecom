@@ -82,6 +82,11 @@ class FakeConnectPanel:
         # Area flags 44 Internal Alarm and 62 Speaker Mimic: the internal sounder going off, as for a
         # tamper while disarmed (seen on a real panel); a code at the keypad silences it.
         self.internal_alarm = False
+        # A SmartCom reports an alarm itself: about 1.5 s after the disarm that follows it, it hangs
+        # up, and turns logins away for about 2 minutes (seen on a real panel). 0: never.
+        self.busy_after_alarm = 0.0  # seconds logins are turned away
+        self.report_after = 1.5  # seconds from the disarm to hanging up
+        self.busy_until = 0.0  # loop time
         # GET_USER: {number: (name, code)} for users 1-24; the others are empty.
         # The codes are fakes, used to check that Home Assistant never keeps or logs one.
         self.users: dict[int, tuple[str, str]] = dict(FAKE_USERS)
@@ -118,8 +123,20 @@ class FakeConnectPanel:
         self.send(bytes([P.MSG_ZONE, number, state]))
 
     def set_area(self, state: int, part_arm: int | None = None) -> None:
+        if self.area_state == 5 and state == 0 and self.busy_after_alarm:
+            asyncio.get_running_loop().call_later(self.report_after, self._report_alarm)
         self.area_state, self.part_arm = state, part_arm
         self.send(bytes([P.MSG_AREA, 1, state]))
+
+    def _report_alarm(self) -> None:
+        """Hangs up to send its own alarm report, and is busy meanwhile."""
+        self.busy_until = asyncio.get_running_loop().time() + self.busy_after_alarm
+        for w in list(self.writers):
+            w.close()
+
+    @property
+    def busy(self) -> bool:
+        return asyncio.get_running_loop().time() < self.busy_until
 
     def send_log(self, log_type: int, group: int, parameter: int, areas: int = 1) -> None:
         now = datetime.now()
@@ -156,6 +173,9 @@ class FakeConnectPanel:
 
     async def _on_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.connections += 1
+        if self.busy:
+            await self._turn_away(reader, writer)
+            return
         self.writers.add(writer)
         parser = P.FrameParser(lambda f: self._on_frame(writer, f))
         try:
@@ -165,6 +185,21 @@ class FakeConnectPanel:
             pass
         finally:
             self.writers.discard(writer)
+            writer.close()
+
+    @staticmethod
+    async def _turn_away(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        """Busy reporting an alarm: a login gets 80-byte frames the driver
+        doesn't know, one with a bad CRC, then the connection closes (as a
+        real SmartCom did)."""
+        try:
+            await reader.read(1024)  # the login
+            unknown = P.encode_frame(0x41, 0, bytes(75))
+            writer.write(unknown + unknown[:-1] + bytes([unknown[-1] ^ 0xFF]))
+            await writer.drain()
+        except (ConnectionError, OSError):
+            pass
+        finally:
             writer.close()
 
     def _on_frame(self, writer: asyncio.StreamWriter, frame: P.Frame) -> None:
@@ -288,6 +323,8 @@ COMMANDS = """Commands, one per line:
   lid|aux open unlogged              the same, but the panel doesn't log it (seen once on a real panel)
   armfail N                          arming failed: zone N was active when the exit time ended
   drop                               hang up, as when the panel reports an alarm
+  busy N                             from now on, after an alarm is disarmed: hang up and turn logins
+                                     away for N seconds, as a SmartCom reporting the alarm (about 120)
   refuse arm|disarm                  say no to the next arm or disarm from Home Assistant
   log TYPE GROUP PARAMETER [AREAS]   any event-log entry"""
 
@@ -324,6 +361,8 @@ def run_command(panel: FakeConnectPanel, line: str) -> str:
                 panel.send_log(85, 0, int(n))
             case ["drop"]:
                 panel.drop_all()
+            case ["busy", seconds]:
+                panel.busy_after_alarm = float(seconds)
             case ["refuse", "arm" | "disarm" as what]:
                 panel.nak_next[P.CMD_ARM_AREA if what == "arm" else P.CMD_DISARM_AREA] = 1
             case ["log", log_type, group, parameter, *areas] if len(areas) <= 1:
