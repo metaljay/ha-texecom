@@ -35,8 +35,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> b
     # The panel device exists before the area and zone devices that link to it.
     dr.async_get(hass).async_get_or_create(config_entry_id=entry.entry_id, **panel_device_info(entry, panel))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
-    # Connects in the background: entities show as unavailable until then.
-    await panel.start()
     if entry.options.get(CONF_TIME_SYNC):
         clear_clock_issue(hass, entry)
     entry.async_on_unload(watch_connection(hass, entry, panel))
@@ -60,6 +58,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> b
             panel.notify()
 
     entry.async_on_unload(entry.add_update_listener(options_updated))
+    # Connects in the background (entities show as unavailable until then),
+    # last: if anything above fails, no connection is left holding the
+    # SmartCom's only session.
+    await panel.start()
     return True
 
 

@@ -3,6 +3,7 @@ and names each kind of entry gets, and a Crestron entry working end to end."""
 
 from __future__ import annotations
 
+import asyncio
 import sys
 from pathlib import Path
 
@@ -142,3 +143,26 @@ async def test_crestron_without_udl_is_sensors_only(hass, port):
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call("alarm_control_panel", "alarm_arm_away", {"entity_id": ALARM}, blocking=True)
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_a_failed_setup_leaves_no_connection_open(hass, fake):
+    """If setting up fails (here: building the dashboard, which uses Home
+    Assistant's internals), no connection to the panel is left running: it
+    would hold the SmartCom's only session."""
+    from unittest.mock import patch
+
+    from .common import layout_of
+
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        data={"protocol": "connect", "host": "127.0.0.1", "port": fake.port, "udl": UDL, "create_dashboard": True}
+        | (await layout_of(fake)),
+        options={"night_part_arm": 1},
+    )
+    entry.add_to_hass(hass)
+    connections = fake.connections
+    with patch("custom_components.texecom.async_create_dashboard", side_effect=RuntimeError("changed internals")):
+        assert not await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+    await asyncio.sleep(0.3)
+    assert fake.connections == connections
