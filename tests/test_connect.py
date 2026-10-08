@@ -893,3 +893,46 @@ async def test_reading_user_names_when_not_connected(fake):
     await panel.stop()
     with pytest.raises(PanelError):
         await panel.async_read_user_names()
+
+
+# ─── More than one area ────────────────────────────────────────────────────
+
+
+@pytest.fixture
+async def two_areas():
+    """A panel like the first one reported from outside (issue #4): an Elite
+    12 on V6.03, two areas. The Garage is in area 2, GARAGE."""
+    from fake_connect_panel import TWO_AREAS, with_garage_area
+
+    panel = FakeConnectPanel(zones=with_garage_area(FakeConnectPanel().zone_list), areas=TWO_AREAS)
+    panel.ident = b"Elite 12     V6.03.02LS1"
+    await panel.start()
+    yield panel
+    await panel.close()
+
+
+async def test_a_panel_with_two_areas(two_areas, monkeypatch):
+    """Each area is read, shown, armed and ready to arm on its own."""
+    from custom_components.texecom.connect import panel as connect_panel
+
+    monkeypatch.setattr(connect_panel, "READY_CHECK_DELAY", 0.05)
+    fake = two_areas
+    info, zones, areas = await probe("127.0.0.1", fake.port, "1234")
+    assert (info.zones, info.firmware) == (12, "V6.03.02LS1")
+    assert [(a.number, a.name) for a in areas] == [(1, "HOUSE"), (2, "GARAGE")]
+    assert {z.name: z.areas for z in zones}["Garage"] == [2]
+    panel = await make_panel(fake)
+    try:
+        assert panel.areas[1].ready and panel.areas[2].ready
+        await panel.arm(2, "away")
+        assert (P.CMD_ARM_AREA, bytes([0, 0b10])) in fake.commands
+        await wait_for(lambda: panel.areas[2].state == ARMED_AWAY)
+        assert panel.areas[1].state == DISARMED
+        fake.set_zone(2, 1)  # the lounge (area 1) opens
+        await wait_for(lambda: panel.areas[1].ready is False)
+        assert panel.areas[2].ready is False  # armed: not "ready to arm"
+        await panel.disarm(2)
+        await wait_for(lambda: panel.areas[2].state == DISARMED)
+        assert panel.areas[1].state == DISARMED
+    finally:
+        await panel.stop()
