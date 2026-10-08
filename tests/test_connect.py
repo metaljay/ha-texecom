@@ -1029,3 +1029,27 @@ async def test_a_short_keypad_message_is_read_soon_after_what_caused_it(fake, mo
         assert sum(cmd == P.CMD_GET_LCD_DISPLAY for cmd, _args in fake.commands) == reads
     finally:
         await panel.stop()
+
+
+async def test_a_drop_after_an_alarm_says_why(fake, caplog):
+    """The SmartCom closes the session to report an alarm: the log says so,
+    so a missing connection afterwards isn't a mystery."""
+    from fake_connect_panel import run_command
+
+    caplog.set_level("INFO", logger="custom_components.texecom")
+    run_command(fake, "busy 0.3")
+    fake.report_after = 0.05
+    panel = await make_panel(fake)
+    try:
+        fake.drop_all()  # a drop with no alarm: nothing said
+        await wait_for(lambda: not panel.connected)
+        await wait_for(lambda: panel.connected)
+        assert "to report it" not in caplog.text
+        run_command(fake, "area alarm")
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        run_command(fake, "area off")
+        await wait_for(lambda: not panel.connected)
+        assert "closed the connection after the alarm, probably to report it" in caplog.text
+        await wait_for(lambda: panel.connected, timeout=5)
+    finally:
+        await panel.stop()

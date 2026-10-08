@@ -48,6 +48,9 @@ SWITCH_GRACE = 10.0  # longest a mode switch may sit between "disarmed" and the 
 # 30 s read misses them: the keypad is also read this long after something
 # it may show, at most once every DISPLAY_SOON_EVERY seconds.
 DISPLAY_SOON_DELAY = 1.0
+# A SmartCom closes the session to report an alarm (seen ~1.5 s after the
+# disarm that followed it): a drop this soon after an alarm is explained.
+ALARM_REPORT_WINDOW = 300.0
 DISPLAY_SOON_EVERY = 5.0
 
 
@@ -109,6 +112,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._internal_alarm_handle: asyncio.TimerHandle | None = None
         self._display_handle: asyncio.TimerHandle | None = None
         self._display_soon_at = float("-inf")  # when the keypad was last read for _read_display_soon
+        self._alarm_at = float("-inf")  # when an area was last in alarm
         self._last_cause_at = float("-inf")  # when a tamper, zone alarm or failed arm was last reported
         self.last_error: str | None = None
 
@@ -173,6 +177,11 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                     sync_task = asyncio.get_running_loop().create_task(self._time_sync_loop())
                 try:
                     await self._closed_event.wait()
+                    if time.monotonic() - self._alarm_at < ALARM_REPORT_WINDOW:
+                        self._log.info(
+                            "Connect: the panel closed the connection after the alarm, probably to report it; "
+                            "it usually lets Home Assistant back in within about two minutes"
+                        )
                 finally:
                     if sync_task:
                         sync_task.cancel()
@@ -317,6 +326,8 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         area = self.areas.get(number)
         if area is None:
             return
+        if state == "in alarm" or area.state == TRIGGERED:
+            self._alarm_at = time.monotonic()
         if state in ("in entry", "armed", "part armed", "in alarm") and number in self._switch_disarmed:
             # The panel has disarmed for the switch and moved on (straight to
             # armed, with no exit time, say): a "disarmed" now is a real one.
