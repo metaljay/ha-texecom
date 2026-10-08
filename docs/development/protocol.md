@@ -91,6 +91,7 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 28, 29, 30 | Bell SAB, Bell SCB, Strobe | — | Candidates for "the siren is sounding" |
 | 36 | Reset Required | — | Candidate for *System Alerts!* |
 | 64, 65, 66 | Detector Fault, Detector Masked, Fault Present | — | Candidates for faults already present when Home Assistant connects (D11) |
+| 27, 55 | Arm Failed, Arm Fail Warning | — | Seen 8 Oct 2026: 27 set (with 30 *Strobe*, 44 and 62) while the "fail to set" warning sounded after a failed arm, cleared by a code; 55 still set after the next good arm and disarm. Not used |
 
 **With the mains off** (one read, 8 Oct 2026) the flags set were 29 *Bell SCB*, 32 *Detector Reset* and 67 *LED control*; 16 *Ready* and 25 *Force Armable* were clear. Three minutes later, still on battery, *Ready* was set again, so a zone active at the time of that read may explain it: check again with nothing moving.
 
