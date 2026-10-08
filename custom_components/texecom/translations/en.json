@@ -11,7 +11,7 @@
       },
       "connect": {
         "title": "Your SmartCom",
-        "description": "Find the SmartCom in your router's list of devices and reserve its address so it never changes.\n\nHome Assistant uses the SmartCom's connection for the Texecom app, so the app can't connect while Home Assistant is: your alarm and the app's alarm notifications work as before. If Homebridge or texecom2mqtt use the SmartCom, turn them off first.\n\nConnecting can take up to a minute.\n\nNeed help? See the [setup guide]({help}).",
+        "description": "Find the SmartCom in your router's list of devices and reserve its address so it never changes.\n\nThe SmartCom takes one connection at a time, so the Texecom app can't connect while Home Assistant is. Your alarm, and the app's alarm notifications, work as before. If Homebridge or texecom2mqtt use the SmartCom, turn them off first.\n\nConnecting can take up to a minute.\n\nNeed help? See the [setup guide]({help}).",
         "data": {
           "host": "IP address",
           "port": "Port",
