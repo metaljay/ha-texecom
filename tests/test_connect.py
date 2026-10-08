@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import time
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -18,6 +19,7 @@ from custom_components.texecom.panel import (
     ARMED_AWAY,
     ARMED_HOME,
     ARMED_NIGHT,
+    ARMING,
     DISARMED,
     PENDING,
     TRIGGERED,
@@ -250,6 +252,40 @@ async def test_switching_mode_never_shows_disarmed(fake):
         await panel.arm(1, "away")
         await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
         assert DISARMED not in seen
+    finally:
+        await panel.stop()
+
+
+async def test_a_mode_switch_hides_only_its_own_disarm(fake):
+    """Switching mode hides the panel's one brief "disarmed", not a real
+    disarm: a panel with no exit time arms straight away, and a disarm just
+    after shows at once."""
+    panel = await make_panel(fake)
+    try:
+        await panel.arm(1, "night")
+        await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
+        fake.exit_delay = 0
+        await panel.arm(1, "away")
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        fake.set_area(0)  # disarmed at a keypad straight after
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+    finally:
+        await panel.stop()
+
+
+async def test_a_reread_of_the_old_mode_doesnt_end_a_mode_switch(fake):
+    """A re-read the panel answered before it disarmed for the switch still
+    shows the old mode: the switch's own "disarmed" must stay hidden."""
+    panel = await make_panel(fake)
+    try:
+        await panel.arm(1, "night")
+        await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
+        panel._switching[1] = time.monotonic() + 10  # as arm() does when switching to Away
+        panel._apply_area(1, "part armed", 1)  # the re-read
+        panel._apply_area(1, "disarmed", None)  # the switch's own disarm
+        assert panel.areas[1].state == ARMED_NIGHT
+        panel._apply_area(1, "in exit", None)
+        assert panel.areas[1].state == ARMING
     finally:
         await panel.stop()
 

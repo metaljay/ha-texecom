@@ -214,13 +214,14 @@ class FakeConnectPanel:
         elif cmd == P.CMD_ARM_AREA:
             arm_type = args[0]
             reply(ack)
-            self.set_area(1)
-            loop = asyncio.get_running_loop()
-            if arm_type == P.ARM_FULL:
-                self._exit_timer = loop.call_later(self.exit_delay, self.set_area, 3)
-            else:
+            if arm_type != P.ARM_FULL:
                 self.send_log(77 + arm_type, 0, 0)  # PART_ARM_n log, as the panel does
-                self._exit_timer = loop.call_later(self.exit_delay, self.set_area, 4, arm_type)
+            armed = (3, None) if arm_type == P.ARM_FULL else (4, arm_type)
+            if self.exit_delay:
+                self.set_area(1)
+                self._exit_timer = asyncio.get_running_loop().call_later(self.exit_delay, self.set_area, *armed)
+            else:
+                self.set_area(*armed)  # no exit time: armed at once
         elif cmd == P.CMD_DISARM_AREA:
             if self._exit_timer:
                 self._exit_timer.cancel()

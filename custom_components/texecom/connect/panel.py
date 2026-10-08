@@ -97,7 +97,8 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._last_user: tuple[str, float] | None = None
         self._recent_alarms: dict[tuple[int, bool], float] = {}
         self._alarm_zone: tuple[str, float] | None = None
-        self._switching: dict[int, float] = {}
+        self._switching: dict[int, float] = {}  # area -> end of a mode switch's grace
+        self._switch_disarmed: set[int] = set()  # areas whose switch has had its "disarmed"
         self._seen_current = False
         self._idle_count = 0
         self._refresh_handle: asyncio.TimerHandle | None = None
@@ -291,15 +292,22 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         area = self.areas.get(number)
         if area is None:
             return
+        if state in ("in entry", "armed", "part armed", "in alarm") and number in self._switch_disarmed:
+            # The panel has disarmed for the switch and moved on (straight to
+            # armed, with no exit time, say): a "disarmed" now is a real one.
+            # Before that, a re-read can still show the old mode, so it
+            # doesn't end the switch.
+            self._end_switch(number)
         if state == "disarmed":
             if self._switching.get(number, 0) > time.monotonic():
                 self._log.debug("Connect: area %s: disarmed while switching mode; still arming", number)
+                self._switch_disarmed.add(number)
                 return
-            self._switching.pop(number, None)
+            self._end_switch(number)
             self._alarm_zone = None  # the next alarm names its own zone
             self.set_area(number, DISARMED, None, changed_by)
         elif state == "in exit":
-            if self._switching.pop(number, None) is not None:
+            if self._end_switch(number):
                 self.set_area(number, ARMING, None, changed_by)
                 return
             # An armed area can't start an exit delay without being disarmed
@@ -326,6 +334,11 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
             if self._alarm_zone and time.monotonic() - self._alarm_zone[1] < USER_CHANGE_WINDOW:
                 changed_by = self._alarm_zone[0]
             self.set_area(number, TRIGGERED, area.part_arm, changed_by)
+
+    def _end_switch(self, number: int) -> bool:
+        """Ends a mode switch; whether one was under way."""
+        self._switch_disarmed.discard(number)
+        return self._switching.pop(number, None) is not None
 
     def _refresh_areas_soon(self) -> None:
         if self._refresh_handle:
@@ -366,13 +379,14 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 # before the new exit delay. Show "arming" throughout, so
                 # automations on "disarmed" don't fire (seen on a real panel).
                 self._switching[area] = time.monotonic() + SWITCH_GRACE
+                self._switch_disarmed.discard(area)
                 self.set_area(area, ARMING, None, "Home Assistant")
                 await self._ok(client.disarm(area, self.panel_zones), "disarm before re-arm")
             await self._ok(client.arm(area, arm_type, self.panel_zones), f"arm ({mode})")
         except PanelError:
             self._drop_credit(credit)
             self._requested_mode.pop(area, None)
-            if self._switching.pop(area, None) is not None:
+            if self._end_switch(area):
                 self._refresh_areas_soon()  # show whatever the panel is really in
             raise
 
