@@ -24,7 +24,7 @@ The Home app keeps the buttons it saw first. After changing Night or Home in Hom
 
 ## Codes
 
-The Home app can't ask for a code. If you set a **Home Assistant alarm code**, the HomeKit Bridge needs it in its settings (`entity_config` → `code`), or arming from the Home app fails.
+The Home app can't ask for a code. If you set a **Home Assistant alarm code**, the Home app and Siri **can't disarm** any more, and can't arm either if *Ask for the code when arming too* is ticked. HomeKit Bridge can pass a code on, but only from its YAML settings (`entity_config` → `code`); a bridge set up from **Settings → Devices & services** can't. See [what a code affects](using.md#what-a-home-assistant-alarm-code-affects).
 
 Without a code, the Home app arms and disarms freely, as it did with Homebridge. Consider letting Home Assistant [arm automatically when everyone leaves](automations.md#arm-automatically-when-everyone-leaves), and leaving disarming to the keypad.
 

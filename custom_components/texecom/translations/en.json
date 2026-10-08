@@ -181,13 +181,13 @@
       },
       "alarm_code": {
         "title": "Home Assistant alarm code",
-        "description": "A code Home Assistant asks for before disarming. It's checked by Home Assistant, not the panel, and has nothing to do with your keypad codes. Leave it empty for no code.",
+        "description": "An extra code Home Assistant asks for before it disarms. It's checked by Home Assistant, not the panel, and has nothing to do with your keypad codes. Leave it empty for no code.\n\n**Before you set one:** the Home app and Siri can't type a code, so through HomeKit Bridge they can't disarm any more (or arm, if you tick the box below). Automations that disarm need the code too. [What a code affects]({help})",
         "data": {
           "alarm_code": "Alarm code (optional)",
           "code_arm_required": "Ask for the code when arming too"
         },
         "data_description": {
-          "code_arm_required": "If you use Apple Home, the HomeKit Bridge then needs the code in its settings too, or arming from the Home app fails."
+          "code_arm_required": "Then the Home app, Siri, and automations that arm (such as \"arm when everyone leaves\") can't arm either, unless they're given the code."
         }
       },
       "user_names": {

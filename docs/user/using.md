@@ -55,7 +55,7 @@ Open **Settings → Devices & services → Texecom → ⚙️ Configure**, and p
 | In the menu | What it does |
 |---|---|
 | **Night and Home buttons** | The part arm behind each button. *'Not used'* hides the button. *Reconnects to the panel* |
-| **Home Assistant alarm code** | Optional. Home Assistant asks for it before disarming (and, if you tick the box, before arming). It's checked by Home Assistant, not the panel, and has nothing to do with your keypad codes |
+| **Home Assistant alarm code** | Optional. Home Assistant asks for it before disarming (and, if you tick the box, before arming). It's checked by Home Assistant, not the panel, and has nothing to do with your keypad codes. **It stops Apple Home and some automations working**: see [what a code affects](#what-a-home-assistant-alarm-code-affects) first |
 | **Names for keypad users** | One per line, like `3 = Sam`: the alarm then says *changed by Sam* instead of *User 3*, here and in the activity list |
 | **Notifications** | Whether Home Assistant shows a notification while the panel has no mains power, or while a tamper is open (both on to start with) |
 | **Panel clock** | **Keep the panel clock right**: once a day (and on connecting), sets the panel's clock if it's more than a minute out, in Home Assistant's time zone (so British Summer Time is handled). *Reconnects to the panel* |
@@ -92,8 +92,21 @@ With [Crestron](crestron.md) you see the keypad users; the rest needs **Texecom 
 ## Codes
 
 - **The UDL code** lets Home Assistant talk to the panel. It's stored in Home Assistant like any integration's password. Anyone with admin access to your Home Assistant can arm and disarm, so keep that access tight.
-- **The Home Assistant alarm code** (optional, in Options) is an extra check on top: Home Assistant asks for it before disarming.
+- **The Home Assistant alarm code** (optional, in Options) is an extra check on top: Home Assistant asks for it before disarming. It's a code you make up; the panel never sees it.
 - **Your keypad codes** aren't used or stored by Home Assistant.
+
+### What a Home Assistant alarm code affects
+
+| | No code (the default) | With a code | With a code, and *Ask for the code when arming too* |
+|---|---|---|---|
+| Home Assistant's dashboards and app | Arm and disarm freely | Asks for the code to disarm | Asks for the code to arm and disarm |
+| The Home app and Siri (through HomeKit Bridge) | Arm and disarm | **Can't disarm** | **Can't arm or disarm** |
+| Automations, scripts and the [blueprints](automations.md) | Arm and disarm | Arming works; disarming needs `code:` in the action | **Arming fails too**, including *arm when everyone leaves* |
+| The keypads, fobs and the panel itself | Unchanged | Unchanged | Unchanged |
+
+The Home app can't ask for a code, and HomeKit Bridge only passes one on if it's written into its YAML settings (`entity_config` → `code`); a bridge set up from **Settings → Devices & services** can't hold one.
+
+**Our suggestion:** if you use Apple Home or the arming automations, leave it empty. Anyone who can open Home Assistant has to log in first, so keep that login (and who has an account) tight instead.
 
 ## Good to know
 

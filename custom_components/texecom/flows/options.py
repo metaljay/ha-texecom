@@ -39,6 +39,7 @@ from ..const import (
     CONF_TIME_SYNC,
     CONF_USER_NAMES,
     DEFAULT_STATUS_POLL,
+    HELP_CODES,
     HELP_DASHBOARD,
     HELP_OPTIONS,
     HELP_PART_ARMS,
@@ -111,7 +112,9 @@ class TexecomOptionsFlow(OptionsFlow):
                 ),
             }
         )
-        return self.async_show_form(step_id="alarm_code", data_schema=schema, errors=errors)
+        return self.async_show_form(
+            step_id="alarm_code", data_schema=schema, errors=errors, description_placeholders={"help": HELP_CODES}
+        )
 
     async def async_step_user_names(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}

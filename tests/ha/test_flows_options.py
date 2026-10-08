@@ -89,6 +89,9 @@ async def test_night_and_home_buttons_reconnect(hass, fake):
 
 async def test_alarm_code_applies_without_reconnecting(hass, fake):
     entry = await setup_connect(hass, fake)
+    result = await open_options(hass, entry, "alarm_code")
+    # Links to what a code affects (Apple Home and automations) before one is set.
+    assert result["description_placeholders"]["help"].endswith("using.md#codes")
     result = await options(hass, entry, "alarm_code", alarm_code="12a", code_arm_required=False)
     assert result["errors"] == {"alarm_code": "invalid_code_format"}
     connections = fake.connections

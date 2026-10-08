@@ -20,6 +20,7 @@ It sets the alarm to **Away** when nobody has been home for 5 minutes, as long a
 - **If someone is still inside**, the arm fails at the end of the exit time (the panel sounds its "fail to set" warning), and Home Assistant shows an **Alarm not set** notification naming the zone.
 - **Then also** lets you add something, such as a notification to your phone saying the alarm is set.
 - **We suggest not adding an automatic disarm.** If you do, require something besides phone location (for example the front door being unlocked with a code).
+- **With a Home Assistant alarm code** and *Ask for the code when arming too* ticked, this (and *Or ask me first*) can't arm: leave that box unticked. See [what a code affects](using.md#what-a-home-assistant-alarm-code-affects).
 - **Rather decide each time?** Use [Or ask me first](#or-ask-me-first) instead.
 
 <details>
