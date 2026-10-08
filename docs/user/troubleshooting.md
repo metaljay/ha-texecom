@@ -51,6 +51,8 @@ Check:
 2. Its address hasn't changed (look in your router). If it has, use **Reconfigure** (above).
 3. Nothing else is connected to it: the Texecom app, Homebridge, texecom2mqtt, or a second Home Assistant.
 
+Just after an alarm, a drop is normal: the SmartCom closes the connection to report the alarm and turns Home Assistant away for about two minutes. The log says *the panel closed the connection after the alarm*, and the alarm's entities keep their state meanwhile.
+
 ## Getting more detail
 
 For a detailed log, add this to `configuration.yaml` and restart Home Assistant:

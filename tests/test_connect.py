@@ -245,6 +245,38 @@ async def test_a_refused_request_doesnt_name_home_assistant(fake):
         await panel.stop()
 
 
+async def test_an_arm_with_no_code_doesnt_keep_who_disarmed(fake):
+    """An area that goes straight from disarmed to armed with no code (a fob,
+    or no exit time) doesn't keep the name of whoever disarmed it (F4)."""
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        fake.send_user(4)
+        fake.set_area(0)
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        assert panel.areas[1].changed_by == "User 4"
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        assert panel.areas[1].changed_by is None
+    finally:
+        await panel.stop()
+
+
+async def test_an_alarm_never_names_a_user(fake):
+    """A code entered shortly before an alarm doesn't name that user as the
+    alarm's cause while no zone has been reported."""
+    panel = await make_panel(fake)
+    try:
+        fake.send_user(1)
+        await asyncio.sleep(0.2)
+        fake.set_area(5)
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        assert panel.areas[1].changed_by is None
+    finally:
+        await panel.stop()
+
+
 async def test_switching_mode_disarms_first_and_unmapped_mode_is_refused(fake):
     panel = await make_panel(fake, part_arms={"night": 1, "home": 2})
     try:

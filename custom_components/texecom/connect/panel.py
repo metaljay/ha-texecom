@@ -372,6 +372,8 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 changed_by = None  # still the zone that set it off
             elif first and time.monotonic() - first[1] < USER_CHANGE_WINDOW:
                 changed_by = first[0]
+            else:
+                changed_by = None  # a zone, not a user, sets an alarm off; named when it's reported
             self.set_area(number, TRIGGERED, area.part_arm, changed_by)
 
     def _end_switch(self, number: int) -> bool:

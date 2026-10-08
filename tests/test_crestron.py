@@ -103,6 +103,7 @@ class FakeCrestronPort:
                         break
         finally:
             self.writers.discard(writer)
+            writer.close()  # its side too, or asyncio warns "unclosed StreamWriter"
 
 
 async def make_panel(port: int, **kwargs) -> CrestronPanel:
