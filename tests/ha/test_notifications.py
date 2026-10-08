@@ -95,3 +95,29 @@ async def test_notices_go_when_the_integration_unloads(hass, fake):
     await wait_for(lambda: _notice(hass, "tamper", entry) is not None)
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert _notice(hass, "tamper", entry) is None
+
+
+async def test_a_failed_arm_isnt_forgotten_because_another_area_is_armed(hass, socket_enabled):
+    """With two areas, the garage being armed doesn't remove the notice that
+    the house didn't arm; the house arming does."""
+    from fake_connect_panel import DEMO_ZONES, TWO_AREAS, FakeConnectPanel, with_garage_area
+
+    fake = FakeConnectPanel(zones=with_garage_area(DEMO_ZONES), areas=TWO_AREAS, exit_delay=0.05)
+    await fake.start()
+    try:
+        entry = await setup_connect(hass, fake)
+        fake.set_area(3, area=2)  # the garage is armed
+        await wait_for(lambda: hass.states.get("alarm_control_panel.texecom_garage").state == "armed_away")
+        fake.send_log(85, 0, 4, areas=1)  # the house didn't arm: Kitchen
+        await wait_for(lambda: _notes(hass))
+        fake.set_zone(2, 1)  # anything else the panel reports meanwhile
+        fake.set_area(1, area=2)  # even the garage arming again
+        fake.set_area(3, area=2)
+        await hass.async_block_till_done()
+        await wait_for(lambda: hass.states.get("binary_sensor.texecom_hallway").state == "on")
+        assert _notes(hass)
+        fake.set_area(3, area=1)  # the house arms on the next try
+        await wait_for(lambda: not _notes(hass))
+        assert await hass.config_entries.async_unload(entry.entry_id)
+    finally:
+        await fake.close()
