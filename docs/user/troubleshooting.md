@@ -18,6 +18,7 @@
 | What you see | Try |
 |---|---|
 | **Everything shows as unavailable** | The panel has been unreachable for over 3 minutes. Look at **Panel connection** on the panel's device page and at **Settings → Repairs**, then see [The panel is unreachable](#the-panel-is-unreachable) |
+| **Panel connection goes off for about 2 minutes after an alarm** | Normal: the SmartCom sends its own report of the alarm, then lets Home Assistant back in. The alarm and the zones keep their last state meanwhile, and Home Assistant reconnects by itself |
 | **The SmartCom's address changed** | **Settings → Devices & services → Texecom → ⋮ → Reconfigure**, and enter the new one. Reserve the address in your router so it doesn't happen again |
 | **"Alarm not set" notification** | A zone was still active when the exit time ended (a door open, or someone in view of a sensor), so the panel didn't arm. The notification names the zone. Close it or keep out of view, and arm again |
 | **Home or Night is missing from the alarm** | It's set to *'Not used'*: change it in **Configure → Night and Home buttons** |
@@ -77,7 +78,7 @@ Questions rather than bugs: [Discussions](https://github.com/metaljay/ha-texecom
 What the panel does and doesn't tell Home Assistant, found by testing on a real Premier Elite 24 (V6.05.03):
 
 - **One connection at a time.** The SmartCom serves Home Assistant *or* the Texecom app (or Homebridge, texecom2mqtt). It also refuses a new connection for up to about a minute after the last one closed, so after Home Assistant restarts the alarm can take a minute to come back.
-- **During an alarm** the SmartCom drops Home Assistant for about a minute to send its own report. Entities keep their last state for up to 3 minutes; Home Assistant reconnects and catches up by itself. If your SmartCom also reports to a monitoring centre, consider a second module (a ComIP) for Home Assistant.
+- **After an alarm** the SmartCom drops Home Assistant for about 2 minutes to send its own report (on one panel, just after the disarm). Entities keep their last state for up to 3 minutes; Home Assistant reconnects and catches up by itself. If your SmartCom also reports to a monitoring centre, consider a second module (a ComIP) for Home Assistant.
 - **Mains coming back** isn't reported by the panel, only the failure. Home Assistant reads the panel's power every 30 seconds instead, so *Mains power* turns back on within half a minute.
 - **Which detector was tampered with** usually isn't known: most installs wire every detector's tamper switch to one shared circuit, which the panel reports as *Auxiliary Tamper*.
 - **Keypad lights** (e.g. the spanner) aren't sent; **Keypad display** shows the screen text instead.

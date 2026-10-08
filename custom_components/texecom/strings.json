@@ -11,7 +11,7 @@
       },
       "connect": {
         "title": "Your SmartCom",
-        "description": "Find the SmartCom in your router's list of devices and reserve its address so it never changes.\n\nHome Assistant uses the SmartCom's connection for the Texecom app, so the app can't connect while Home Assistant is: your alarm and the app's alarm notifications work as before. If Homebridge or texecom2mqtt use the SmartCom, turn them off first.\n\nConnecting can take up to a minute.\n\nNeed help? See the [setup guide]({help}).",
+        "description": "Find the SmartCom in your router's list of devices and reserve its address so it never changes.\n\nThe SmartCom takes one connection at a time, so the Texecom app can't connect while Home Assistant is. Your alarm, and the app's alarm notifications, work as before. If Homebridge or texecom2mqtt use the SmartCom, turn them off first.\n\nConnecting can take up to a minute.\n\nNeed help? See the [setup guide]({help}).",
         "data": {
           "host": "IP address",
           "port": "Port",
@@ -130,7 +130,7 @@
     },
     "error": {
       "cannot_connect": "Couldn't connect. Check the address and port. If the Texecom app, Homebridge or texecom2mqtt was connected a moment ago, wait a minute and try again.",
-      "invalid_auth": "The panel refused the UDL code.",
+      "invalid_auth": "The panel refused the UDL code. Check it with your installer: Texecom's default is 1234.",
       "invalid_udl": "The UDL code is 4 to 8 digits.",
       "no_zones": "Connected, but the panel reported no zones in use.",
       "no_reply": "Connected, but the panel didn't answer. Check the COM port is set to Crestron System and the speed matches.",
@@ -143,7 +143,7 @@
       "reconfigure_successful": "Updated the connection."
     },
     "progress": {
-      "connecting": "Logging in to your panel and reading its zones and areas.\n\nThis usually takes about ten seconds, or up to a minute if something else (the Texecom app, Homebridge, a restart) was connected to the SmartCom just before."
+      "connecting": "Logging in to your panel and reading its zones and areas.\n\nThis usually takes about 15 seconds, or up to a minute if something else (the Texecom app, Homebridge, a restart) was connected to the SmartCom just before."
     }
   },
   "options": {
@@ -228,7 +228,7 @@
       }
     },
     "progress": {
-      "reading": "Reading the zones and areas from the panel. This takes about ten seconds."
+      "reading": "Reading the zones and areas from the panel. This takes about 15 seconds."
     },
     "error": {
       "same_part_arm": "Night and Home can't use the same part arm.",

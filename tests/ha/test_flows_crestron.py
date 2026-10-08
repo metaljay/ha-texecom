@@ -37,6 +37,8 @@ async def test_crestron_network(hass, crestron_port, no_setup):
     port, _state = crestron_port
     result = await start(hass, "crestron", "crestron_network")
     assert result["step_id"] == "crestron_network"
+    udl = next(key for key in result["data_schema"].schema if key == "udl")
+    assert not udl.description["suggested_value"]  # empty: sensors only, unless a code is typed
     result = await hass.config_entries.flow.async_configure(
         result["flow_id"], {"host": "127.0.0.1", "port": port, "zone_count": 5, "area_count": 1}
     )

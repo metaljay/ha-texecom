@@ -31,7 +31,6 @@ from ..const import (
     CONNECTION_SERIAL,
     DEFAULT_BAUD_RATE,
     DEFAULT_CRESTRON_PORT,
-    DEFAULT_UDL,
     HELP_CRESTRON,
     PROTOCOL_CRESTRON,
 )
@@ -49,7 +48,7 @@ class CrestronSteps(ConfigFlow):
 
     def _crestron_common(self, defaults: Mapping[str, Any]) -> dict[Any, Any]:
         return {
-            vol.Optional(CONF_UDL, description={"suggested_value": defaults.get(CONF_UDL, DEFAULT_UDL)}): UDL_SELECTOR,
+            vol.Optional(CONF_UDL, description={"suggested_value": defaults.get(CONF_UDL)}): UDL_SELECTOR,
             vol.Required(CONF_ZONE_COUNT, default=defaults.get(CONF_ZONE_COUNT, 8)): NumberSelector(
                 NumberSelectorConfig(min=1, max=168, mode=NumberSelectorMode.BOX)
             ),
