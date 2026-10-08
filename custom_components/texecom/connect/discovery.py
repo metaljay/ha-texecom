@@ -1,7 +1,7 @@
 """Reading the panel's layout: its identity, the zones in use and the areas
 that contain them. Done when setting up (probe: a one-off login), over the
 open session when asked to in the options, and by itself when engineer
-programming ends."""
+programming ends. Also the users' names, when asked to in the options."""
 
 from __future__ import annotations
 
@@ -13,6 +13,9 @@ from ..panel import PanelArea, PanelError, PanelInfo, PanelZone
 from .client import ConnectClient, ConnectError, HostLog, LoginRejected, Unreachable
 
 _LOGGER = logging.getLogger(__name__)
+
+MAX_USERS = 255  # the user number is sent as one byte
+USER_RETRY_DELAY = 0.3  # a NAK is either "no such user" or "busy": asked once more
 
 
 def default_area_name(number: int) -> str:
@@ -89,6 +92,27 @@ class RediscoveryMixin:
             return await discover(client)
         except ConnectError as err:
             raise PanelError(f"couldn't read the panel: {err}") from err
+
+    async def async_read_user_names(self) -> dict[int, str]:
+        """The names of the panel's users, {1: "Master", 3: "Sam"}, read over
+        the open session; users without a name are left out. Their codes come
+        in the same replies and are dropped unread (see client.user_name).
+        Raises PanelError."""
+        client = self._ready_client()
+        names: dict[int, str] = {}
+        try:
+            for number in range(1, MAX_USERS + 1):
+                name = await client.user_name(number)
+                if name is None:  # past the last user, or busy for a moment
+                    await asyncio.sleep(USER_RETRY_DELAY)
+                    name = await client.user_name(number)
+                if name is None:
+                    break
+                if name:
+                    names[number] = name
+        except ConnectError as err:
+            raise PanelError(f"couldn't read the users: {err}") from err
+        return names
 
     async def _rediscover(self) -> None:
         if not self.client:

@@ -62,7 +62,6 @@ Each needs evidence from a real panel, or a decision from the owner, first. The 
 | Read the tampers and faults that are already there on connecting | Fixes the known limit after a restart | Which flag or system flag shows them (D11–D13) |
 | A "siren sounding" sensor (flags 28–30) | Know when the bell sounds and stops | A test during an alarm (E6). Over a SmartCom, Home Assistant is disconnected during an alarm anyway |
 | A message on the keypads (command 14) | e.g. "Back door open" on the keypads | The owner's agreement, and a supervised test |
-| User names read from the panel (command 27) | Names without typing them | Its reply includes each user's **code**: a decision on handling codes (the docs promise keypad codes aren't stored) |
 | Catch up on the event log after a reconnect (commands 15 and the log read) | Events missed while disconnected, e.g. during the alarm drop | Tests of what those commands return |
 | Exit and entry countdown attributes | Dashboards could show a countdown | Small: the area details already include the delays |
 | Part Arm 3 as a third button | Panels that use all three part arms | An option, shown as *Vacation* or *Custom bypass* |

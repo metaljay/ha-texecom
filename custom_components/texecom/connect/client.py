@@ -273,6 +273,12 @@ class ConnectClient:
         body = zone.to_bytes(2, "little") if zone > 255 else bytes([zone])
         return P.decode_zone_details(await self.command(P.CMD_GET_ZONE_DETAILS, body))
 
+    async def user_name(self, number: int) -> str | None:
+        """User N's name ("" if it has none); None if the panel has no such
+        user, or refuses. The reply also holds the user's code: it's dropped
+        here, unread."""
+        return P.decode_user_name(await self.command(P.CMD_GET_USER, bytes([number]), optional=True))
+
     async def area_details(self, area: int) -> P.AreaDetails | None:
         return P.decode_area_details(await self.command(P.CMD_GET_AREA_DETAILS, bytes([area])))
 

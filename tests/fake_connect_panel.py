@@ -41,6 +41,19 @@ DEMO_ZONES = [
 ]
 
 
+USER_COUNT = 24
+FAKE_USERS = {1: ("Master", "975319"), 3: ("Sam", "864208")}
+
+
+def user_record(name: str, code: str) -> bytes:
+    """A GET_USER reply shaped like a Premier Elite 24's (23 bytes): the name,
+    then the code as BCD padded with F (all F when there's none), then the
+    user's settings (zeros here)."""
+    digits = [int(c) for c in code] + [0xF] * (6 - len(code))
+    bcd = bytes(digits[i] << 4 | digits[i + 1] for i in range(0, 6, 2))
+    return name.encode("latin1").ljust(8)[:8] + bcd + bytes(12)
+
+
 class FakeConnectPanel:
     def __init__(self, udl: str = "1234", zones=None, area_name: str = "HOUSE", exit_delay: float = 0.05) -> None:
         self.udl = udl
@@ -66,6 +79,9 @@ class FakeConnectPanel:
         self.clock_raw: bytes | None = None  # raw GET_DATE_TIME reply (e.g. an impossible date)
         self.system_flags = bytes(8)  # GET_SYSTEM_FLAGS reply (its meaning isn't mapped yet)
         self.ready: bool | None = None  # area flag 16; None: ready while disarmed with no zone open
+        # GET_USER: {number: (name, code)} for users 1-24; the others are empty.
+        # The codes are fakes, used to check that Home Assistant never keeps or logs one.
+        self.users: dict[int, tuple[str, str]] = dict(FAKE_USERS)
 
     async def start(self, port: int = 0, host: str = "127.0.0.1") -> int:
         self.server = await asyncio.start_server(self._on_client, host, port)
@@ -237,6 +253,9 @@ class FakeConnectPanel:
             reply(ack)
         elif cmd == P.CMD_GET_SYSTEM_FLAGS:
             reply(self.system_flags)
+        elif cmd == P.CMD_GET_USER:
+            number = args[0] if args else 0
+            reply(user_record(*self.users.get(number, ("", ""))) if 1 <= number <= USER_COUNT else bytes([P.NAK]))
         else:
             reply(bytes([P.NAK]))
 

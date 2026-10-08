@@ -39,6 +39,7 @@ CMD_GET_PANEL_IDENTIFICATION = 22
 CMD_GET_DATE_TIME = 23
 CMD_SET_DATE_TIME = 24
 CMD_GET_SYSTEM_POWER = 25
+CMD_GET_USER = 27  # its reply holds the user's code: only decode_user_name reads it
 CMD_GET_AREA_DETAILS = 35
 CMD_SET_EVENT_MESSAGES = 37
 
@@ -176,7 +177,10 @@ class FrameParser:
                 return
             frame, self.buffer = self.buffer[:length], self.buffer[length:]
             if crc8(frame[:-1]) != frame[-1]:
-                self.on_error(f"bad CRC on frame {frame.hex()}")
+                # A reply can hold a user's code (command 27), so only event
+                # messages are logged in full.
+                shown = frame.hex() if frame[1] == TYPE_MESSAGE else f"of type {frame[1]:#04x}, {length} bytes"
+                self.on_error(f"bad CRC on frame {shown}")
                 continue
             self.on_frame(Frame(frame[1], frame[3], frame[4:-1]))
 
@@ -374,6 +378,20 @@ def decode_system_power(payload: bytes) -> SystemPower | None:
         panel_current=sys_i * 9,
         battery_current=bat_i * 9,
     )
+
+
+USER_NAME_LENGTH = 8
+
+
+def decode_user_name(payload: bytes) -> str | None:
+    """A user's name from a GET_USER reply; None for a NAK (no such user).
+
+    The reply also holds the user's code, as BCD after the name (seen on a
+    Premier Elite 24, V6.05). Only the name is read: the rest is never
+    decoded, kept or logged."""
+    if is_nak(payload) or len(payload) <= USER_NAME_LENGTH:
+        return None
+    return clean_text(payload[:USER_NAME_LENGTH])
 
 
 class InvalidClock(ValueError):

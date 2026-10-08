@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 
 import _paths  # noqa: F401
 import pytest
-from fake_connect_panel import FakeConnectPanel
+from fake_connect_panel import FAKE_USERS, FakeConnectPanel, user_record
 
 from custom_components.texecom.connect import protocol as P
 from custom_components.texecom.connect.client import ConnectClient, LoginRejected, PanelBusyError, Timing
@@ -84,6 +84,25 @@ def test_bad_crc_is_dropped_and_plus_plus_plus_is_a_hangup():
     assert frames == []
     parser.push(b"+++")
     assert drops
+
+
+def test_a_user_record_gives_only_the_name():
+    assert P.decode_user_name(user_record("Sam", "864208")) == "Sam"
+    assert P.decode_user_name(user_record("", "")) == ""  # a user without a name
+    assert P.decode_user_name(bytes([P.NAK])) is None  # no such user
+
+
+def test_a_reply_with_a_bad_crc_isnt_logged():
+    """A reply can hold a user's code (GET_USER), so only messages are shown in full."""
+    errors: list[str] = []
+    parser = P.FrameParser(lambda _f: None, on_error=errors.append)
+    for frame_type in (P.TYPE_RESPONSE, P.TYPE_MESSAGE):
+        bad = bytearray(P.encode_frame(frame_type, 1, bytes([P.CMD_GET_USER]) + user_record("Sam", "864208")))
+        bad[-1] ^= 0xFF
+        parser.push(bytes(bad))
+    assert len(errors) == 2
+    assert "864208" not in errors[0] and "bytes" in errors[0]
+    assert "864208" in errors[1]  # an event message (which never holds a code) is shown
 
 
 def test_area_flags_decoding():
@@ -634,3 +653,26 @@ def test_nice_names_keep_acronyms():
     assert nice_name("HALL PIR") == "Hall PIR"
     assert nice_name("HOUSE") == "House"
     assert nice_name("Front Door") == "Front Door"  # already mixed case: left alone
+
+
+async def test_user_names_are_read_and_their_codes_dropped(fake, caplog):
+    caplog.set_level("DEBUG", logger="custom_components.texecom")
+    panel = await make_panel(fake)
+    try:
+        assert await panel.async_read_user_names() == {1: "Master", 3: "Sam"}
+        # Users 1-24 asked once, then 25 twice (a NAK may only mean "busy").
+        asked = [args[0] for cmd, args in fake.commands if cmd == P.CMD_GET_USER]
+        assert asked == [*range(1, 26), 25]
+        diagnostics = await panel.async_diagnostics()
+        for _name, code in FAKE_USERS.values():
+            assert code not in caplog.text and code not in str(diagnostics)
+        assert panel.connected
+    finally:
+        await panel.stop()
+
+
+async def test_reading_user_names_when_not_connected(fake):
+    panel = await make_panel(fake)
+    await panel.stop()
+    with pytest.raises(PanelError):
+        await panel.async_read_user_names()

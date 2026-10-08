@@ -2,7 +2,7 @@
 
 - the Night and Home buttons (and, over Crestron, how a keypad arm shows)
 - an optional Home Assistant alarm code
-- names for keypad users
+- names for keypad users (which can be filled in from the panel, over Connect)
 - notifications for mains failures and tampers (Connect)
 - keeping the panel clock right (Connect), or how often to check the panel
   (Crestron)
@@ -52,6 +52,8 @@ from ..users import format_user_names, parse_user_names
 from .validation import UDL_SELECTOR, arm_mode_options, arm_modes_error, arm_modes_schema
 
 _LOGGER = logging.getLogger(__name__)
+
+READ_NAMES = "read_names"  # on the names form, not an option: fills in the panel's names
 
 
 class TexecomOptionsFlow(OptionsFlow):
@@ -123,16 +125,33 @@ class TexecomOptionsFlow(OptionsFlow):
             text = user_input.get(CONF_USER_NAMES, "")
             if (names := parse_user_names(text)) is None:
                 errors[CONF_USER_NAMES] = "invalid_user_names"
+            elif user_input.get(READ_NAMES):
+                # Shown again with the panel's names added, to check before saving.
+                text, error = await self._with_panel_names(names)
+                if error:
+                    errors["base"] = error
             else:
                 return self._save({CONF_USER_NAMES: names})
-        schema = vol.Schema(
-            {
-                vol.Optional(CONF_USER_NAMES, description={"suggested_value": text}): TextSelector(
-                    TextSelectorConfig(multiline=True)
-                )
-            }
-        )
-        return self.async_show_form(step_id="user_names", data_schema=schema, errors=errors)
+        fields: dict[Any, Any] = {
+            vol.Optional(CONF_USER_NAMES, description={"suggested_value": text}): TextSelector(
+                TextSelectorConfig(multiline=True)
+            )
+        }
+        if self._is_connect:
+            fields[vol.Optional(READ_NAMES, default=False)] = BooleanSelector()
+        return self.async_show_form(step_id="user_names", data_schema=vol.Schema(fields), errors=errors)
+
+    async def _with_panel_names(self, names: dict[str, str]) -> tuple[str, str | None]:
+        """The names typed so far plus the panel's for the other users, and an
+        error key if the panel couldn't be read or has no named users."""
+        try:
+            from_panel = await self.config_entry.runtime_data.async_read_user_names()
+        except (PanelError, AttributeError) as err:
+            _LOGGER.debug("Reading the users from the panel failed: %s", err)
+            return format_user_names(names), "read_names_failed"
+        if not from_panel:
+            return format_user_names(names), "no_user_names"
+        return format_user_names({**{str(n): name for n, name in from_panel.items()}, **names}), None
 
     async def async_step_notices(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         if user_input is not None:

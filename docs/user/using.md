@@ -56,7 +56,7 @@ Open **Settings → Devices & services → Texecom → ⚙️ Configure**, and p
 |---|---|
 | **Night and Home buttons** | The part arm behind each button. *'Not used'* hides the button. *Reconnects to the panel* |
 | **Home Assistant alarm code** | Optional. Home Assistant asks for it before disarming (and, if you tick the box, before arming). It's checked by Home Assistant, not the panel, and has nothing to do with your keypad codes. **It stops Apple Home and some automations working**: see [what a code affects](#what-a-home-assistant-alarm-code-affects) first |
-| **Names for keypad users** | One per line, like `3 = Sam`: the alarm then says *changed by Sam* instead of *User 3*, here and in the activity list |
+| **Names for keypad users** | One per line, like `3 = Sam`: the alarm then says *changed by Sam* instead of *User 3*, here and in the activity list. With a SmartCom or ComIP, tick *Fill in the names stored in the panel* to start from the names your installer gave. The panel sends each user's code with the name; Home Assistant drops the codes at once, without keeping or logging them |
 | **Notifications** | Whether Home Assistant shows a notification while the panel has no mains power, or while a tamper is open (both on to start with) |
 | **Panel clock** | **Keep the panel clock right**: once a day (and on connecting), sets the panel's clock if it's more than a minute out, in Home Assistant's time zone (so British Summer Time is handled). *Reconnects to the panel* |
 | **Read zones and areas from the panel again** | After your installer adds or renames zones. It happens by itself when engineer programming ends, too |
