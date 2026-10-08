@@ -4,7 +4,7 @@ What the panel and its modules actually do, as seen on a real **Premier Elite 24
 
 **Add to this page** whenever you learn something new on a real panel: what you saw, how, the panel and firmware, and the date. The [live test plan](../testing/live-test-plan.md) lists what's still to find out.
 
-**On this page:** [Texecom Connect](#texecom-connect-smartcom-or-comip) · [Area flags](#area-flags) · [Seen by other projects](#seen-by-other-projects) · [Crestron](#crestron) · [Still unknown](#still-unknown)
+**On this page:** [Texecom Connect](#texecom-connect-smartcom-or-comip) · [Area flags](#area-flags) · [System flags](#system-flags) · [Seen by other projects](#seen-by-other-projects) · [Crestron](#crestron) · [Still unknown](#still-unknown)
 
 ## Texecom Connect (SmartCom or ComIP)
 
@@ -24,7 +24,7 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | **Drops an idle session after ~60 s** | A keep-alive every 30 s; the driver uses it to re-read zones, areas, the keypad text and power | `client.py` (`KEEPALIVE`), `connect/panel.py` (`_on_idle`) |
 | **Slow answers** | One command at a time; resent (same sequence number) after 3.5 s, up to 5 times. `GET_AREA_FLAGS` once took over 2.5 s | `client.py` |
 | **Busy: a 1-byte NAK (0x15)** | Right after a burst of events, reads can get a NAK. Taken as data it would read as "zone active, alarmed", so short replies mean "busy, change nothing" | `client.py` (`PanelBusyError`) |
-| **Hangs up to report an alarm** | During an alarm the SmartCom sends `+++` and drops the session for about a minute to send its own alarm report | `protocol.py` (`FrameParser`), `panel.py` (`OFFLINE_GRACE`, 3 minutes) |
+| **Hangs up to report an alarm** | The SmartCom drops the session (with `+++`, or by closing it) to send its own alarm report, and lets nothing back in for about 2 minutes. In two alarms on 8 Oct 2026 it closed the session about 1.5 s **after the disarm** that followed the alarm, not when the alarm started, just after the alarm's log entries marked *communicated*; Home Assistant was back in 2 min 8 s later both times. Logins meanwhile got 80-byte frames the driver doesn't recognise and frames with bad CRCs, then the SmartCom closed them | `protocol.py` (`FrameParser`), `panel.py` (`OFFLINE_GRACE`, 3 minutes) |
 | **Wintex alongside** | Wintex can connect through the SmartCom while Home Assistant is connected | — |
 
 ### Commands used
@@ -37,9 +37,9 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 6 | Arm area | Arm type (0 full, 1–3 part arm) + area bitmap |
 | 8 | Disarm area | Area bitmap |
 | 9 | Reset area | Sent before disarming when in alarm |
-| 10 | Get system flags | 8 bytes, meaning not mapped yet. Only read for diagnostics, as an *optional* command: sent once, and no answer doesn't end the session |
+| 10 | Get system flags | 8 bytes, meaning not mapped yet ([first clues](#system-flags)). Only read for diagnostics, as an *optional* command: sent once, and no answer doesn't end the session |
 | 11 | Get area flags | Bulk: 72 flags in 0.4 s on the Elite 24 (see [Area flags](#area-flags)). Some firmware (Elite 48, V4.02.01) answers a bulk read with one byte: then flags are read one at a time |
-| 13 | Get LCD display | The keypad's two 16-character lines, with the clock (e.g. `HOME 13:48.52 Wed 07`), which the driver strips |
+| 13 | Get LCD display | The keypad's two 16-character lines, with the clock (e.g. `HOME 13:48.52 Wed 07`), which the driver strips. Seen: `HOME`, `Area in Entry > A.`, `Z003 Secure Kitchen`, `AUX 0,0 Tamper 08:40.38 08/10`, `System Alerts!`, `Alarm Engineer Working On Site.` Read every 30 s, so short messages such as *Area arm fail* are usually missed |
 | 22 | Get panel identification | e.g. `Elite 24     V6.05.03LS1` |
 | 23 / 24 | Get / set date and time | Day, month, 2-digit year, hours, minutes, seconds |
 | 25 | Get system power | Reference, panel volts, battery volts, panel current, battery current (formula below) |
@@ -51,7 +51,7 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | Message | Content |
 |---|---|
 | **Zone** | Zone number and a state byte: bits 0–1 secure/active/tamper/short, bit 2 fault, bit 3 failed test, bit 4 **alarmed**, bit 5 manual bypass, bit 6 auto bypass, bit 7 masked |
-| **Area** | Area and state: 0 disarmed, 1 in exit, 2 in entry, 3 armed, 4 part armed, 5 in alarm. **6 and 7** arrive straight after Part Arm 1 and 2 (a "settled" part arm?): the driver re-reads the area flags instead |
+| **Area** | Area and state: 0 disarmed, 1 in exit, 2 in entry, 3 armed, 4 part armed, 5 in alarm. **6 and 7** arrive straight after Part Arm 1 and 2 (a "settled" part arm?): the driver re-reads the area flags instead. On 8 Oct 2026 state 6 came with log entries 113 (*Remote Command*, group 9, parameter 1) and 207 (*Remote Part Arm 1*, group 6). Neither value is in the published lists, so the debug log shows `unknown (6)` |
 | **User** | User number and method (code, tag, code + tag) when someone uses a keypad |
 | **Log** | Event type, group (low 6 bits; bit 6 "communication delayed", bit 7 "communicated"), parameter (a zone or user number), areas, timestamp |
 | **Output** | Output location and state: decoded but not used yet |
@@ -68,10 +68,10 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 48, 50–52, 65, 66, 96, 97, 99, 101, 104, 105, 107–109, 118, 119, 122 | Faults: Low Battery, Mains Over Voltage, Telephone Line Fault, Fail to Communicate, Expander/Keypad Trouble, Supervision Fault, RF Low Battery, Radio Jamming, Zone Fault, Zone Masked, PSU faults… | `connect/conditions.py`, names in `protocol.py` (`FAULT_LOG_NAMES`) |
 | 59 | Installer (engineer) programming ended: the driver re-reads zones and areas | `connect/events.py` |
 | 60 | **Panel Box Tamper** (the lid): group 11 open, 12 closed | `connect/conditions.py` |
-| 62 | **Auxiliary Tamper**: every detector's tamper on one shared circuit (both PIR types tested), so nothing can say which detector | `connect/conditions.py` |
+| 62 | **Auxiliary Tamper**: every detector's tamper on one shared circuit (both PIR types tested), so nothing can say which detector. Group 11 (marked *communicated*) when a cover opens, 12 when it's closed | `connect/conditions.py` |
 | 61, 63, 64, 67, 68, 70, 110, 121 | Other tampers: bell, expander, keypad, fire zone, zone, code tamper, PSU, GSM | `connect/conditions.py`, names in `protocol.py` (`TAMPER_LOG_NAMES`) |
 | 78–80, 204–209 | Part Arm 1–3 (says which part arm a "part armed" area message means) | `connect/events.py` |
-| 85 | **Arm failed**: one entry per zone still active at the end of the exit time | `connect/events.py` |
+| 85 | **Arm failed**: one entry per zone still active at the end of the exit time; the keypad shows *Area arm fail* | `connect/events.py` |
 
 ### Area flags
 
@@ -90,21 +90,37 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 36 | Reset Required | — | Candidate for *System Alerts!* |
 | 64, 65, 66 | Detector Fault, Detector Masked, Fault Present | — | Candidates for faults already present when Home Assistant connects (D11) |
 
+**With the mains off** (one read, 8 Oct 2026) the flags set were 29 *Bell SCB*, 32 *Detector Reset* and 67 *LED control*; 16 *Ready* and 25 *Force Armable* were clear. Three minutes later, still on battery, *Ready* was set again, so a zone active at the time of that read may explain it: check again with nothing moving.
+
+### System flags
+
+`Get system flags` (command 10) returns 8 bytes whose meaning isn't published. First clues from one panel (8 Oct 2026):
+
+| State | Bytes |
+|---|---|
+| Normal | `00 20 09 00 00 00 00 01` |
+| After an alarm, until the engineer code was entered (the keypad showed *Alarm Engineer Working On Site*) | byte 0 is `40` |
+| Mains off | byte 2 is `08` instead of `09` (bit 0 of byte 2 looks like *mains OK*) |
+
+They're candidates for knowing what's already wrong when Home Assistant connects (D11), but nothing relies on them yet: capture them with a tamper open, a fault and an alarm memory first (D13).
+
 ### Arming, alarms and the keypad
 
 - **Every arm path works**: Away, Part Arm 1 and 2, switching mode, keypad arms (with the user number), and Apple Home through Home Assistant's HomeKit Bridge.
-- **Switching mode** (disarm, then arm 0.3 s later) reports *disarmed* in between. The driver hides it, so *disarmed* automations don't fire (`connect/panel.py`, `SWITCH_GRACE`).
+- **Switching mode** (disarm, then arm) really disarms for a moment: *disarmed* about 0.4 s after the request, then *in exit* 0.3 s later, with log 42 (*Remote Open/Close*) group 5 (*Open*) for the disarm. The driver hides it, so *disarmed* automations don't fire (`connect/panel.py`, `SWITCH_GRACE`).
 - **A flag re-read just after a remote arm** can still show the exit flag; the driver ignores an exit flag on an armed area.
-- **Remote arms** set after about 10 s with option 58 *Remote Arm Instant* on.
-- **Fail to set**: a zone active at the end of the exit time stops the arm and sounds the siren; log type 85 names each zone.
+- **Exit times**: with the same programmed exit delay, a remote arm set after about 10 s and a keypad arm after 15 s (option 58 *Remote Arm Instant* on, which seems to shorten the exit time rather than skip it). The entry delay was 15–16 s.
+- **Fail to set**: a zone active at the end of the exit time stops the arm and sounds the siren; log type 85 names each zone, and the keypad shows *Area arm fail*. With detectors only (no door contacts), keep moving in view of one until the exit time ends.
 - **Zone alarms are logged twice** (again once reported). Sometimes only the second arrives, after the disarm. The zone's *alarmed* bit is set at once and stays set (alarm memory) until reset, so a zone in a disarmed area doesn't explain a later alarm.
-- **After an alarm**, clearing *System Alerts!* at the keypad needed the engineer code on this panel; the spanner light stayed on afterwards (probably a service reminder).
+- **After an alarm the panel can go back to *in entry*** when the entry zone is seen again: *in alarm*, *in entry* 1.6 s later, then *in alarm* again 16 s after that, with the sirens sounding throughout until the disarm. The zone stays *alarmed*. The driver keeps showing the alarm (`connect/panel.py`, `_apply_area`).
+- **A detector that sees the entry route can raise a real alarm**: walking in, an interior PIR saw the person 0.6 s before the entry zone did, so the area went *in alarm* (keypad sounder only; the alarm was reported) and 0.6 s later *in entry*.
+- **After an alarm or a tamper**, clearing *System Alerts!* at the keypad needed the engineer code on this panel (it shows as user 0 in the *user* message); the spanner light stayed on afterwards (probably a service reminder).
 
 ### Power
 
 - **Readings**: volts = 13.7 + (reading − reference) × 0.07; current = reading × 9 mA.
-- **On mains**: about 300 mA at about 13.6 V. **On battery**: both currents read 0, and the voltage falls (13.0 → 12.2 V in 2 minutes).
-- The **AC Fail** log arrives at once, but the restore never does, so the driver decides mains is back from the readings (`connect/conditions.py`). Panels that never report current are only called "on battery" below 12.9 V.
+- **On mains**: about 300 mA (and 18 mA into the battery) at about 13.6 V. **On battery**: both currents read 0, and the voltage falls (13.0 → 12.2 V in 2 minutes once; 13.6 → 12.2 V over 9 minutes, the battery 13.6 → 12.4 V, another time).
+- The **AC Fail** log arrives at once, but the restore never does, so the driver decides mains is back from the readings (`connect/conditions.py`): within 30 s, as they're taken every 30 s (7 s on 8 Oct 2026). Panels that never report current are only called "on battery" below 12.9 V.
 
 ### Clock
 
@@ -154,10 +170,11 @@ Things to find out on real panels (each is a task in the [live test plan](../tes
 - **Log event types** not in the tables above, including **type 137** (observed during testing, meaning unknown).
 - Whether a remote **arm is refused** (NAK) with a zone open or a fault present, and what the panel sends then.
 - Commands not used yet that could help: **reading the event log** (to catch up after a reconnect), **user names** (its reply includes the code), **zone bypass**, **outputs**, **the keypad text** (command 14).
-- What the **system flags** (command 10) mean, and which **area flags** show tampers and faults that are already there when Home Assistant connects (D11–D13).
+- What the **system flags** (command 10) mean beyond the [first clues](#system-flags), and which **area flags** show tampers and faults that are already there when Home Assistant connects (D11–D13).
 - Whether **Ready** (flag 16) is set exactly when the area can be armed, and what it shows while armed.
 - Whether Home Assistant's own login writes **Download Start** (log 53) to the panel's log, before log 53/54 (remote access) and 58 (engineer programming) are shown in the activity list.
 - The exact **refusal window** after a session closes, and what affects it.
+- Why the SmartCom waited for the disarm before reporting an alarm (and dropping the session), and whether that depends on how the panel is set to report alarms.
 - The SmartCom's **network name (DHCP hostname)**, which could let Home Assistant discover it automatically.
 - Whether the panel changes its own clock for **summer time**, and how that interacts with clock sync (UK clocks change on 25 October 2026 and 28 March 2027).
 - **Other panels and modules**: Elite 12, 48, 64, 88, 168, 640; firmware V4 and other V6 versions; ComIP; more than one area.
