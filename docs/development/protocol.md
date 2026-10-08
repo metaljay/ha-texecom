@@ -19,7 +19,7 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | Behaviour | Detail | Where in the code |
 |---|---|---|
 | **One session at a time** | The SmartCom serves Home Assistant *or* the Texecom app, Homebridge, texecom2mqtt | — |
-| **Refuses a new login for ~10–70 s after a session closes** | Setup's check, a Home Assistant restart, a reload: the next login is refused or the connection is closed during login. Retries are expected; the first three are logged at debug level | `connect/panel.py` (`QUIET_FAILURES`), `connect/discovery.py` (`probe` waits up to 75 s) |
+| **Refuses a new login for ~10–70 s after a session closes** | Setup's check, a Home Assistant restart, a reload: the next login is refused or the connection is closed during login. Retries are expected, so they're logged at debug level, with one warning only after 3 minutes without a connection (as long as entities keep their state) | `connect/panel.py` (`_run`, `OFFLINE_GRACE`), `connect/discovery.py` (`probe` waits up to 75 s) |
 | **A login sent too soon is ignored** | Wait 2 s after connecting before sending it | `client.py` (`LOGIN_DELAY`) |
 | **Drops an idle session after ~60 s** | A keep-alive every 30 s; the driver uses it to re-read zones, areas, the keypad text and power | `client.py` (`KEEPALIVE`), `connect/panel.py` (`_on_idle`) |
 | **Slow answers** | One command at a time; resent (same sequence number) after 3.5 s, up to 5 times. `GET_AREA_FLAGS` once took over 2.5 s | `client.py` |
@@ -37,9 +37,9 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 6 | Arm area | Arm type (0 full, 1–3 part arm) + area bitmap |
 | 8 | Disarm area | Area bitmap |
 | 9 | Reset area | Sent before disarming when in alarm |
-| 10 | Get system flags | 8 bytes, meaning not mapped yet ([first clues](#system-flags)). Only read for diagnostics, as an *optional* command: sent once, and no answer doesn't end the session |
+| 10 | Get system flags | 8 bytes, meaning not mapped yet ([first clues](#system-flags)). Only read for diagnostics, as an *optional* command: sent at most twice (a panel busy with a burst of events can miss one), and no answer doesn't end the session |
 | 11 | Get area flags | Bulk: 72 flags in 0.4 s on the Elite 24 (see [Area flags](#area-flags)). Some firmware (Elite 48, V4.02.01) answers a bulk read with one byte: then flags are read one at a time |
-| 13 | Get LCD display | The keypad's two 16-character lines, with the clock (e.g. `HOME 13:48.52 Wed 07`), which the driver strips. Seen: `HOME`, `Area in Entry > A.`, `Z003 Secure Kitchen`, `AUX 0,0 Tamper 08:40.38 08/10`, `System Alerts!`, `Alarm Engineer Working On Site.` Read every 30 s, so short messages such as *Area arm fail* are usually missed |
+| 13 | Get LCD display | The keypad's two 16-character lines, with the clock (e.g. `HOME 13:48.52 Wed 07`), which the driver strips. Seen: `HOME`, `Area in Entry > A.`, `Z003 Secure Kitchen`, `AUX 0,0 Tamper 08:40.38 08/10`, `System Alerts!`, `Alarm Engineer Working On Site.` Read every 30 s, and about 1 s after an area message, a failed arm, a tamper or a fault (at most every 5 s), so short messages such as *Area arm fail* are caught |
 | 22 | Get panel identification | e.g. `Elite 24     V6.05.03LS1` |
 | 23 / 24 | Get / set date and time | Day, month, 2-digit year, hours, minutes, seconds |
 | 25 | Get system power | Reference, panel volts, battery volts, panel current, battery current (formula below) |
@@ -68,7 +68,7 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 48, 50–52, 65, 66, 96, 97, 99, 101, 104, 105, 107–109, 118, 119, 122 | Faults: Low Battery, Mains Over Voltage, Telephone Line Fault, Fail to Communicate, Expander/Keypad Trouble, Supervision Fault, RF Low Battery, Radio Jamming, Zone Fault, Zone Masked, PSU faults… | `connect/conditions.py`, names in `protocol.py` (`FAULT_LOG_NAMES`) |
 | 59 | Installer (engineer) programming ended: the driver re-reads zones and areas | `connect/events.py` |
 | 60 | **Panel Box Tamper** (the lid): group 11 open, 12 closed | `connect/conditions.py` |
-| 62 | **Auxiliary Tamper**: every detector's tamper on one shared circuit (both PIR types tested), so nothing can say which detector. Group 11 (marked *communicated*) when a cover opens, 12 when it's closed | `connect/conditions.py` |
+| 62 | **Auxiliary Tamper**: every detector's tamper on one shared circuit (both PIR types tested), so nothing can say which detector. Group 11 (marked *communicated*) when a cover opens, 12 when it's closed. **Not always logged**: on 8 Oct 2026 the third opening that day (10:45, after two at 08:40 and 08:42) sent no group 11 at all, although the keypad showed `AUX 0,0 Tamper` and the internal sounder went off; only the group 12 came, when the cover closed. A limit on repeated alarms ("swinger" count)? The driver falls back on area flag 44 ([below](#area-flags)) | `connect/conditions.py` |
 | 61, 63, 64, 67, 68, 70, 110, 121 | Other tampers: bell, expander, keypad, fire zone, zone, code tamper, PSU, GSM | `connect/conditions.py`, names in `protocol.py` (`TAMPER_LOG_NAMES`) |
 | 78–80, 204–209 | Part Arm 1–3 (says which part arm a "part armed" area message means) | `connect/events.py` |
 | 85 | **Arm failed**: one entry per zone still active at the end of the exit time; the keypad shows *Area arm fail* | `connect/events.py` |
@@ -85,7 +85,9 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 21, 22, 23, 26 | Armed, Full Armed, Part Armed, Force Armed | the armed states on a re-read | Used |
 | 24 | Part Arming | *Arming…* on a re-read | Used |
 | 50–52 | Part Arm 1–3 | which part arm | Used |
-| 14 | Tamper Alarm | — | Candidate for tampers already open when Home Assistant connects (D11) |
+| 44 | Internal Alarm | **A tamper the panel doesn't log**: while an area is disarmed, flag 44 set for 5 s with nothing reported to explain it (a tamper, a zone alarm, a failed arm; the area in exit, entry or alarm) shows as the tamper *Internal Alarm* until it clears | Seen 8 Oct 2026: set 1 s after a detector's cover opened (with 62 *Speaker Mimic*), while disarmed, with no tamper logged; both cleared once a user code was entered, not when the cover closed. On V4 firmware another project saw it set while an alarm sounded (below). What else sets it is to be checked (exit and entry tones, chime, the fail-to-set warning, walk test): the driver ignores it in exit, entry and alarm, and after a failed arm |
+| 62 | Speaker Mimic | — | Set with 44 above. Not used: it may follow exit, entry or chime tones too |
+| 14 | Tamper Alarm | — | Candidate for tampers already open when Home Assistant connects (D11). Not set while the cover was open above |
 | 28, 29, 30 | Bell SAB, Bell SCB, Strobe | — | Candidates for "the siren is sounding" |
 | 36 | Reset Required | — | Candidate for *System Alerts!* |
 | 64, 65, 66 | Detector Fault, Detector Masked, Fault Present | — | Candidates for faults already present when Home Assistant connects (D11) |
@@ -102,6 +104,7 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | Once, after an alarm and before the engineer code (the keypad showed *Alarm Engineer Working On Site*) | byte 0 was `40`. A second alarm, disarmed with a user code, left it at `00`, so it isn't simply "after an alarm" |
 | Mains off | byte 2 was `08` |
 | Mains on, straight after the engineer code cleared *System Alerts!* | byte 2 was also `08`, so bit 0 of byte 2 isn't simply *mains OK* |
+| A detector's cover open while disarmed, the tamper not logged (area flags 44 and 62 set, keypad *System Alerts!*) | byte 0 was `10` |
 
 None of these is understood yet, and nothing relies on them. They're candidates for knowing what's already wrong when Home Assistant connects (D11): capture them with a tamper open, a fault, during an alarm, and before and after clearing *System Alerts!* (D13).
 
@@ -172,6 +175,7 @@ Things to find out on real panels (each is a task in the [live test plan](../tes
 - Whether a remote **arm is refused** (NAK) with a zone open or a fault present, and what the panel sends then.
 - Commands not used yet that could help: **reading the event log** (to catch up after a reconnect), **user names** (its reply includes the code), **zone bypass**, **outputs**, **the keypad text** (command 14).
 - What the **system flags** (command 10) mean beyond the [first clues](#system-flags), and which **area flags** show tampers and faults that are already there when Home Assistant connects (D11–D13).
+- Why the panel sometimes **doesn't log a tamper** (a limit on repeats?), and what else sets area flag 44 *Internal Alarm* while disarmed (chime, walk test, the fail-to-set warning, a 24-hour zone).
 - Whether **Ready** (flag 16) is set exactly when the area can be armed, and what it shows while armed.
 - Whether Home Assistant's own login writes **Download Start** (log 53) to the panel's log, before log 53/54 (remote access) and 58 (engineer programming) are shown in the activity list.
 - The exact **refusal window** after a session closes, and what affects it.

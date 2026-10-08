@@ -67,7 +67,8 @@ class TexecomPowerSensor(TexecomEntity, SensorEntity):
 
 
 class TexecomDisplaySensor(TexecomEntity, SensorEntity):
-    """The text on the keypads (checked every 30 seconds)."""
+    """The text on the keypads (read every 30 seconds, and a moment after an
+    area change, a failed arm, a tamper or a fault)."""
 
     _entity_domain = "sensor"
     _attr_entity_category = EntityCategory.DIAGNOSTIC

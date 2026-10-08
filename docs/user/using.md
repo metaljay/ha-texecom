@@ -77,7 +77,7 @@ Besides the **Alarm not set** notification (the alarm couldn't arm because a zon
 | Notification | While | Goes when |
 |---|---|---|
 | **Alarm panel on battery** | The panel has lost its mains power | The mains is back |
-| **Alarm tamper** | A tamper is open, with what to check (e.g. *the panel's lid is open*, or *a detector's cover is open*) | It's closed again |
+| **Alarm tamper** | A tamper is open, with what to check (e.g. *the panel's lid is open*, or *a detector's cover is open*), or the panel has set off its internal sounders without saying why (*Internal Alarm*) | It's closed again (*Internal Alarm*: a code has been entered at the keypad) |
 
 <img src="../images/notifications.png" width="420" alt="Home Assistant's notifications: Alarm not set (Kitchen was active when the exit time ended), Alarm panel on battery, and Alarm tamper (the panel's lid is open)">
 
@@ -119,9 +119,13 @@ The Home app can't ask for a code, and HomeKit Bridge only passes one on if it's
 - 🚨 **When the alarm goes off**, the panel drops the connection for about a minute to send its own alarm report through the SmartCom. The alarm and zones **keep showing their last state** (e.g. *Alarm!*) meanwhile, so dashboards and the Home app don't go blank; **Panel connection** shows the link itself. Home Assistant reconnects and catches up by itself.
 - 🔁 **It reconnects by itself** after a power cut, a router restart or a dropped connection, and reads the panel's state again so nothing is missed. After Home Assistant restarts, the SmartCom can take about a minute to let it back in.
 - 🔌 **Mains power** turns off as soon as the panel reports a mains failure, and **Problem** lists any fault the panel reports (e.g. *AC Fail*, *Low Battery*). The panel doesn't report the mains coming back, so Home Assistant checks the power readings every 30 seconds instead.
-- 🔧 **Tamper** turns on while the panel's lid, a keypad, the bell box or a detector is open, and says which. Most installs wire every detector's tamper switch to one shared circuit, so it can't say *which* detector: that shows as *Auxiliary Tamper*.
+- 🔧 **Tamper** turns on while the panel's lid, a keypad, the bell box or a detector is open, and says which. Most installs wire every detector's tamper switch to one shared circuit, so it can't say *which* detector: that shows as *Auxiliary Tamper*. The panel doesn't always report a tamper: if it sets off its internal sounders while the alarm is off and doesn't say why, Tamper shows *Internal Alarm* until a code is entered at the keypad.
 - 🕐 **The panel clock** resets if the panel loses all power (mains and battery). Home Assistant notices and offers to fix it (see [Troubleshooting](troubleshooting.md#the-panel-clock-is-wrong)).
 - 📟 **Keypad display** shows what the keypads say (e.g. *System Alerts!*), without the clock.
+
+## More than one area
+
+If your panel has more than one area (the house and a garage, say), each gets its own alarm and **Ready to arm**, armed and disarmed on its own. *Changed by* and the zone that set an alarm off are worked out for each area, and **Alarm not set** stays until the area that didn't arm is armed. The **Night** and **Home** buttons use the same part arms in every area. Over [Crestron](crestron.md), only the first area can be part armed.
 
 ## Build the dashboard yourself
 

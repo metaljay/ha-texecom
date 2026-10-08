@@ -33,9 +33,9 @@ from ..panel import (
 from . import protocol as P
 from .client import ConnectClient, ConnectError, HostLog, LoginRejected, PanelBusyError, Timing
 from .clock import ClockMixin
-from .conditions import ConditionsMixin
+from .conditions import ConditionsMixin, InternalAlarm
 from .discovery import RediscoveryMixin
-from .events import USER_CHANGE_WINDOW, EventsMixin
+from .events import USER_CHANGE_WINDOW, Credit, EventsMixin
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -44,10 +44,14 @@ RECONNECT_MAX = 30.0
 READY_CHECK_DELAY = 1.5  # after zones settle, re-read whether an area is ready to arm
 POWER_EVERY_N_IDLE = 1  # voltages and currents every keep-alive (~30 s)
 SWITCH_GRACE = 10.0  # longest a mode switch may sit between "disarmed" and the new exit delay
-# A SmartCom refuses a new session for about a minute after the last one
-# closed (setup's check, a restart, an alarm report): the first few retries
-# are expected, so only later ones are logged as warnings.
-QUIET_FAILURES = 3
+# Short keypad messages (Area arm fail, Area in Entry) last seconds, so the
+# 30 s read misses them: the keypad is also read this long after something
+# it may show, at most once every DISPLAY_SOON_EVERY seconds.
+DISPLAY_SOON_DELAY = 1.0
+# A SmartCom closes the session to report an alarm (seen ~1.5 s after the
+# disarm that followed it): a drop this soon after an alarm is explained.
+ALARM_REPORT_WINDOW = 300.0
+DISPLAY_SOON_EVERY = 5.0
 
 
 class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, TexecomPanel):
@@ -94,9 +98,9 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._stopped = False
         self._closed_event = asyncio.Event()
         self._last_part_arm: int | None = None
-        self._last_user: tuple[str, float] | None = None
+        self._last_user: Credit | None = None  # who to name for the next arm or disarm (events.py)
         self._recent_alarms: dict[tuple[int, bool], float] = {}
-        self._alarm_zone: tuple[str, float] | None = None
+        self._alarm_zones: dict[int, tuple[str, float]] = {}  # area -> the zone that set its alarm off, and when
         self._switching: dict[int, float] = {}  # area -> end of a mode switch's grace
         self._switch_disarmed: set[int] = set()  # areas whose switch has had its "disarmed"
         self._seen_current = False
@@ -104,6 +108,12 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._refresh_handle: asyncio.TimerHandle | None = None
         self._ready_handle: asyncio.TimerHandle | None = None
         self._logged_flags: dict[int, list[int]] = {}  # area -> flags last named in the debug log
+        self._internal_alarms: dict[int, InternalAlarm] = {}  # area -> its internal alarm flag (conditions.py)
+        self._internal_alarm_handle: asyncio.TimerHandle | None = None
+        self._display_handle: asyncio.TimerHandle | None = None
+        self._display_soon_at = float("-inf")  # when the keypad was last read for _read_display_soon
+        self._alarm_at = float("-inf")  # when an area was last in alarm
+        self._last_cause_at = float("-inf")  # when a tamper, zone alarm or failed arm was last reported
         self.last_error: str | None = None
 
     @property
@@ -118,7 +128,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
 
     async def stop(self) -> None:
         self._stopped = True
-        for handle in (self._refresh_handle, self._ready_handle):
+        for handle in (self._refresh_handle, self._ready_handle, self._internal_alarm_handle, self._display_handle):
             if handle:
                 handle.cancel()
         for task in [self._task, *self._tasks]:
@@ -140,7 +150,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
 
     async def _run(self) -> None:
         delay = self.reconnect_min
-        failures = 0
+        warned = False
         while not self._stopped:
             self._closed_event.clear()
             client = ConnectClient(
@@ -160,13 +170,18 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 self._log.info("Connect: logged in to %s:%s", self.host, self.port)
                 self.last_error = None
                 delay = self.reconnect_min
-                failures = 0
+                warned = False
                 self.set_connected(True)
                 sync_task = None
                 if self.time_sync_seconds > 0:
                     sync_task = asyncio.get_running_loop().create_task(self._time_sync_loop())
                 try:
                     await self._closed_event.wait()
+                    if time.monotonic() - self._alarm_at < ALARM_REPORT_WINDOW:
+                        self._log.info(
+                            "Connect: the panel closed the connection after the alarm, probably to report it; "
+                            "it usually lets Home Assistant back in within about two minutes"
+                        )
                 finally:
                     if sync_task:
                         sync_task.cancel()
@@ -180,11 +195,15 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                     self._stopped = True  # wait for a new code rather than retry
             except Exception as err:  # noqa: BLE001 - any failure means reconnect
                 self.last_error = str(err)
-                # A SmartCom is often busy for a minute (e.g. reporting an
-                # alarm): one warning, then quieter until it's back.
-                failures += 1
-                if failures == QUIET_FAILURES + 1:
-                    self._log.warning("Connect: %s; still trying", err)
+                # A SmartCom turns logins away for a minute or two after a
+                # session closes (a restart, or reporting an alarm: 92 s once),
+                # so retries are expected: one warning only once it's been
+                # long enough for entities to go unavailable.
+                since = self.disconnected_since
+                offline = time.monotonic() - since if since is not None else 0.0
+                if not warned and offline > self.offline_grace:
+                    warned = True
+                    self._log.warning("Connect: no connection for %.0f s (%s); still trying", offline, err)
                 else:
                     self._log.debug("Connect: unavailable (%s); retrying", err)
             finally:
@@ -227,6 +246,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
             self._apply_area(number, state, part_arm)
         self._log_area_flags()
         self._update_ready()
+        self._check_internal_alarm()
 
     def _update_ready(self) -> None:
         flags = self.client.last_area_flags if self.client else None
@@ -279,6 +299,20 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 self.extra["display"] = text
                 self.notify()
 
+    def _read_display_soon(self) -> None:
+        """Reads the keypad a moment after the panel reports something it may
+        show: an area changing, a failed arm, a tamper or a fault (not zones,
+        which change all the time)."""
+        if self._display_handle or time.monotonic() - self._display_soon_at < DISPLAY_SOON_EVERY:
+            return
+
+        def run() -> None:
+            self._display_handle = None
+            self._display_soon_at = time.monotonic()
+            self._spawn(self._quiet(self.read_display()))
+
+        self._display_handle = asyncio.get_running_loop().call_later(DISPLAY_SOON_DELAY, run)
+
     async def read_power(self) -> None:
         assert self.client
         with contextlib.suppress(PanelBusyError):
@@ -292,6 +326,8 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         area = self.areas.get(number)
         if area is None:
             return
+        if state == "in alarm" or area.state == TRIGGERED:
+            self._alarm_at = time.monotonic()
         if state in ("in entry", "armed", "part armed", "in alarm") and number in self._switch_disarmed:
             # The panel has disarmed for the switch and moved on (straight to
             # armed, with no exit time, say): a "disarmed" now is a real one.
@@ -304,7 +340,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 self._switch_disarmed.add(number)
                 return
             self._end_switch(number)
-            self._alarm_zone = None  # the next alarm names its own zone
+            self._alarm_zones.pop(number, None)  # the next alarm names its own zone
             self.set_area(number, DISARMED, None, changed_by)
         elif state == "in exit":
             if self._end_switch(number):
@@ -331,8 +367,11 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         elif state == "part armed":
             self.set_area(number, self.armed_state_for_part_arm(number, part_arm), part_arm, changed_by)
         elif state == "in alarm":
-            if self._alarm_zone and time.monotonic() - self._alarm_zone[1] < USER_CHANGE_WINDOW:
-                changed_by = self._alarm_zone[0]
+            first = self._alarm_zones.get(number)
+            if self._alarm_named(area):
+                changed_by = None  # still the zone that set it off
+            elif first and time.monotonic() - first[1] < USER_CHANGE_WINDOW:
+                changed_by = first[0]
             self.set_area(number, TRIGGERED, area.part_arm, changed_by)
 
     def _end_switch(self, number: int) -> bool:
@@ -354,7 +393,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         try:
             await coro
         except ConnectError as err:
-            self._log.debug("Connect: area refresh skipped: %s", err)
+            self._log.debug("Connect: read skipped: %s", err)
 
     # ─── Arm / disarm ───────────────────────────────────────────────────────
 
@@ -372,7 +411,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         client = self._ready_client()
         current = self.areas[area].state
         self._requested_mode[area] = mode
-        credit = self._last_user = ("Home Assistant", time.monotonic())
+        credit = self._last_user = Credit("Home Assistant", time.monotonic(), area)
         try:
             if current not in (DISARMED, ARMING, PENDING, TRIGGERED):
                 # Switching mode: the panel reports "disarmed" for a moment
@@ -393,7 +432,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
     async def disarm(self, area: int) -> None:
         """Resets first when in alarm (as texecom2mqtt does)."""
         client = self._ready_client()
-        credit = self._last_user = ("Home Assistant", time.monotonic())
+        credit = self._last_user = Credit("Home Assistant", time.monotonic(), area)
         try:
             if self.areas[area].state == TRIGGERED:
                 await self._ok(client.reset(area, self.panel_zones), "reset")
@@ -402,7 +441,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
             self._drop_credit(credit)
             raise
 
-    def _drop_credit(self, credit: tuple[str, float]) -> None:
+    def _drop_credit(self, credit: Credit) -> None:
         """A request the panel didn't take explains nothing that happens next
         (unless a keypad code has come in since)."""
         if self._last_user is credit:

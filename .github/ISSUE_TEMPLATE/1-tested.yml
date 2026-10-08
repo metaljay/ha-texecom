@@ -1,12 +1,13 @@
 name: "✅ Tested on my panel"
 description: Tell us how it went on your panel, whether it all worked or not. This helps more than anything else right now.
-title: "Tested: Premier Elite <zones> <firmware> via <SmartCom/ComIP/Crestron>"
+title: "Tested: "
 labels: ["test report"]
 body:
   - type: markdown
     attributes:
       value: |
         Thanks for trying it! Reports from panels other than the Elite 24 are especially useful.
+        Please finish the title with your panel, firmware and module, e.g. *Tested: Premier Elite 24, V6.05, SmartCom*.
         Your **panel model and firmware** are on the panel's device page in Home Assistant (*Settings → Devices & services → Texecom*), or in the diagnostics download.
   - type: dropdown
     id: panel

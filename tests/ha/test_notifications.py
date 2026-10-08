@@ -62,6 +62,22 @@ async def test_tamper_notice_says_what_to_check(hass, fake):
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
+async def test_a_tamper_the_panel_doesnt_log_is_explained(hass, fake):
+    """Seen on a real panel: a detector's cover opened, the internal sounder
+    went off, but no tamper was logged. The notice says to look at the keypad."""
+    entry = await setup_connect(hass, fake)
+    fake.open_tamper(62, logged=False)
+    await entry.runtime_data.refresh_areas()  # the next regular read
+    await wait_for(lambda: _notice(hass, "tamper", entry) is not None)
+    note = _notice(hass, "tamper", entry)
+    assert "**Internal Alarm**" in note["message"] and "The keypad shows what it is" in note["message"]
+    assert hass.states.get("binary_sensor.texecom_tamper").attributes["sources"] == ["Internal Alarm"]
+    fake.send_user(1)  # a code at the keypad silences it
+    await wait_for(lambda: _notice(hass, "tamper", entry) is None)
+    assert hass.states.get("binary_sensor.texecom_tamper").state == "off"
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
 async def test_notices_can_be_turned_off(hass, fake):
     entry = await setup_connect(hass, fake, options={"notify_mains": False, "notify_tamper": False})
     fake.on_battery = True
@@ -79,3 +95,29 @@ async def test_notices_go_when_the_integration_unloads(hass, fake):
     await wait_for(lambda: _notice(hass, "tamper", entry) is not None)
     assert await hass.config_entries.async_unload(entry.entry_id)
     assert _notice(hass, "tamper", entry) is None
+
+
+async def test_a_failed_arm_isnt_forgotten_because_another_area_is_armed(hass, socket_enabled):
+    """With two areas, the garage being armed doesn't remove the notice that
+    the house didn't arm; the house arming does."""
+    from fake_connect_panel import DEMO_ZONES, TWO_AREAS, FakeConnectPanel, with_garage_area
+
+    fake = FakeConnectPanel(zones=with_garage_area(DEMO_ZONES), areas=TWO_AREAS, exit_delay=0.05)
+    await fake.start()
+    try:
+        entry = await setup_connect(hass, fake)
+        fake.set_area(3, area=2)  # the garage is armed
+        await wait_for(lambda: hass.states.get("alarm_control_panel.texecom_garage").state == "armed_away")
+        fake.send_log(85, 0, 4, areas=1)  # the house didn't arm: Kitchen
+        await wait_for(lambda: _notes(hass))
+        fake.set_zone(2, 1)  # anything else the panel reports meanwhile
+        fake.set_area(1, area=2)  # even the garage arming again
+        fake.set_area(3, area=2)
+        await hass.async_block_till_done()
+        await wait_for(lambda: hass.states.get("binary_sensor.texecom_hallway").state == "on")
+        assert _notes(hass)
+        fake.set_area(3, area=1)  # the house arms on the next try
+        await wait_for(lambda: not _notes(hass))
+        assert await hass.config_entries.async_unload(entry.entry_id)
+    finally:
+        await fake.close()

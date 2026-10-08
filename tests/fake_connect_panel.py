@@ -1,11 +1,12 @@
-"""Fake Texecom Connect panel (Premier Elite 24, one area) for tests and demos.
+"""Fake Texecom Connect panel (Premier Elite 24, one area or more) for tests and demos.
 
-    python3 tests/fake_connect_panel.py [port] [--demo] [--clock-reset] [--commands]
+    python3 tests/fake_connect_panel.py [port] [--demo] [--two-areas] [--clock-reset] [--commands]
 
 --demo uses friendlier zone names (for screenshots) and wanders a few zones
-between active and secure. --clock-reset starts its clock at 31 Oct 2023.
---commands reads commands from standard input (see COMMANDS below), so a test
-Home Assistant can be shown tampers, mains failures, keypad users and alarms.
+between active and secure. --two-areas puts the Garage in a second area,
+GARAGE. --clock-reset starts its clock at 31 Oct 2023. --commands reads
+commands from standard input (see COMMANDS below), so a test Home Assistant
+can be shown tampers, mains failures, keypad users and alarms.
 """
 
 from __future__ import annotations
@@ -41,6 +42,19 @@ DEMO_ZONES = [
 ]
 
 
+TWO_AREAS = {1: "HOUSE", 2: "GARAGE"}
+
+
+def with_garage_area(zones: list[tuple]) -> list[tuple]:
+    """The zones with the Garage in area 2 (zone entries: number, name, type,
+    and optionally an area bitmap; area 1 when left out)."""
+    return [(z[0], z[1], z[2], 2 if z[1] == "Garage" else 1) for z in zones]
+
+
+def zone_areas(zone: tuple) -> int:
+    return zone[3] if len(zone) > 3 else 1
+
+
 USER_COUNT = 24
 FAKE_USERS = {1: ("Master", "975319"), 3: ("Sam", "864208")}
 
@@ -55,14 +69,22 @@ def user_record(name: str, code: str) -> bytes:
 
 
 class FakeConnectPanel:
-    def __init__(self, udl: str = "1234", zones=None, area_name: str = "HOUSE", exit_delay: float = 0.05) -> None:
+    def __init__(
+        self,
+        udl: str = "1234",
+        zones=None,
+        area_name: str = "HOUSE",
+        exit_delay: float = 0.05,
+        areas: dict[int, str] | None = None,
+    ) -> None:
         self.udl = udl
         self.zone_list = zones or TEST_ZONES
-        self.area_name = area_name
+        self.area_names = areas or {1: area_name}
         self.exit_delay = exit_delay
-        self.zone_state = {n: 0 for n, _name, _t in self.zone_list}
-        self.area_state = 0  # index into P.AREA_STATES
-        self.part_arm: int | None = None
+        self.zone_state = {z[0]: 0 for z in self.zone_list}
+        self.area_states = dict.fromkeys(self.area_names, 0)  # area -> index into P.AREA_STATES
+        self.part_arms: dict[int, int | None] = dict.fromkeys(self.area_names)
+        self.ident = b"Elite 24     V6.05.03LS1"
         self.commands: list[tuple[int, bytes]] = []
         self.writers: set[asyncio.StreamWriter] = set()
         self.msg_seq = 0
@@ -72,13 +94,22 @@ class FakeConnectPanel:
         self.clock_set_to: bytes | None = None
         self.server: asyncio.base_events.Server | None = None
         self.port = 0
-        self._exit_timer: asyncio.TimerHandle | None = None
+        self._exit_timers: dict[int, asyncio.TimerHandle] = {}
         self.on_battery = False
         self.connections = 0  # TCP connections accepted (a SmartCom counts these, logged in or not)
         self.power_override: bytes | None = None  # raw GET_SYSTEM_POWER reply
         self.clock_raw: bytes | None = None  # raw GET_DATE_TIME reply (e.g. an impossible date)
         self.system_flags = bytes(8)  # GET_SYSTEM_FLAGS reply (its meaning isn't mapped yet)
         self.ready: bool | None = None  # area flag 16; None: ready while disarmed with no zone open
+        # Area flags 44 Internal Alarm and 62 Speaker Mimic: the internal sounder going off, as for a
+        # tamper while disarmed (seen on a real panel); a code at the keypad silences it.
+        self.internal_alarm = False
+        self.display: str | None = None  # the keypad's text; None: "Premier Elite" and the time
+        # A SmartCom reports an alarm itself: about 1.5 s after the disarm that follows it, it hangs
+        # up, and turns logins away for about 2 minutes (seen on a real panel). 0: never.
+        self.busy_after_alarm = 0.0  # seconds logins are turned away
+        self.report_after = 1.5  # seconds from the disarm to hanging up
+        self.busy_until = 0.0  # loop time
         # GET_USER: {number: (name, code)} for users 1-24; the others are empty.
         # The codes are fakes, used to check that Home Assistant never keeps or logs one.
         self.users: dict[int, tuple[str, str]] = dict(FAKE_USERS)
@@ -93,6 +124,19 @@ class FakeConnectPanel:
             w.close()
         if self.server:
             self.server.close()
+
+    @property
+    def area_state(self) -> int:
+        """Area 1's state (index into P.AREA_STATES)."""
+        return self.area_states[1]
+
+    @area_state.setter
+    def area_state(self, state: int) -> None:
+        self.area_states[1] = state
+
+    @property
+    def part_arm(self) -> int | None:
+        return self.part_arms[1]
 
     def drop_all(self, alarm: bool = False) -> None:
         """Panel hangs up (as when it reports an alarm through the module)."""
@@ -114,9 +158,21 @@ class FakeConnectPanel:
         self.zone_state[number] = state
         self.send(bytes([P.MSG_ZONE, number, state]))
 
-    def set_area(self, state: int, part_arm: int | None = None) -> None:
-        self.area_state, self.part_arm = state, part_arm
-        self.send(bytes([P.MSG_AREA, 1, state]))
+    def set_area(self, state: int, part_arm: int | None = None, area: int = 1) -> None:
+        if self.area_states[area] == 5 and state == 0 and self.busy_after_alarm:
+            asyncio.get_running_loop().call_later(self.report_after, self._report_alarm)
+        self.area_states[area], self.part_arms[area] = state, part_arm
+        self.send(bytes([P.MSG_AREA, area, state]))
+
+    def _report_alarm(self) -> None:
+        """Hangs up to send its own alarm report, and is busy meanwhile."""
+        self.busy_until = asyncio.get_running_loop().time() + self.busy_after_alarm
+        for w in list(self.writers):
+            w.close()
+
+    @property
+    def busy(self) -> bool:
+        return asyncio.get_running_loop().time() < self.busy_until
 
     def send_log(self, log_type: int, group: int, parameter: int, areas: int = 1) -> None:
         now = datetime.now()
@@ -133,16 +189,29 @@ class FakeConnectPanel:
     def send_zone_alarm(self, number: int) -> None:
         """The zone-alarm log entry. Its type is the zone's type, as on a real
         panel: 1 for an entry/exit zone, 3 for an interior one..."""
-        zone_type = next((t for n, _name, t in self.zone_list if n == number), 3)
-        self.send_log(zone_type, 3, number)
+        zone = next((z for z in self.zone_list if z[0] == number), None)
+        self.send_log(zone[2] if zone else 3, 3, number, areas=zone_areas(zone) if zone else 1)
 
     def send_user(self, user: int) -> None:
+        self.internal_alarm = False  # a code silences the internal sounder
         self.send(bytes([P.MSG_USER, user, 0]))
+
+    def open_tamper(self, log_type: int, logged: bool = True) -> None:
+        """A tamper opens (e.g. 60 the lid, 62 a detector's cover). While
+        disarmed the panel sounds its internal alarm. A real panel once
+        didn't log it (logged=False): only its internal alarm flag showed it."""
+        if self.area_state == 0:
+            self.internal_alarm = True
+        if logged:
+            self.send_log(log_type, 11, 0, areas=0)
 
     # ─── Commands ───────────────────────────────────────────────────────────
 
     async def _on_client(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
         self.connections += 1
+        if self.busy:
+            await self._turn_away(reader, writer)
+            return
         self.writers.add(writer)
         parser = P.FrameParser(lambda f: self._on_frame(writer, f))
         try:
@@ -152,6 +221,21 @@ class FakeConnectPanel:
             pass
         finally:
             self.writers.discard(writer)
+            writer.close()
+
+    @staticmethod
+    async def _turn_away(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+        """Busy reporting an alarm: a login gets 80-byte frames the driver
+        doesn't know, one with a bad CRC, then the connection closes (as a
+        real SmartCom did)."""
+        try:
+            await reader.read(1024)  # the login
+            unknown = P.encode_frame(0x41, 0, bytes(75))
+            writer.write(unknown + unknown[:-1] + bytes([unknown[-1] ^ 0xFF]))
+            await writer.drain()
+        except (ConnectionError, OSError):
+            pass
+        finally:
             writer.close()
 
     def _on_frame(self, writer: asyncio.StreamWriter, frame: P.Frame) -> None:
@@ -186,46 +270,31 @@ class FakeConnectPanel:
             self.clock_raw = None
             reply(ack)
         elif cmd == P.CMD_GET_PANEL_IDENTIFICATION:
-            reply(b"Elite 24     V6.05.03LS1".ljust(32))
+            reply(self.ident.ljust(32))
         elif cmd == P.CMD_GET_ZONE_DETAILS:
             details = bytearray(34)
-            for number, name, ztype in self.zone_list:
-                if number == args[0]:
-                    details[0], details[1] = ztype, 0x01
-                    details[2 : 2 + len(name)] = name.encode()
+            for zone in self.zone_list:
+                if zone[0] == args[0]:
+                    details[0], details[1] = zone[2], zone_areas(zone)
+                    details[2 : 2 + len(zone[1])] = zone[1].encode()
             reply(bytes(details))
         elif cmd == P.CMD_GET_AREA_DETAILS:
             details = bytearray(25)
             details[0] = args[0]
-            if args[0] == 1:
-                details[1 : 1 + len(self.area_name)] = self.area_name.encode()
+            name = self.area_names.get(args[0], "")
+            details[1 : 1 + len(name)] = name.encode()
             struct.pack_into("<HH", details, 17, 15, 15)
             reply(bytes(details))
         elif cmd == P.CMD_GET_ZONE_STATE:
             start, count = args[0], args[1]
             reply(bytes(self.zone_state.get(start + i, 0) for i in range(count)))
         elif cmd == P.CMD_GET_AREA_FLAGS:
-            flags = bytearray(73)
-            s = self.area_state
-            ready = (
-                self.ready if self.ready is not None else s == 0 and not any(v & 3 for v in self.zone_state.values())
-            )
-            if ready:
-                flags[P.FLAG_READY] = 1
-            if s == 5:
-                flags[P.FLAG_ALARM] = 1
-            elif s == 1:
-                flags[P.FLAG_EXIT] = 1
-            elif s == 2:
-                flags[P.FLAG_ARMED] = flags[P.FLAG_ENTRY] = 1
-            elif s == 3:
-                flags[P.FLAG_ARMED] = flags[P.FLAG_FULL_ARMED] = 1
-            elif s == 4:
-                flags[P.FLAG_ARMED] = flags[P.FLAG_PART_ARMED] = 1
-                flags[P.FLAG_PART_ARM_1 + (self.part_arm or 1) - 1] = 1
-            reply(bytes(flags[args[0] : args[0] + args[1]]))
+            reply(bytes(self._area_flags()[args[0] : args[0] + args[1]]))
         elif cmd == P.CMD_GET_LCD_DISPLAY:
-            reply(b" Premier Elite  " + datetime.now().strftime(" %a %d %H:%M  ").encode())
+            if self.display is not None:
+                reply(self.display.encode("latin1").ljust(32)[:32])
+            else:
+                reply(b" Premier Elite  " + datetime.now().strftime(" %a %d %H:%M  ").encode())
         elif cmd == P.CMD_GET_SYSTEM_POWER:
             # ref, system V, battery V, system I, battery I (as a real panel:
             # on battery both currents read 0 and the voltage drops)
@@ -234,21 +303,25 @@ class FakeConnectPanel:
             else:
                 reply(bytes([100, 92, 94, 0, 0]) if self.on_battery else bytes([100, 101, 99, 30, 2]))
         elif cmd == P.CMD_ARM_AREA:
-            arm_type = args[0]
+            arm_type, bitmap = args[0], args[1]
             reply(ack)
             if arm_type != P.ARM_FULL:
-                self.send_log(77 + arm_type, 0, 0)  # PART_ARM_n log, as the panel does
+                self.send_log(77 + arm_type, 0, 0, bitmap)  # PART_ARM_n log, as the panel does
             armed = (3, None) if arm_type == P.ARM_FULL else (4, arm_type)
-            if self.exit_delay:
-                self.set_area(1)
-                self._exit_timer = asyncio.get_running_loop().call_later(self.exit_delay, self.set_area, *armed)
-            else:
-                self.set_area(*armed)  # no exit time: armed at once
+            for area in self._areas_in(bitmap):
+                if self.exit_delay:
+                    self.set_area(1, area=area)
+                    self._exit_timers[area] = asyncio.get_running_loop().call_later(
+                        self.exit_delay, self.set_area, *armed, area
+                    )
+                else:
+                    self.set_area(*armed, area=area)  # no exit time: armed at once
         elif cmd == P.CMD_DISARM_AREA:
-            if self._exit_timer:
-                self._exit_timer.cancel()
             reply(ack)
-            self.set_area(0)
+            for area in self._areas_in(args[0]):
+                if timer := self._exit_timers.pop(area, None):
+                    timer.cancel()
+                self.set_area(0, area=area)
         elif cmd == P.CMD_RESET_AREA:
             reply(ack)
         elif cmd == P.CMD_GET_SYSTEM_FLAGS:
@@ -260,24 +333,53 @@ class FakeConnectPanel:
         else:
             reply(bytes([P.NAK]))
 
+    def _areas_in(self, bitmap: int) -> list[int]:
+        return [area for area in self.area_states if bitmap & (1 << (area - 1))]
+
+    def _area_flags(self) -> bytearray:
+        """GET_AREA_FLAGS from flag 0: one byte per flag, a bit per area."""
+        flags = bytearray(73)
+        for area, s in self.area_states.items():
+            bit = 1 << (area - 1)
+            open_zones = any(self.zone_state.get(z[0], 0) & 3 for z in self.zone_list if zone_areas(z) & bit)
+            if self.ready if self.ready is not None else s == 0 and not open_zones:
+                flags[P.FLAG_READY] |= bit
+            if self.internal_alarm and area == 1:
+                flags[P.FLAG_INTERNAL_ALARM] |= bit
+                flags[62] |= bit  # Speaker Mimic
+            on = {
+                5: (P.FLAG_ALARM,),
+                1: (P.FLAG_EXIT,),
+                2: (P.FLAG_ARMED, P.FLAG_ENTRY),
+                3: (P.FLAG_ARMED, P.FLAG_FULL_ARMED),
+                4: (P.FLAG_ARMED, P.FLAG_PART_ARMED, P.FLAG_PART_ARM_1 + (self.part_arms[area] or 1) - 1),
+            }.get(s, ())
+            for flag in on:
+                flags[flag] |= bit
+        return flags
+
 
 COMMANDS = """Commands, one per line:
   zone N open|closed|tamper|alarm    zone N changes (alarm: active and alarmed, and logged)
-  area off|exit|entry|armed|alarm    the area changes
-  area part N                        the area is part armed with part arm N
+  area [A] off|exit|entry|armed|alarm  the area changes (area 1, or area A)
+  area [A] part N                    the area is part armed with part arm N
   user N                             user N enters a code at a keypad
   mains off|on                       mains fails (logged at once), or comes back (seen in the power readings)
-  lid open|closed                    the panel's lid (Panel Box Tamper)
-  aux open|closed                    a detector's cover (Auxiliary Tamper, the shared circuit)
+  lid open|closed                    the panel's lid (Panel Box Tamper); while disarmed it sounds the
+                                     internal alarm until a code is entered (user N)
+  aux open|closed                    a detector's cover (Auxiliary Tamper, the shared circuit), the same
+  lid|aux open unlogged              the same, but the panel doesn't log it (seen once on a real panel)
   armfail N                          arming failed: zone N was active when the exit time ended
   drop                               hang up, as when the panel reports an alarm
+  busy N                             from now on, after an alarm is disarmed: hang up and turn logins
+                                     away for N seconds, as a SmartCom reporting the alarm (about 120)
   refuse arm|disarm                  say no to the next arm or disarm from Home Assistant
-  log TYPE GROUP PARAMETER [AREAS]   any event-log entry"""
+  log TYPE GROUP PARAMETER [AREAS]   any event-log entry
+  display TEXT                       the keypads show TEXT (up to 32 characters); display alone: the usual"""
 
 ZONE_BITS = {"open": 0x01, "closed": 0x00, "tamper": 0x02, "alarm": 0x11}
 AREA_STATES = {"off": 0, "exit": 1, "entry": 2, "armed": 3, "alarm": 5}
 TAMPER_LOGS = {"lid": 60, "aux": 62}
-TAMPER_GROUPS = {"open": 11, "closed": 12}
 
 
 def run_command(panel: FakeConnectPanel, line: str) -> str:
@@ -293,6 +395,10 @@ def run_command(panel: FakeConnectPanel, line: str) -> str:
                 panel.set_area(4, int(n))
             case ["area", state] if state in AREA_STATES:
                 panel.set_area(AREA_STATES[state])
+            case ["area", a, "part", n] if a.isdigit() and int(a) in panel.area_states:
+                panel.set_area(4, int(n), area=int(a))
+            case ["area", a, state] if a.isdigit() and int(a) in panel.area_states and state in AREA_STATES:
+                panel.set_area(AREA_STATES[state], area=int(a))
             case ["user", n]:
                 panel.send_user(int(n))
             case ["mains", "off"]:
@@ -300,14 +406,20 @@ def run_command(panel: FakeConnectPanel, line: str) -> str:
                 panel.send_log(47, 9, 0, areas=0)  # AC Fail, as a real panel logs it
             case ["mains", "on"]:
                 panel.on_battery = False  # a real panel doesn't log the restore
-            case [place, state] if place in TAMPER_LOGS and state in TAMPER_GROUPS:
-                panel.send_log(TAMPER_LOGS[place], TAMPER_GROUPS[state], 0, areas=0)
+            case [place, "open", *how] if place in TAMPER_LOGS and how in ([], ["unlogged"]):
+                panel.open_tamper(TAMPER_LOGS[place], logged=not how)
+            case [place, "closed"] if place in TAMPER_LOGS:
+                panel.send_log(TAMPER_LOGS[place], 12, 0, areas=0)
             case ["armfail", n]:
                 panel.send_log(85, 0, int(n))
             case ["drop"]:
                 panel.drop_all()
+            case ["busy", seconds]:
+                panel.busy_after_alarm = float(seconds)
             case ["refuse", "arm" | "disarm" as what]:
                 panel.nak_next[P.CMD_ARM_AREA if what == "arm" else P.CMD_DISARM_AREA] = 1
+            case ["display", *_]:
+                panel.display = line.strip().split(maxsplit=1)[1] if len(words) > 1 else None
             case ["log", log_type, group, parameter, *areas] if len(areas) <= 1:
                 panel.send_log(int(log_type), int(group), int(parameter), *(int(a) for a in areas))
             case _:
@@ -328,7 +440,13 @@ async def _read_commands(panel: FakeConnectPanel) -> None:
 async def _main() -> None:
     port = int(next((a for a in sys.argv[1:] if a.isdigit()), "10001"))
     demo = "--demo" in sys.argv
-    panel = FakeConnectPanel(zones=DEMO_ZONES if demo else None, exit_delay=15 if demo else 2)
+    zones = DEMO_ZONES if demo else TEST_ZONES
+    two = "--two-areas" in sys.argv
+    panel = FakeConnectPanel(
+        zones=with_garage_area(zones) if two else zones,
+        areas=TWO_AREAS if two else None,
+        exit_delay=15 if demo else 2,
+    )
     if "--clock-reset" in sys.argv:  # as after a full power-down: 31 Oct 2023
         panel.clock_offset = datetime(2023, 10, 31, 12, 0) - datetime.now()
     await panel.start(port, "0.0.0.0")

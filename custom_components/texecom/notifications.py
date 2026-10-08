@@ -1,7 +1,7 @@
 """Notifications in Home Assistant:
 
 - "Alarm not set": the panel didn't arm because zones were active when the
-  exit time ended. It names the zones, and goes once the alarm is armed.
+  exit time ended. It names the zones, and goes once that area is armed.
 - "Alarm panel on battery" while the panel has no mains power, and "Alarm
   tamper" while a tamper is open (each can be turned off in Options). They
   follow the Mains power and Tamper sensors."""
@@ -14,9 +14,9 @@ from typing import Any
 
 from homeassistant.components import persistent_notification
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import Event, HomeAssistant, callback
 
-from .const import CONF_NOTIFY_MAINS, CONF_NOTIFY_TAMPER, DOMAIN
+from .const import CONF_NOTIFY_MAINS, CONF_NOTIFY_TAMPER, DOMAIN, EVENT
 from .panel import MAINS_FAULTS, TexecomPanel
 
 ARM_FAILED_WINDOW = 60.0  # zones reported within this of each other are one failed arm
@@ -36,6 +36,10 @@ TAMPER_PLACES = {
     "Expander Tamper": "an expander",
     "PSU Tamper": "a power supply's box",
     "Code Tamper Alarm": "too many wrong codes were entered at a keypad",
+    "Internal Alarm": (
+        "the panel set off its internal sounders without saying why. The keypad shows what it is "
+        "(often a detector's cover or the panel's lid), and entering a code there silences it"
+    ),
 }
 
 
@@ -69,15 +73,43 @@ def arm_failed_notifier(hass: HomeAssistant, entry: ConfigEntry) -> Callable[[di
 
 
 def dismiss_when_armed(hass: HomeAssistant, entry: ConfigEntry, panel: TexecomPanel) -> Callable[[], None]:
-    """Removes the notification once an area is armed. Returns the function
-    that stops watching."""
+    """Removes the notification once an area that didn't arm is armed: the
+    areas the panel named in its arm_failed events, or any area if it named
+    none. An area that was armed already (a garage that's always armed, say)
+    doesn't remove it. Returns the function that stops watching."""
+    failed: set[int] = set()  # the areas that didn't arm
+    failed_at = [0.0]
+    armed: set[int] = set()  # the areas armed at the last check
+
+    @callback
+    def arm_failed(event: Event) -> None:
+        if event.data.get("type") != "arm_failed" or event.data.get("entry_id") != entry.entry_id:
+            return
+        now = time.monotonic()
+        if now - failed_at[0] > ARM_FAILED_WINDOW:  # a new notification, as arm_failed_notifier makes
+            failed.clear()
+        failed_at[0] = now
+        bitmap = event.data.get("areas") or 0
+        failed.update(number for number in panel.areas if bitmap & (1 << (number - 1)))
 
     @callback
     def armed_now() -> None:
-        if any(area.state.startswith("armed") for area in panel.areas.values()):
+        now_armed = {number for number, area in panel.areas.items() if area.state.startswith("armed")}
+        newly = now_armed - armed
+        armed.clear()
+        armed.update(now_armed)
+        if newly and (newly & failed or not failed):
+            failed.clear()
             persistent_notification.async_dismiss(hass, f"{DOMAIN}_arm_failed_{entry.entry_id}")
 
-    return panel.add_listener(armed_now)
+    remove_event = hass.bus.async_listen(EVENT, arm_failed)
+    remove_listener = panel.add_listener(armed_now)
+
+    def remove() -> None:
+        remove_event()
+        remove_listener()
+
+    return remove
 
 
 def watch_conditions(hass: HomeAssistant, entry: ConfigEntry, panel: TexecomPanel) -> Callable[[], None]:

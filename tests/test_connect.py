@@ -398,6 +398,63 @@ async def test_reconnects_after_the_panel_hangs_up(fake):
         await panel.stop()
 
 
+async def test_the_simulated_smartcom_is_busy_after_an_alarm(fake):
+    """As a real SmartCom: a moment after the disarm that follows an alarm it
+    hangs up to report the alarm, and turns logins away for a while (with
+    frames the driver doesn't know, then closing the connection)."""
+    from fake_connect_panel import run_command
+
+    run_command(fake, "busy 0.6")
+    fake.report_after = 0.05
+    panel = await make_panel(fake)
+    try:
+        run_command(fake, "area alarm")
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        connections = fake.connections
+        run_command(fake, "area off")
+        await wait_for(lambda: not panel.connected)
+        await asyncio.sleep(0.4)
+        assert not panel.connected and fake.connections > connections  # tried, and turned away
+        assert "closed the connection" in panel.last_error
+        await wait_for(lambda: panel.connected)  # let back in afterwards
+        assert panel.areas[1].state == DISARMED
+    finally:
+        await panel.stop()
+
+
+async def test_a_smartcom_busy_reporting_an_alarm_is_no_warning_until_entities_go_unavailable(fake, caplog):
+    """After an alarm a SmartCom turns Home Assistant away for about two
+    minutes (92 s once): expected, so retries are quiet until it's been as
+    long as entities keep their state (3 minutes), then one warning."""
+    from fake_connect_panel import run_command
+
+    def warnings() -> list[str]:
+        return [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+
+    async def alarm_then_disarm() -> None:
+        run_command(fake, "area alarm")
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        run_command(fake, "area off")
+        await wait_for(lambda: not panel.connected)
+        await wait_for(lambda: panel.connected, timeout=5)
+
+    caplog.set_level("DEBUG", logger="custom_components.texecom")
+    run_command(fake, "busy 1")
+    fake.report_after = 0.05
+    panel = await make_panel(fake)
+    panel.offline_grace = 3.0  # the 3 minutes, shortened
+    try:
+        connections = fake.connections
+        await alarm_then_disarm()
+        assert fake.connections - connections >= 5  # four logins turned away, then back in
+        assert warnings() == []
+        panel.offline_grace = 0.3  # now longer than that
+        await alarm_then_disarm()
+        assert len(warnings()) == 1 and "still trying" in warnings()[0]
+    finally:
+        await panel.stop()
+
+
 async def test_arm_failed_names_the_zone(fake):
     events = []
     panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
@@ -421,6 +478,42 @@ async def test_alarm_names_the_zone_from_its_alarmed_flag(fake):
         await panel.stop()
 
 
+async def test_a_zone_seen_later_in_an_alarm_doesnt_replace_the_one_that_set_it_off(fake, monkeypatch):
+    """However long the alarm lasts: the hallway sets it off and the kitchen
+    sees someone over a minute later; the alarm still names the hallway,
+    also when the panel says "in alarm" again."""
+    from custom_components.texecom.connect import events
+    from custom_components.texecom.connect import panel as connect_panel
+
+    for module in (events, connect_panel):
+        monkeypatch.setattr(module, "USER_CHANGE_WINDOW", 0.2)  # the minute, shortened
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        fake.set_area(5)
+        fake.set_zone(1, 0x11)  # Hallway: active and alarmed
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED and panel.areas[1].changed_by == "Hallway")
+        await asyncio.sleep(0.3)
+        fake.set_zone(3, 0x11)  # Kitchen, later
+        fake.send_zone_alarm(3)
+        await asyncio.sleep(0.1)
+        await panel.refresh_areas()  # a re-read: still in alarm
+        fake.set_area(5)  # the panel says "in alarm" again
+        await asyncio.sleep(0.1)
+        assert panel.areas[1].state == TRIGGERED and panel.areas[1].changed_by == "Hallway"
+        fake.set_area(0)  # disarmed: the next alarm names its own zone
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        await asyncio.sleep(0.3)
+        fake.set_area(5)
+        fake.set_zone(3, 0x11)
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED and panel.areas[1].changed_by == "Kitchen")
+    finally:
+        await panel.stop()
+
+
 async def test_system_tampers(fake):
     events = []
     panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
@@ -431,6 +524,126 @@ async def test_system_tampers(fake):
         assert events[0] == ("tamper", {"source": "Panel Box Tamper", "log_type": 60})
         fake.send_log(60, 12, 0, areas=0)  # lid back on
         await wait_for(lambda: panel.extra.get("tampers") == {"Auxiliary Tamper"})
+    finally:
+        await panel.stop()
+
+
+@pytest.fixture
+def quick_internal_alarm(monkeypatch):
+    from custom_components.texecom.connect import conditions
+
+    monkeypatch.setattr(conditions, "INTERNAL_ALARM_CONFIRM", 0.2)
+
+
+async def test_a_tamper_the_panel_doesnt_log_shows_from_its_internal_alarm(fake, quick_internal_alarm):
+    """Seen on a real panel: a detector's cover opened while disarmed, the
+    internal sounder went off (area flag 44, Internal Alarm), but the panel
+    didn't log the tamper; only its restore, when the cover closed. It shows
+    as the tamper "Internal Alarm" until a code at the keypad clears it."""
+    from fake_connect_panel import run_command
+
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        run_command(fake, "aux open unlogged")
+        await panel.refresh_areas()  # the next regular read
+        assert not panel.extra.get("tampers")  # not at once: it must stay on a moment
+        await wait_for(lambda: panel.extra.get("tampers") == {"Internal Alarm"})  # read again by itself
+        assert events == [("tamper", {"source": "Internal Alarm", "log_type": None})]
+        run_command(fake, "aux closed")  # the restore of the tamper the panel didn't report
+        await asyncio.sleep(0.1)
+        await panel.refresh_areas()
+        assert panel.extra["tampers"] == {"Internal Alarm"}  # the internal alarm is on until a code
+        run_command(fake, "user 1")  # a code silences it: read again soon
+        await wait_for(lambda: panel.extra.get("tampers") == set())
+        assert events[-2:] == [
+            ("user", {"user": 1, "method": "code"}),
+            ("tamper_cleared", {"source": "Internal Alarm", "log_type": None}),
+        ]
+    finally:
+        await panel.stop()
+
+
+async def test_a_reported_tamper_doesnt_show_its_internal_alarm_too(fake, quick_internal_alarm, monkeypatch):
+    """The internal alarm that goes with a logged tamper isn't a second
+    tamper, before or after the tamper closes; the same cover opened again
+    later, this time not logged, is shown."""
+    from fake_connect_panel import run_command
+
+    from custom_components.texecom.connect import conditions
+
+    monkeypatch.setattr(conditions, "CAUSE_MARGIN", 0)  # the second opening isn't minutes later here
+    panel = await make_panel(fake)
+    try:
+        run_command(fake, "aux open")  # logged, with the internal alarm
+        await wait_for(lambda: panel.extra.get("tampers") == {"Auxiliary Tamper"})
+        await panel.refresh_areas()
+        await asyncio.sleep(0.3)
+        await panel.refresh_areas()
+        run_command(fake, "aux closed")
+        await wait_for(lambda: panel.extra.get("tampers") == set())
+        await asyncio.sleep(0.3)
+        await panel.refresh_areas()  # the internal alarm is still on: explained by the tamper
+        assert panel.extra["tampers"] == set()
+        run_command(fake, "user 1")  # silenced
+        await wait_for(lambda: not panel._internal_alarms[1].since)
+        run_command(fake, "aux open unlogged")  # opened again; the panel doesn't log it this time
+        await panel.refresh_areas()
+        await wait_for(lambda: panel.extra.get("tampers") == {"Internal Alarm"})
+    finally:
+        await panel.stop()
+
+
+async def test_the_internal_alarm_is_no_tamper_in_an_alarm_an_exit_or_a_failed_arm(fake, quick_internal_alarm):
+    """Things that sound the internal sounders and are shown already: an
+    alarm (and the disarm after it), an exit delay, the warning after a
+    failed arm. A flag that's only on for a moment isn't shown either."""
+    panel = await make_panel(fake)
+
+    async def settle() -> None:
+        await panel.refresh_areas()
+        await asyncio.sleep(0.3)
+        await panel.refresh_areas()
+
+    try:
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        fake.set_area(5)
+        fake.internal_alarm = True
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        await settle()
+        fake.set_area(0)  # disarmed; its internal alarm is still on until a code
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        await settle()
+        fake.send_user(1)
+        await panel.refresh_areas()
+        fake.set_area(1)  # an exit delay
+        fake.internal_alarm = True
+        await wait_for(lambda: panel.areas[1].state == ARMING)
+        await settle()
+        fake.send_log(85, 0, 3)  # the arm failed: Kitchen active at the end of the exit time
+        fake.set_area(0)
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        await settle()
+        fake.send_user(1)
+        await panel.refresh_areas()
+        fake.internal_alarm = True  # on for a moment only
+        await panel.refresh_areas()
+        fake.internal_alarm = False
+        await asyncio.sleep(0.4)  # the re-read finds it off
+        await panel.refresh_areas()
+        assert not panel.extra.get("tampers")
+    finally:
+        await panel.stop()
+
+
+async def test_an_internal_alarm_already_on_when_connecting_is_shown(fake, quick_internal_alarm):
+    """After a restart a tamper that was logged before is unknown, but the
+    panel's internal alarm still says something's wrong."""
+    fake.internal_alarm = True
+    panel = await make_panel(fake)
+    try:
+        await wait_for(lambda: panel.extra.get("tampers") == {"Internal Alarm"})
     finally:
         await panel.stop()
 
@@ -508,9 +721,13 @@ async def test_diagnostics_name_the_flags_and_read_the_system_flags(fake, caplog
         assert diagnostics["area_flags"] == {1: ["21 Armed", "22 Full Armed"]}
         assert diagnostics["system_flags"] == "00 04 00 00 00 00 00 00"
         assert "area 1 flags: 21 Armed, 22 Full Armed" in caplog.text
+        # One request missed (a panel busy with a burst of events can): asked again.
+        fake.ignore_next[P.CMD_GET_SYSTEM_FLAGS] = 1
+        diagnostics = await panel.async_diagnostics()
+        assert diagnostics["system_flags"] == "00 04 00 00 00 00 00 00"
         # A panel that doesn't answer it: diagnostics say so, and the session carries on.
         connections = fake.connections
-        fake.ignore_next[P.CMD_GET_SYSTEM_FLAGS] = 1
+        fake.ignore_next[P.CMD_GET_SYSTEM_FLAGS] = 2
         diagnostics = await panel.async_diagnostics()
         assert diagnostics["system_flags"].startswith("unreadable")
         assert panel.connected and fake.connections == connections
@@ -676,3 +893,163 @@ async def test_reading_user_names_when_not_connected(fake):
     await panel.stop()
     with pytest.raises(PanelError):
         await panel.async_read_user_names()
+
+
+# ─── More than one area ────────────────────────────────────────────────────
+
+
+@pytest.fixture
+async def two_areas():
+    """A panel like the first one reported from outside (issue #4): an Elite
+    12 on V6.03, two areas. The Garage is in area 2, GARAGE."""
+    from fake_connect_panel import TWO_AREAS, with_garage_area
+
+    panel = FakeConnectPanel(zones=with_garage_area(FakeConnectPanel().zone_list), areas=TWO_AREAS)
+    panel.ident = b"Elite 12     V6.03.02LS1"
+    await panel.start()
+    yield panel
+    await panel.close()
+
+
+async def test_a_panel_with_two_areas(two_areas, monkeypatch):
+    """Each area is read, shown, armed and ready to arm on its own."""
+    from custom_components.texecom.connect import panel as connect_panel
+
+    monkeypatch.setattr(connect_panel, "READY_CHECK_DELAY", 0.05)
+    fake = two_areas
+    info, zones, areas = await probe("127.0.0.1", fake.port, "1234")
+    assert (info.zones, info.firmware) == (12, "V6.03.02LS1")
+    assert [(a.number, a.name) for a in areas] == [(1, "HOUSE"), (2, "GARAGE")]
+    assert {z.name: z.areas for z in zones}["Garage"] == [2]
+    panel = await make_panel(fake)
+    try:
+        assert panel.areas[1].ready and panel.areas[2].ready
+        await panel.arm(2, "away")
+        assert (P.CMD_ARM_AREA, bytes([0, 0b10])) in fake.commands
+        await wait_for(lambda: panel.areas[2].state == ARMED_AWAY)
+        assert panel.areas[1].state == DISARMED
+        fake.set_zone(2, 1)  # the lounge (area 1) opens
+        await wait_for(lambda: panel.areas[1].ready is False)
+        assert panel.areas[2].ready is False  # armed: not "ready to arm"
+        await panel.disarm(2)
+        await wait_for(lambda: panel.areas[2].state == DISARMED)
+        assert panel.areas[1].state == DISARMED
+    finally:
+        await panel.stop()
+
+
+async def test_each_area_names_the_zone_that_set_its_own_alarm_off(two_areas):
+    """Two alarms within a minute: each area names its own zone, and
+    disarming one doesn't change what the other says."""
+    fake = two_areas
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3, area=1)
+        fake.set_area(3, area=2)
+        await wait_for(lambda: panel.areas[1].state == panel.areas[2].state == ARMED_AWAY)
+        fake.set_area(5, area=1)
+        fake.set_zone(1, 0x11)  # Hallway (the house)
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED and panel.areas[1].changed_by == "Hallway")
+        fake.set_zone(4, 0x11)  # Garage (the garage) seen first...
+        fake.set_area(5, area=2)  # ...then its alarm
+        await wait_for(lambda: panel.areas[2].state == TRIGGERED)
+        await asyncio.sleep(0.1)
+        assert panel.areas[2].changed_by == "Garage"
+        fake.set_area(0, area=2)  # the garage disarmed
+        await wait_for(lambda: panel.areas[2].state == DISARMED)
+        fake.set_area(5, area=1)  # the house says "in alarm" again
+        await asyncio.sleep(0.1)
+        assert panel.areas[1].changed_by == "Hallway"
+    finally:
+        await panel.stop()
+
+
+async def test_who_armed_or_disarmed_is_worked_out_for_each_area(two_areas):
+    """Home Assistant arming the house doesn't explain the garage arming at
+    the same time (a fob, say); one keypad code disarming both names the
+    user on both."""
+    fake = two_areas
+    fake.exit_delay = 1.0
+    panel = await make_panel(fake)
+    try:
+        await panel.arm(1, "away")  # the house: an exit delay
+        await wait_for(lambda: panel.areas[1].state == ARMING)
+        fake.set_area(3, area=2)  # meanwhile the garage arms, by a fob
+        await wait_for(lambda: panel.areas[2].state == ARMED_AWAY)
+        assert panel.areas[2].changed_by is None
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        assert panel.areas[1].changed_by == "Home Assistant"
+        fake.send_user(3)  # a code at a keypad disarms both
+        fake.set_area(0, area=1)
+        fake.set_area(0, area=2)
+        await wait_for(lambda: panel.areas[1].state == panel.areas[2].state == DISARMED)
+        assert (panel.areas[1].changed_by, panel.areas[2].changed_by) == ("User 3", "User 3")
+    finally:
+        await panel.stop()
+
+
+async def test_ready_to_arm_is_read_again_after_a_disarm(fake):
+    """It used to wait for the next regular read (up to 30 s) or a zone
+    change, so a disarm from the phone left "Not ready" showing."""
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        await panel.refresh_areas()
+        assert panel.areas[1].ready is False  # armed
+        fake.set_area(0)  # disarmed, and nothing else happens
+        await wait_for(lambda: panel.areas[1].ready is True, timeout=2)
+    finally:
+        await panel.stop()
+
+
+async def test_a_short_keypad_message_is_read_soon_after_what_caused_it(fake, monkeypatch):
+    """ "Area arm fail" shows for a few seconds: the 30 s read missed it. The
+    keypad is read a moment after the panel reports something it may show,
+    but not after zone changes."""
+    from fake_connect_panel import run_command
+
+    from custom_components.texecom.connect import panel as connect_panel
+
+    monkeypatch.setattr(connect_panel, "DISPLAY_SOON_DELAY", 0.05)
+    monkeypatch.setattr(connect_panel, "DISPLAY_SOON_EVERY", 0.2)
+    panel = await make_panel(fake)
+    try:
+        run_command(fake, "display Area arm fail")
+        run_command(fake, "armfail 3")
+        await wait_for(lambda: panel.extra["display"] == "Area arm fail", timeout=2)
+        await asyncio.sleep(0.3)
+        run_command(fake, "display Area in Entry > A.")
+        run_command(fake, "area entry")
+        await wait_for(lambda: panel.extra["display"] == "Area in Entry > A.", timeout=2)
+        await asyncio.sleep(0.3)
+        reads = sum(cmd == P.CMD_GET_LCD_DISPLAY for cmd, _args in fake.commands)
+        run_command(fake, "zone 2 open")
+        await asyncio.sleep(0.3)
+        assert sum(cmd == P.CMD_GET_LCD_DISPLAY for cmd, _args in fake.commands) == reads
+    finally:
+        await panel.stop()
+
+
+async def test_a_drop_after_an_alarm_says_why(fake, caplog):
+    """The SmartCom closes the session to report an alarm: the log says so,
+    so a missing connection afterwards isn't a mystery."""
+    from fake_connect_panel import run_command
+
+    caplog.set_level("INFO", logger="custom_components.texecom")
+    run_command(fake, "busy 0.3")
+    fake.report_after = 0.05
+    panel = await make_panel(fake)
+    try:
+        fake.drop_all()  # a drop with no alarm: nothing said
+        await wait_for(lambda: not panel.connected)
+        await wait_for(lambda: panel.connected)
+        assert "to report it" not in caplog.text
+        run_command(fake, "area alarm")
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        run_command(fake, "area off")
+        await wait_for(lambda: not panel.connected)
+        assert "closed the connection after the alarm, probably to report it" in caplog.text
+        await wait_for(lambda: panel.connected, timeout=5)
+    finally:
+        await panel.stop()

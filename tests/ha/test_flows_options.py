@@ -131,7 +131,7 @@ async def test_names_can_be_filled_in_from_the_panel(hass, fake, caplog):
 
 async def test_filling_in_names_when_the_panel_is_busy(hass, fake):
     entry = await setup_connect(hass, fake)
-    fake.ignore_next[P.CMD_GET_USER] = 1
+    fake.ignore_next[P.CMD_GET_USER] = 2  # not answered, even when asked again
     result = await options(hass, entry, "user_names", user_names="3 = Alex", read_names=True)
     assert result["type"] is FlowResultType.FORM and result["errors"] == {"base": "read_names_failed"}
     fake.users = {}

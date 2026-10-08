@@ -210,7 +210,8 @@ class ConnectClient:
         """Send a command and return its reply payload (after the echoed
         command byte). Commands never overlap; each is resent on timeout with
         the same sequence number. An optional command (one the panel might
-        not support) is sent once, and no answer doesn't end the session."""
+        not support) is sent at most twice (a panel busy with a burst of
+        events can miss one), and no answer doesn't end the session."""
         async with self._lock:
             if not self._writer or self._closed:
                 raise ConnectError("not connected")
@@ -219,7 +220,8 @@ class ConnectClient:
             frame = P.encode_command(sequence, cmd, body)
             loop = asyncio.get_running_loop()
             self._last_command = loop.time()
-            for _attempt in range(1 if optional else self.timing.command_attempts):
+            attempts = self.timing.command_attempts
+            for _attempt in range(min(2, attempts) if optional else attempts):
                 future: asyncio.Future[bytes] = loop.create_future()
                 self._pending = (sequence, cmd, future)
                 try:
@@ -233,7 +235,7 @@ class ConnectClient:
                     self._pending = None
             if optional:
                 raise ConnectError(f"command {cmd} was not answered")
-            reason = f"command {cmd} was not answered after {self.timing.command_attempts} attempts"
+            reason = f"command {cmd} was not answered after {attempts} attempts"
             # An unanswered command means the session is dead even if TCP isn't.
             self._end(reason)
             raise ConnectError(reason)

@@ -52,16 +52,20 @@ The Home Assistant tests have one file per module (see [Architecture](architectu
 
 ## The simulated panels
 
-**`tests/fake_connect_panel.py`: `FakeConnectPanel`**, a Premier Elite 24 with one area, speaking Texecom Connect on localhost. It answers logins, reads, arm/disarm/reset, and can be told to:
+**`tests/fake_connect_panel.py`: `FakeConnectPanel`**, a Premier Elite 24 with one area (or more), speaking Texecom Connect on localhost. It answers logins, reads, arm/disarm/reset, and can be told to:
 
 | Call or setting | Simulates |
 |---|---|
 | `set_zone(n, bits)` | A zone changing (`0x01` active, `0x02` tamper, `0x11` active and alarmed, `0x20` bypassed) |
-| `set_area(state, part_arm=None)` | The area changing (`0` disarmed, `1` exit, `2` entry, `3` armed, `4` part armed, `5` alarm) |
+| `set_area(state, part_arm=None, area=1)` | The area changing (`0` disarmed, `1` exit, `2` entry, `3` armed, `4` part armed, `5` alarm) |
+| `FakeConnectPanel(areas={1: "HOUSE", 2: "GARAGE"}, zones=with_garage_area(TEST_ZONES))` | **More than one area.** A zone entry can carry an area bitmap as a fourth item (area 1 when left out); `with_garage_area()` puts the Garage in area 2. Each area has its own state, flags and Ready, and arm/disarm act on the areas in the request's bitmap. `ident` changes the panel identification (e.g. `b"Elite 12     V6.03.02LS1"`) |
 | `send_zone_alarm(n)` | Zone *n*'s alarm log entry, typed as a real panel types it (1 for an entry/exit zone, 3 for an interior one) |
-| `send_user(n)` | A user entering a code at a keypad |
+| `send_user(n)` | A user entering a code at a keypad (which also silences the internal alarm) |
+| `open_tamper(type, logged=True)` | A tamper opening (`60` the lid, `62` a detector's cover): logged, and while disarmed the internal alarm goes off (area flags 44 and 62) until a code is entered. `logged=False` leaves the log out, as a real panel once did |
+| `internal_alarm` | Area flags 44 *Internal Alarm* and 62 *Speaker Mimic* on or off |
 | `send_log(type, group, parameter, areas=1)` | An event-log entry (e.g. `send_log(85, 0, 3)`: arm failed, zone 3 active) |
 | `drop_all(alarm=True)` | Hanging up, as when the SmartCom reports an alarm |
+| `busy_after_alarm = seconds` (`report_after`) | Reporting an alarm as a real SmartCom does: `report_after` seconds (1.5) after the disarm that follows an alarm it hangs up, then turns logins away for `busy_after_alarm` seconds (about 120 on a real one) with frames the driver doesn't know and one with a bad CRC, then closes. `0` (the default): never |
 | `exit_delay` | Seconds from an arm to armed; `0` arms at once, with no exit time |
 | `nak_next[command] = n` | Refusing the next *n* of a command (a busy panel) |
 | `ignore_next[command] = n` | Not answering the next *n* |
@@ -69,6 +73,7 @@ The Home Assistant tests have one file per module (see [Architecture](architectu
 | `clock_offset` / `clock_raw` | The panel's clock wrong, or holding an impossible date |
 | `ready` | The Ready flag (16): `None` (the default) sets it while disarmed with no zone open; `True`/`False` force it |
 | `system_flags` | The 8 bytes the panel returns for *get system flags* |
+| `display` | The keypads' text (command `display TEXT`); `None`: *Premier Elite* and the time |
 | `udl` | A different UDL code (for reauth tests) |
 | `commands` / `connections` / `clock_set_to` | What it received, for assertions |
 
@@ -78,9 +83,10 @@ It also runs on its own, so a test Home Assistant can connect to it:
 python tests/fake_connect_panel.py 10001 --demo          # friendly zone names, zones that wander
 python tests/fake_connect_panel.py 10001 --clock-reset   # its clock says 31 Oct 2023
 python tests/fake_connect_panel.py 10001 --demo --commands   # and take commands (below)
+python tests/fake_connect_panel.py 10001 --demo --two-areas  # the Garage in a second area, GARAGE
 ```
 
-With `--commands` you type what the panel should do next: `lid open`, `mains off`, `user 3`, `armfail 4`, `zone 4 alarm`, `area alarm`, `drop`… (it prints the full list, `COMMANDS` in the file). That's how to try notifications, the activity list and the blueprints on a test Home Assistant without touching a real alarm. To send commands while it runs in the background, feed it from a file:
+With `--commands` you type what the panel should do next: `lid open`, `aux open unlogged`, `mains off`, `user 3`, `armfail 4`, `zone 4 alarm`, `area alarm`, `area 2 armed`, `drop`, `busy 120`… (it prints the full list, `COMMANDS` in the file). That's how to try notifications, the activity list and the blueprints on a test Home Assistant without touching a real alarm. To send commands while it runs in the background, feed it from a file:
 
 ```bash
 touch fake.in
