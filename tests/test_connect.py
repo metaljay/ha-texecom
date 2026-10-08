@@ -245,6 +245,27 @@ async def test_a_refused_request_doesnt_name_home_assistant(fake):
         await panel.stop()
 
 
+async def test_a_disarm_doesnt_flick_back_to_armed(fake):
+    """The area flags can still show armed just after the panel announces a
+    disarm (seen on a real panel: 0.35 s later); the re-read after a disarm
+    mustn't put the alarm back to armed for a few seconds."""
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        fake.flags_lag = 1.5
+        seen: list[str] = []
+        panel.add_listener(lambda: seen.append(panel.areas[1].state))
+        fake.set_area(0)
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        await asyncio.sleep(1.0)  # the re-read 0.5 s after the disarm, while the flags lag
+        assert ARMED_AWAY not in seen[seen.index(DISARMED) :]
+        await panel.refresh_areas()  # later, the flags have caught up
+        assert panel.areas[1].state == DISARMED
+    finally:
+        await panel.stop()
+
+
 async def test_an_arm_with_no_code_doesnt_keep_who_disarmed(fake):
     """An area that goes straight from disarmed to armed with no code (a fob,
     or no exit time) doesn't keep the name of whoever disarmed it (F4)."""

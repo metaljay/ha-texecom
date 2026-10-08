@@ -34,7 +34,7 @@ Run one compartment's tests while you work, e.g. `pytest tests/ha/test_flows_opt
 
 | Suite | Where | What it covers |
 |---|---|---|
-| **Driver tests** (68) | `tests/test_connect.py`, `tests/test_crestron.py` | Layers 1 and 2: decoding, and each driver against a simulated panel over real sockets. Fast, and need no Home Assistant |
+| **Driver tests** (69) | `tests/test_connect.py`, `tests/test_crestron.py` | Layers 1 and 2: decoding, and each driver against a simulated panel over real sockets. Fast, and need no Home Assistant |
 | **Home Assistant tests** (77) | `tests/ha/` | Layer 3: the integration running inside a real Home Assistant (setup screens, options, entities, services, events, notifications, the activity list, Repairs, diagnostics, the dashboard, the blueprints), against the same simulated panels |
 
 The Home Assistant tests have one file per module (see [Architecture](architecture.md#tests)). `tests/ha/common.py` holds shared helpers:

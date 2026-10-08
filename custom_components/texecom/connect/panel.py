@@ -51,6 +51,10 @@ DISPLAY_SOON_DELAY = 1.0
 # A SmartCom closes the session to report an alarm (seen ~1.5 s after the
 # disarm that followed it): a drop this soon after an alarm is explained.
 ALARM_REPORT_WINDOW = 300.0
+# The area flags can lag the panel's area messages: a real panel's flags still
+# showed Full Armed 0.35 s after it announced a disarm. For this long after a
+# disarm, a flags re-read that shows the area in any other state is stale.
+FLAGS_LAG_AFTER_DISARM = 5.0
 DISPLAY_SOON_EVERY = 5.0
 
 
@@ -113,6 +117,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._display_handle: asyncio.TimerHandle | None = None
         self._display_soon_at = float("-inf")  # when the keypad was last read for _read_display_soon
         self._alarm_at = float("-inf")  # when an area was last in alarm
+        self._disarmed_at: dict[int, float] = {}  # area -> when the panel last announced its disarm
         self._last_cause_at = float("-inf")  # when a tamper, zone alarm or failed arm was last reported
         self.last_error: str | None = None
 
@@ -243,7 +248,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
             return
         states = await self.client.area_states(list(self.areas), self.panel_zones)
         for number, (state, part_arm) in states.items():
-            self._apply_area(number, state, part_arm)
+            self._apply_area(number, state, part_arm, from_flags=True)
         self._log_area_flags()
         self._update_ready()
         self._check_internal_alarm()
@@ -322,9 +327,19 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 self._mains_from_power(power)
                 self.notify()
 
-    def _apply_area(self, number: int, state: str, part_arm: int | None, changed_by: str | None = None) -> None:
+    def _apply_area(
+        self, number: int, state: str, part_arm: int | None, changed_by: str | None = None, from_flags: bool = False
+    ) -> None:
         area = self.areas.get(number)
         if area is None:
+            return
+        if (
+            from_flags
+            and state != "disarmed"
+            and area.state == DISARMED
+            and time.monotonic() - self._disarmed_at.get(number, float("-inf")) < FLAGS_LAG_AFTER_DISARM
+        ):
+            self._log.debug("Connect: area %s: ignoring stale flags (%s) just after a disarm", number, state)
             return
         if state == "in alarm" or area.state == TRIGGERED:
             self._alarm_at = time.monotonic()
@@ -341,6 +356,8 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 return
             self._end_switch(number)
             self._alarm_zones.pop(number, None)  # the next alarm names its own zone
+            if not from_flags:
+                self._disarmed_at[number] = time.monotonic()
             self.set_area(number, DISARMED, None, changed_by)
         elif state == "in exit":
             if self._end_switch(number):

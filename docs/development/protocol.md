@@ -91,6 +91,7 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | 28, 29, 30 | Bell SAB, Bell SCB, Strobe | — | Candidates for "the siren is sounding" |
 | 36 | Reset Required | — | Candidate for *System Alerts!* |
 | 64, 65, 66 | Detector Fault, Detector Masked, Fault Present | — | Candidates for faults already present when Home Assistant connects (D11) |
+| 27, 55 | Arm Failed, Arm Fail Warning | — | Seen 8 Oct 2026: 27 set (with 30 *Strobe*, 44 and 62) while the "fail to set" warning sounded after a failed arm, cleared by a code; 55 still set after the next good arm and disarm. Not used |
 
 **With the mains off** (one read, 8 Oct 2026) the flags set were 29 *Bell SCB*, 32 *Detector Reset* and 67 *LED control*; 16 *Ready* and 25 *Force Armable* were clear. Three minutes later, still on battery, *Ready* was set again, so a zone active at the time of that read may explain it: check again with nothing moving.
 
@@ -113,6 +114,7 @@ None of these is understood yet, and nothing relies on them. They're candidates 
 - **Every arm path works**: Away, Part Arm 1 and 2, switching mode, keypad arms (with the user number), and Apple Home through Home Assistant's HomeKit Bridge.
 - **Switching mode** (disarm, then arm) really disarms for a moment: *disarmed* about 0.4 s after the request, then *in exit* 0.3 s later, with log 42 (*Remote Open/Close*) group 5 (*Open*) for the disarm. The driver hides it, so *disarmed* automations don't fire (`connect/panel.py`, `SWITCH_GRACE`).
 - **A flag re-read just after a remote arm** can still show the exit flag; the driver ignores an exit flag on an armed area.
+- **A flag re-read just after a disarm** can still show the area armed (8 Oct 2026: flags 22 *Full Armed* and 63 0.35 s after the panel announced the disarm from Home Assistant; caught up within 4.5 s). The driver ignores flags showing anything but disarmed for 5 s after a disarm message.
 - **Exit times**: with the same programmed exit delay, a remote arm set after about 10 s and a keypad arm after 15 s (option 58 *Remote Arm Instant* on, which seems to shorten the exit time rather than skip it). The entry delay was 15–16 s.
 - **Fail to set**: a zone active at the end of the exit time stops the arm and sounds the siren; log type 85 names each zone, and the keypad shows *Area arm fail*. With detectors only (no door contacts), keep moving in view of one until the exit time ends.
 - **Zone alarms are logged twice** (again once reported). Sometimes only the second arrives, after the disarm. The zone's *alarmed* bit is set at once and stays set (alarm memory) until reset, so a zone in a disarmed area doesn't explain a later alarm.
