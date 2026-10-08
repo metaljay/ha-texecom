@@ -189,6 +189,7 @@ async def test_part_arm_uses_binary_frame_inside_udl_session(port):
         assert panel.areas[1].state == ARMING
         fake.send('"A0010')  # the held-back event arrives later
         await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
+        assert panel.areas[1].changed_by == "Home Assistant"  # not "User 0"
     finally:
         await panel.stop()
 

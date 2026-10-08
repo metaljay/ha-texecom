@@ -138,7 +138,9 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
 
     def _apply_area_event(self, number: int, event: str, user: str) -> None:
         self._deferred.pop(number, None)
-        by = f"User {int(user)}" if user.isdigit() else None
+        # User 0 is nobody: e.g. the event held back after Home Assistant's
+        # own UDL arm ("A0010"), which mustn't replace "Home Assistant".
+        by = f"User {int(user)}" if user.isdigit() and int(user) else None
         area = self.areas.get(number)
         if area is None:
             return
