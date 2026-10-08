@@ -154,6 +154,17 @@ class EventsMixin:
             return  # the first zone in an alarm is the one that set it off
         self._alarm_zone = (name, now)
         for number_, area in self.areas.items():
-            if area.state == TRIGGERED and (not zone.areas or number_ in zone.areas) and area.changed_by != name:
+            if (
+                area.state == TRIGGERED
+                and (not zone.areas or number_ in zone.areas)
+                and area.changed_by != name
+                and not self._alarm_named(area)
+            ):
                 area.changed_by = name
                 self.notify()
+
+    def _alarm_named(self, area: PanelArea) -> bool:
+        """Whether an area in alarm already names the zone that set it off.
+        It stays named for as long as the alarm lasts, however long: a zone
+        seen later (someone walking in while the sirens sound) didn't."""
+        return area.state == TRIGGERED and area.changed_by in {nice_name(z.name) for z in self.zones.values()}

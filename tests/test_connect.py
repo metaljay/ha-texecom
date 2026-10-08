@@ -421,6 +421,42 @@ async def test_alarm_names_the_zone_from_its_alarmed_flag(fake):
         await panel.stop()
 
 
+async def test_a_zone_seen_later_in_an_alarm_doesnt_replace_the_one_that_set_it_off(fake, monkeypatch):
+    """However long the alarm lasts: the hallway sets it off and the kitchen
+    sees someone over a minute later; the alarm still names the hallway,
+    also when the panel says "in alarm" again."""
+    from custom_components.texecom.connect import events
+    from custom_components.texecom.connect import panel as connect_panel
+
+    for module in (events, connect_panel):
+        monkeypatch.setattr(module, "USER_CHANGE_WINDOW", 0.2)  # the minute, shortened
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        fake.set_area(5)
+        fake.set_zone(1, 0x11)  # Hallway: active and alarmed
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED and panel.areas[1].changed_by == "Hallway")
+        await asyncio.sleep(0.3)
+        fake.set_zone(3, 0x11)  # Kitchen, later
+        fake.send_zone_alarm(3)
+        await asyncio.sleep(0.1)
+        await panel.refresh_areas()  # a re-read: still in alarm
+        fake.set_area(5)  # the panel says "in alarm" again
+        await asyncio.sleep(0.1)
+        assert panel.areas[1].state == TRIGGERED and panel.areas[1].changed_by == "Hallway"
+        fake.set_area(0)  # disarmed: the next alarm names its own zone
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        await asyncio.sleep(0.3)
+        fake.set_area(5)
+        fake.set_zone(3, 0x11)
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED and panel.areas[1].changed_by == "Kitchen")
+    finally:
+        await panel.stop()
+
+
 async def test_system_tampers(fake):
     events = []
     panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))

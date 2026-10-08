@@ -335,7 +335,9 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         elif state == "part armed":
             self.set_area(number, self.armed_state_for_part_arm(number, part_arm), part_arm, changed_by)
         elif state == "in alarm":
-            if self._alarm_zone and time.monotonic() - self._alarm_zone[1] < USER_CHANGE_WINDOW:
+            if self._alarm_named(area):
+                changed_by = None  # still the zone that set it off
+            elif self._alarm_zone and time.monotonic() - self._alarm_zone[1] < USER_CHANGE_WINDOW:
                 changed_by = self._alarm_zone[0]
             self.set_area(number, TRIGGERED, area.part_arm, changed_by)
 
