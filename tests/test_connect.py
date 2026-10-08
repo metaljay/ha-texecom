@@ -936,3 +936,29 @@ async def test_a_panel_with_two_areas(two_areas, monkeypatch):
         assert panel.areas[1].state == DISARMED
     finally:
         await panel.stop()
+
+
+async def test_each_area_names_the_zone_that_set_its_own_alarm_off(two_areas):
+    """Two alarms within a minute: each area names its own zone, and
+    disarming one doesn't change what the other says."""
+    fake = two_areas
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3, area=1)
+        fake.set_area(3, area=2)
+        await wait_for(lambda: panel.areas[1].state == panel.areas[2].state == ARMED_AWAY)
+        fake.set_area(5, area=1)
+        fake.set_zone(1, 0x11)  # Hallway (the house)
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED and panel.areas[1].changed_by == "Hallway")
+        fake.set_zone(4, 0x11)  # Garage (the garage) seen first...
+        fake.set_area(5, area=2)  # ...then its alarm
+        await wait_for(lambda: panel.areas[2].state == TRIGGERED)
+        await asyncio.sleep(0.1)
+        assert panel.areas[2].changed_by == "Garage"
+        fake.set_area(0, area=2)  # the garage disarmed
+        await wait_for(lambda: panel.areas[2].state == DISARMED)
+        fake.set_area(5, area=1)  # the house says "in alarm" again
+        await asyncio.sleep(0.1)
+        assert panel.areas[1].changed_by == "Hallway"
+    finally:
+        await panel.stop()

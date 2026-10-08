@@ -39,7 +39,7 @@ class EventsMixin:
     _last_part_arm: int | None
     _last_user: tuple[str, float] | None
     _recent_alarms: dict[tuple[int, bool], float]
-    _alarm_zone: tuple[str, float] | None
+    _alarm_zones: dict[int, tuple[str, float]]  # area -> the zone that set its alarm off, and when
     _internal_alarms: dict[int, Any]
     _last_cause_at: float
 
@@ -134,7 +134,8 @@ class EventsMixin:
             self._spawn(self._rediscover())
 
     def _credit_alarm_zone(self, number: int) -> None:
-        """Names the zone that set the alarm off as the alarm's "changed by".
+        """Names the zone that set the alarm off as the alarm's "changed by",
+        in each of the zone's areas (each area's alarm names its own zone).
 
         The panel flags it on the zone's state as the alarm starts (the log
         entry can come only after the disarm), in either order relative to
@@ -143,23 +144,19 @@ class EventsMixin:
         zone = self.zones.get(number)
         if not zone:
             return
-        # The alarmed bit stays set (alarm memory) after the disarm, so a zone
-        # in a disarmed area doesn't explain a later alarm.
-        zone_areas = [self.areas[a] for a in zone.areas if a in self.areas] or list(self.areas.values())
-        if all(a.state == DISARMED for a in zone_areas):
-            return
         name = nice_name(zone.name)
         now = time.monotonic()
-        if self._alarm_zone and self._alarm_zone[0] != name and now - self._alarm_zone[1] < USER_CHANGE_WINDOW:
-            return  # the first zone in an alarm is the one that set it off
-        self._alarm_zone = (name, now)
-        for number_, area in self.areas.items():
-            if (
-                area.state == TRIGGERED
-                and (not zone.areas or number_ in zone.areas)
-                and area.changed_by != name
-                and not self._alarm_named(area)
-            ):
+        for area_number in zone.areas or list(self.areas):
+            area = self.areas.get(area_number)
+            # The alarmed bit stays set (alarm memory) after the disarm, so a
+            # zone in a disarmed area doesn't explain a later alarm.
+            if area is None or area.state == DISARMED:
+                continue
+            first = self._alarm_zones.get(area_number)
+            if first and first[0] != name and now - first[1] < USER_CHANGE_WINDOW:
+                continue  # the first zone in an alarm is the one that set it off
+            self._alarm_zones[area_number] = (name, now)
+            if area.state == TRIGGERED and area.changed_by != name and not self._alarm_named(area):
                 area.changed_by = name
                 self.notify()
 

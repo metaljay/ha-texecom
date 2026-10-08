@@ -92,7 +92,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         self._last_part_arm: int | None = None
         self._last_user: tuple[str, float] | None = None
         self._recent_alarms: dict[tuple[int, bool], float] = {}
-        self._alarm_zone: tuple[str, float] | None = None
+        self._alarm_zones: dict[int, tuple[str, float]] = {}  # area -> the zone that set its alarm off, and when
         self._switching: dict[int, float] = {}  # area -> end of a mode switch's grace
         self._switch_disarmed: set[int] = set()  # areas whose switch has had its "disarmed"
         self._seen_current = False
@@ -308,7 +308,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 self._switch_disarmed.add(number)
                 return
             self._end_switch(number)
-            self._alarm_zone = None  # the next alarm names its own zone
+            self._alarm_zones.pop(number, None)  # the next alarm names its own zone
             self.set_area(number, DISARMED, None, changed_by)
         elif state == "in exit":
             if self._end_switch(number):
@@ -335,10 +335,11 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
         elif state == "part armed":
             self.set_area(number, self.armed_state_for_part_arm(number, part_arm), part_arm, changed_by)
         elif state == "in alarm":
+            first = self._alarm_zones.get(number)
             if self._alarm_named(area):
                 changed_by = None  # still the zone that set it off
-            elif self._alarm_zone and time.monotonic() - self._alarm_zone[1] < USER_CHANGE_WINDOW:
-                changed_by = self._alarm_zone[0]
+            elif first and time.monotonic() - first[1] < USER_CHANGE_WINDOW:
+                changed_by = first[0]
             self.set_area(number, TRIGGERED, area.part_arm, changed_by)
 
     def _end_switch(self, number: int) -> bool:
