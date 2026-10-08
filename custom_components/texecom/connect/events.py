@@ -89,6 +89,8 @@ class EventsMixin:
                 self._refresh_areas_soon()  # confirm which part arm from the flags
             else:
                 self._apply_area(m["area"], m["state"], None, self._recent_user(m["area"]))
+            if m["state"] == "disarmed":
+                self._refresh_areas_soon()  # whether it's ready to arm (not announced)
             if m["state"] in ("disarmed", "armed", "part armed") and self._last_user:
                 # A code (or a request from Home Assistant) explains one arm
                 # or disarm in each area, not whatever happens next.

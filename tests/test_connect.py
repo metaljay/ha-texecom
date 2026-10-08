@@ -986,3 +986,18 @@ async def test_who_armed_or_disarmed_is_worked_out_for_each_area(two_areas):
         assert (panel.areas[1].changed_by, panel.areas[2].changed_by) == ("User 3", "User 3")
     finally:
         await panel.stop()
+
+
+async def test_ready_to_arm_is_read_again_after_a_disarm(fake):
+    """It used to wait for the next regular read (up to 30 s) or a zone
+    change, so a disarm from the phone left "Not ready" showing."""
+    panel = await make_panel(fake)
+    try:
+        fake.set_area(3)
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        await panel.refresh_areas()
+        assert panel.areas[1].ready is False  # armed
+        fake.set_area(0)  # disarmed, and nothing else happens
+        await wait_for(lambda: panel.areas[1].ready is True, timeout=2)
+    finally:
+        await panel.stop()
