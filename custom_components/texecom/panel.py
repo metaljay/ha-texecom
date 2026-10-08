@@ -213,9 +213,14 @@ class TexecomPanel(ABC):
         if changed_by and changed_by != area.changed_by:
             area.changed_by = changed_by
             changed = True
-        elif not changed_by and area.state != state and state in (DISARMED, ARMING, PENDING, TRIGGERED):
-            # Nobody we know of did this (e.g. a fob disarm, or someone
-            # walking in): don't carry "Home Assistant" or "User 3" over.
+        elif (
+            not changed_by
+            and area.state != state
+            and (state in (DISARMED, ARMING, PENDING, TRIGGERED) or area.state in (DISARMED, TRIGGERED))
+        ):
+            # Nobody we know of did this (e.g. a fob disarm, someone walking
+            # in, or an arm with no exit time): don't carry "Home Assistant"
+            # or "User 3" over. Armed after an exit delay keeps who started it.
             area.changed_by = None
         area.state, area.part_arm, area.known = state, part_arm, True
         if state in (DISARMED, ARMED_AWAY, ARMED_HOME, ARMED_NIGHT):
