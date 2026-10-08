@@ -44,10 +44,6 @@ RECONNECT_MAX = 30.0
 READY_CHECK_DELAY = 1.5  # after zones settle, re-read whether an area is ready to arm
 POWER_EVERY_N_IDLE = 1  # voltages and currents every keep-alive (~30 s)
 SWITCH_GRACE = 10.0  # longest a mode switch may sit between "disarmed" and the new exit delay
-# A SmartCom refuses a new session for about a minute after the last one
-# closed (setup's check, a restart, an alarm report): the first few retries
-# are expected, so only later ones are logged as warnings.
-QUIET_FAILURES = 3
 
 
 class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, TexecomPanel):
@@ -143,7 +139,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
 
     async def _run(self) -> None:
         delay = self.reconnect_min
-        failures = 0
+        warned = False
         while not self._stopped:
             self._closed_event.clear()
             client = ConnectClient(
@@ -163,7 +159,7 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                 self._log.info("Connect: logged in to %s:%s", self.host, self.port)
                 self.last_error = None
                 delay = self.reconnect_min
-                failures = 0
+                warned = False
                 self.set_connected(True)
                 sync_task = None
                 if self.time_sync_seconds > 0:
@@ -183,11 +179,15 @@ class ConnectPanel(RediscoveryMixin, EventsMixin, ConditionsMixin, ClockMixin, T
                     self._stopped = True  # wait for a new code rather than retry
             except Exception as err:  # noqa: BLE001 - any failure means reconnect
                 self.last_error = str(err)
-                # A SmartCom is often busy for a minute (e.g. reporting an
-                # alarm): one warning, then quieter until it's back.
-                failures += 1
-                if failures == QUIET_FAILURES + 1:
-                    self._log.warning("Connect: %s; still trying", err)
+                # A SmartCom turns logins away for a minute or two after a
+                # session closes (a restart, or reporting an alarm: 92 s once),
+                # so retries are expected: one warning only once it's been
+                # long enough for entities to go unavailable.
+                since = self.disconnected_since
+                offline = time.monotonic() - since if since is not None else 0.0
+                if not warned and offline > self.offline_grace:
+                    warned = True
+                    self._log.warning("Connect: no connection for %.0f s (%s); still trying", offline, err)
                 else:
                     self._log.debug("Connect: unavailable (%s); retrying", err)
             finally:

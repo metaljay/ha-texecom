@@ -19,7 +19,7 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | Behaviour | Detail | Where in the code |
 |---|---|---|
 | **One session at a time** | The SmartCom serves Home Assistant *or* the Texecom app, Homebridge, texecom2mqtt | — |
-| **Refuses a new login for ~10–70 s after a session closes** | Setup's check, a Home Assistant restart, a reload: the next login is refused or the connection is closed during login. Retries are expected; the first three are logged at debug level | `connect/panel.py` (`QUIET_FAILURES`), `connect/discovery.py` (`probe` waits up to 75 s) |
+| **Refuses a new login for ~10–70 s after a session closes** | Setup's check, a Home Assistant restart, a reload: the next login is refused or the connection is closed during login. Retries are expected, so they're logged at debug level, with one warning only after 3 minutes without a connection (as long as entities keep their state) | `connect/panel.py` (`_run`, `OFFLINE_GRACE`), `connect/discovery.py` (`probe` waits up to 75 s) |
 | **A login sent too soon is ignored** | Wait 2 s after connecting before sending it | `client.py` (`LOGIN_DELAY`) |
 | **Drops an idle session after ~60 s** | A keep-alive every 30 s; the driver uses it to re-read zones, areas, the keypad text and power | `client.py` (`KEEPALIVE`), `connect/panel.py` (`_on_idle`) |
 | **Slow answers** | One command at a time; resent (same sequence number) after 3.5 s, up to 5 times. `GET_AREA_FLAGS` once took over 2.5 s | `client.py` |

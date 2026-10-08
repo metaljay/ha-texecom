@@ -422,6 +422,39 @@ async def test_the_simulated_smartcom_is_busy_after_an_alarm(fake):
         await panel.stop()
 
 
+async def test_a_smartcom_busy_reporting_an_alarm_is_no_warning_until_entities_go_unavailable(fake, caplog):
+    """After an alarm a SmartCom turns Home Assistant away for about two
+    minutes (92 s once): expected, so retries are quiet until it's been as
+    long as entities keep their state (3 minutes), then one warning."""
+    from fake_connect_panel import run_command
+
+    def warnings() -> list[str]:
+        return [r.getMessage() for r in caplog.records if r.levelname == "WARNING"]
+
+    async def alarm_then_disarm() -> None:
+        run_command(fake, "area alarm")
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        run_command(fake, "area off")
+        await wait_for(lambda: not panel.connected)
+        await wait_for(lambda: panel.connected, timeout=5)
+
+    caplog.set_level("DEBUG", logger="custom_components.texecom")
+    run_command(fake, "busy 1")
+    fake.report_after = 0.05
+    panel = await make_panel(fake)
+    panel.offline_grace = 3.0  # the 3 minutes, shortened
+    try:
+        connections = fake.connections
+        await alarm_then_disarm()
+        assert fake.connections - connections >= 5  # four logins turned away, then back in
+        assert warnings() == []
+        panel.offline_grace = 0.3  # now longer than that
+        await alarm_then_disarm()
+        assert len(warnings()) == 1 and "still trying" in warnings()[0]
+    finally:
+        await panel.stop()
+
+
 async def test_arm_failed_names_the_zone(fake):
     events = []
     panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
