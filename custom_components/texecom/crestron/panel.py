@@ -146,6 +146,11 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             self._arming_since[number] = time.monotonic()
             self.set_area(number, ARMING)
         elif event == "E":
+            if area.state == TRIGGERED:
+                # The entry zone seen again during an alarm (as Connect
+                # reports it on a real panel): still an alarm until disarmed.
+                _LOGGER.debug("Crestron: area %s in entry again during an alarm; still in alarm", number)
+                return
             self.set_area(number, PENDING, area.part_arm)
         elif event == "L":
             self.set_area(number, TRIGGERED, area.part_arm)

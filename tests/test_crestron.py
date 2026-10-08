@@ -15,6 +15,7 @@ from custom_components.texecom.panel import (
     ARMED_NIGHT,
     ARMING,
     DISARMED,
+    PENDING,
     TRIGGERED,
     PanelArea,
     PanelError,
@@ -140,6 +141,25 @@ async def test_events_drive_zone_and_area_state(port):
         assert panel.areas[1].changed_by == "User 3"
         fake.send('"L0010')
         await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        fake.send('"D0013')
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+    finally:
+        await panel.stop()
+
+
+async def test_an_alarm_stays_an_alarm_when_the_panel_goes_back_to_entry(port):
+    fake, number = port
+    panel = await make_panel(number, event_coalesce=0)
+    try:
+        fake.send('"A0013')
+        fake.send('"E0010')
+        await wait_for(lambda: panel.areas[1].state == PENDING)
+        fake.send('"L0010')
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        fake.send('"E0010')  # the entry zone seen again, sirens still sounding
+        fake.send('"Z0011')
+        await wait_for(lambda: panel.zones[1].active)
+        assert panel.areas[1].state == TRIGGERED
         fake.send('"D0013')
         await wait_for(lambda: panel.areas[1].state == DISARMED)
     finally:
