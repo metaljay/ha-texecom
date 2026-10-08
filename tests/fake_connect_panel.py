@@ -110,6 +110,11 @@ class FakeConnectPanel:
         self.busy_after_alarm = 0.0  # seconds logins are turned away
         self.report_after = 1.5  # seconds from the disarm to hanging up
         self.busy_until = 0.0  # loop time
+        # The area flags can lag an area message: a real panel's flags still showed Full Armed
+        # 0.35 s after it announced a disarm. For this many seconds after a change, the flags
+        # show the state before it. 0: never.
+        self.flags_lag = 0.0
+        self._flags_before: dict[int, tuple[int, int | None, float]] = {}  # area -> state, part arm, until
         # GET_USER: {number: (name, code)} for users 1-24; the others are empty.
         # The codes are fakes, used to check that Home Assistant never keeps or logs one.
         self.users: dict[int, tuple[str, str]] = dict(FAKE_USERS)
@@ -161,6 +166,9 @@ class FakeConnectPanel:
     def set_area(self, state: int, part_arm: int | None = None, area: int = 1) -> None:
         if self.area_states[area] == 5 and state == 0 and self.busy_after_alarm:
             asyncio.get_running_loop().call_later(self.report_after, self._report_alarm)
+        if self.flags_lag:
+            until = asyncio.get_running_loop().time() + self.flags_lag
+            self._flags_before[area] = (self.area_states[area], self.part_arms[area], until)
         self.area_states[area], self.part_arms[area] = state, part_arm
         self.send(bytes([P.MSG_AREA, area, state]))
 
@@ -339,7 +347,11 @@ class FakeConnectPanel:
     def _area_flags(self) -> bytearray:
         """GET_AREA_FLAGS from flag 0: one byte per flag, a bit per area."""
         flags = bytearray(73)
+        now = asyncio.get_running_loop().time()
         for area, s in self.area_states.items():
+            part_arm = self.part_arms[area]
+            if (before := self._flags_before.get(area)) and now < before[2]:
+                s, part_arm = before[0], before[1]  # the flags haven't caught up yet
             bit = 1 << (area - 1)
             open_zones = any(self.zone_state.get(z[0], 0) & 3 for z in self.zone_list if zone_areas(z) & bit)
             if self.ready if self.ready is not None else s == 0 and not open_zones:
@@ -352,7 +364,7 @@ class FakeConnectPanel:
                 1: (P.FLAG_EXIT,),
                 2: (P.FLAG_ARMED, P.FLAG_ENTRY),
                 3: (P.FLAG_ARMED, P.FLAG_FULL_ARMED),
-                4: (P.FLAG_ARMED, P.FLAG_PART_ARMED, P.FLAG_PART_ARM_1 + (self.part_arms[area] or 1) - 1),
+                4: (P.FLAG_ARMED, P.FLAG_PART_ARMED, P.FLAG_PART_ARM_1 + (part_arm or 1) - 1),
             }.get(s, ())
             for flag in on:
                 flags[flag] |= bit
