@@ -99,10 +99,11 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | State | Bytes |
 |---|---|
 | Normal | `00 20 09 00 00 00 00 01` |
-| After an alarm, until the engineer code was entered (the keypad showed *Alarm Engineer Working On Site*) | byte 0 is `40` |
-| Mains off | byte 2 is `08` instead of `09` (bit 0 of byte 2 looks like *mains OK*) |
+| Once, after an alarm and before the engineer code (the keypad showed *Alarm Engineer Working On Site*) | byte 0 was `40`. A second alarm, disarmed with a user code, left it at `00`, so it isn't simply "after an alarm" |
+| Mains off | byte 2 was `08` |
+| Mains on, straight after the engineer code cleared *System Alerts!* | byte 2 was also `08`, so bit 0 of byte 2 isn't simply *mains OK* |
 
-They're candidates for knowing what's already wrong when Home Assistant connects (D11), but nothing relies on them yet: capture them with a tamper open, a fault and an alarm memory first (D13).
+None of these is understood yet, and nothing relies on them. They're candidates for knowing what's already wrong when Home Assistant connects (D11): capture them with a tamper open, a fault, during an alarm, and before and after clearing *System Alerts!* (D13).
 
 ### Arming, alarms and the keypad
 
