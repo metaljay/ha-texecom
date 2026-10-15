@@ -66,3 +66,17 @@ Run the two test suites separately (Home Assistant's test plugin blocks the sock
 ## Testing on the real panel
 
 Follow the [live test plan](docs/testing/live-test-plan.md), including its safety rules. The owner's private notes (not in this repository) have the addresses and access details for their setup.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in this repo's GitHub Issues (`metaljay/ha-texecom`), managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage labels, used as-is: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root, created when they're first needed. See `docs/agents/domain.md`.
