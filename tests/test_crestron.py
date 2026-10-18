@@ -81,6 +81,11 @@ class FakeCrestronPort:
         self.connect_received.append((command, body))
         if command == C.CMD_LOGIN:
             reply = C.ACK if body.decode("latin1") == self.udl else C.NAK
+        elif command == C.CMD_GET_SYSTEM_POWER:
+            # reference, panel volts, battery volts, panel current, battery current:
+            # 13.63 V, 13.63 V, 297 mA, 18 mA (as read on mains)
+            writer.write(C.encode_frame(C.TYPE_RESPONSE, sequence, bytes([command, 100, 99, 99, 33, 2])))
+            return
         elif command in (C.CMD_ARM_AREA, C.CMD_DISARM_AREA):
             reply = self.connect_arm_reply
             if reply == C.ACK:
@@ -151,6 +156,7 @@ async def make_panel(port: int, **kwargs) -> CrestronPanel:
         "status_poll": 0,
         "reconnect_min": 0.05,
         "blackout": 0.1,
+        "login_timeout": 0.3,
         "zones": [PanelZone(n, f"Zone {n}") for n in range(1, 6)],
     }
     opts.update(kwargs)
@@ -335,6 +341,77 @@ async def test_connect_login_refused_says_so():
             await asyncio.wait_for(panel.disarm(1), 20)
         assert [c for c, _ in fake.connect_received] == [C.CMD_LOGIN]  # no command after a refused login
         await wait_for(lambda: fake.received[-1] == P.WINTEX_LOGOUT)
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_power_is_read_inside_a_short_udl_session():
+    fake = FakeCrestronPort(elite168=True)
+    number = await fake.start()
+    panel = await make_panel(number, power_poll=0.3, power_first_delay=0.05)
+    seen = []
+    panel.add_listener(lambda: seen.append(panel.extra.get("power")))
+    try:
+        await wait_for(lambda: "power" in panel.extra)
+        power = panel.extra["power"]
+        assert (power.panel_voltage, power.battery_voltage, power.panel_current, power.battery_current) == (
+            13.63,
+            13.63,
+            297,
+            18,
+        )
+        assert any(seen)  # entities were told
+        assert fake.connect_received[:2] == [(C.CMD_LOGIN, b"1234"), (C.CMD_GET_SYSTEM_POWER, b"")]
+        await wait_for(lambda: fake.received[-1] == P.WINTEX_LOGOUT)
+        await wait_for(lambda: [c for c, _ in fake.connect_received].count(C.CMD_GET_SYSTEM_POWER) >= 2)  # repeats
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_power_isnt_read_without_a_udl_code_or_when_switched_off():
+    fake = FakeCrestronPort(elite168=True)
+    number = await fake.start()
+    for kwargs in ({"udl": None}, {"power_poll": 0}):
+        panel = await make_panel(number, power_first_delay=0.05, **{"power_poll": 0.1, **kwargs})
+        try:
+            await asyncio.sleep(0.5)
+            assert "power" not in panel.extra and not fake.connect_received
+        finally:
+            await panel.stop()
+    await fake.close()
+
+
+async def test_power_isnt_read_while_arming_entering_or_in_alarm():
+    """A session while someone may be at the keypad (exit, entry, alarm) could
+    get in their way, so the read waits for a settled state."""
+    fake = FakeCrestronPort(elite168=True)
+    number = await fake.start()
+    panel = await make_panel(number, power_poll=0.1, power_first_delay=0.05, power_retry=0.1)
+    try:
+        for event in ("X", "E", "L"):
+            fake.send(f'"{event}0010')
+            await wait_for(lambda: panel.areas[1].state != DISARMED)
+            await wait_for(lambda: not panel._busy)  # a read already under way may finish
+            fake.connect_received.clear()
+            await asyncio.sleep(0.5)
+            assert not fake.connect_received, event
+            fake.send('"D0010')
+            await wait_for(lambda: panel.areas[1].state == DISARMED)
+        await wait_for(lambda: "power" in panel.extra)  # settled again: read
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_a_refused_power_read_is_quiet_and_keeps_trying():
+    fake = FakeCrestronPort(elite168=True, udl="9999")  # the panel refuses our code
+    number = await fake.start()
+    panel = await make_panel(number, power_poll=0.1, power_first_delay=0.05)
+    try:
+        await wait_for(lambda: [c for c, _ in fake.connect_received].count(C.CMD_LOGIN) >= 2)
+        assert "power" not in panel.extra and panel.connected
     finally:
         await panel.stop()
         await fake.close()

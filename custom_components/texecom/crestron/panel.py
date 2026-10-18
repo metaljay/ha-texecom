@@ -27,7 +27,7 @@ from ..panel import (
     TexecomPanel,
 )
 from . import protocol as P
-from .connection import POST_LOGOUT_BLACKOUT, RECONNECT_MIN, ConnectionMixin
+from .connection import LOGIN_TIMEOUT, POST_LOGOUT_BLACKOUT, RECONNECT_MIN, CommandFailed, ConnectionMixin
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +37,13 @@ _LOGGER = logging.getLogger(__name__)
 EVENT_COALESCE = 0.5
 # ASTATUS doesn't report the exit delay; trust it over "arming" after this.
 ARMING_GRACE = 120.0
+# Power readings (through Texecom Connect, in a UDL session, so each costs
+# ~30 s of held-back events): first a while after connecting, then this often.
+POWER_POLL = 1800.0
+POWER_FIRST_DELAY = 120.0
+# When a read is skipped (an area is arming, in entry or in alarm), or fails,
+# try again after this.
+POWER_RETRY = 300.0
 
 
 class CrestronPanel(ConnectionMixin, TexecomPanel):
@@ -56,6 +63,10 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         reconnect_min: float | None = None,
         event_coalesce: float | None = None,
         blackout: float | None = None,
+        login_timeout: float = LOGIN_TIMEOUT,
+        power_poll: float = POWER_POLL,
+        power_first_delay: float = POWER_FIRST_DELAY,
+        power_retry: float = POWER_RETRY,
     ) -> None:
         super().__init__(part_arms)
         self.zones = {z.number: z for z in zones}
@@ -69,6 +80,11 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self.reconnect_min = RECONNECT_MIN if reconnect_min is None else reconnect_min
         self.event_coalesce = EVENT_COALESCE if event_coalesce is None else event_coalesce
         self.blackout = POST_LOGOUT_BLACKOUT if blackout is None else blackout
+        self.login_timeout = login_timeout
+        self.power_poll = power_poll
+        self.power_first_delay = power_first_delay
+        self.power_retry = power_retry
+        self._power_task: asyncio.Task | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._task: asyncio.Task | None = None
         self._stopped = False
@@ -92,18 +108,49 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
 
     async def start(self) -> None:
         self._stopped = False
-        self._task = asyncio.get_running_loop().create_task(self._run(), name="texecom crestron")
+        loop = asyncio.get_running_loop()
+        self._task = loop.create_task(self._run(), name="texecom crestron")
+        if self.udl and self.power_poll > 0:
+            self._power_task = loop.create_task(self._power_loop(), name="texecom crestron power")
 
     async def stop(self) -> None:
         self._stopped = True
         for handle in self._deferred.values():
             handle.cancel()
-        if self._task and not self._task.done():
-            self._task.cancel()
-            with contextlib.suppress(asyncio.CancelledError, Exception):
-                await self._task
+        for task in (self._power_task, self._task):
+            if task and not task.done():
+                task.cancel()
+                with contextlib.suppress(asyncio.CancelledError, Exception):
+                    await task
         self.set_connected(False)
         self.cancel_timers()
+
+    # ─── Power ──────────────────────────────────────────────────────────────
+
+    def _settled(self) -> bool:
+        """No area arming, in entry or in alarm: nobody is likely to be at a
+        keypad, so a short UDL session can't get in their way."""
+        return self.connected and all(
+            a.known and a.state not in (ARMING, PENDING, TRIGGERED) for a in self.areas.values()
+        )
+
+    async def _power_loop(self) -> None:
+        await asyncio.sleep(self.power_first_delay)
+        while True:
+            if not self._settled() or self._busy:
+                await asyncio.sleep(self.power_retry)
+                continue
+            # Every attempt holds back the panel's events for ~30 s, so a
+            # failed one waits for the next regular reading, not the retry.
+            try:
+                power = await self._read_power_once()
+            except (PanelError, CommandFailed) as err:
+                _LOGGER.debug("Crestron: power reading failed: %s", err)
+            else:
+                if power:
+                    self.extra["power"] = power
+                    self.notify()
+            await asyncio.sleep(self.power_poll)
 
     # ─── Incoming ───────────────────────────────────────────────────────────
 
