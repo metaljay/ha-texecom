@@ -44,6 +44,14 @@ POWER_FIRST_DELAY = 120.0
 # When a read is skipped (an area is arming, in entry or in alarm), or fails,
 # try again after this.
 POWER_RETRY = 300.0
+# After an arm from Home Assistant, the stored event log is read this long
+# later (past a Part Arm's 10 s exit delay) to see whether the arm failed:
+# Crestron's text feed says nothing when it does.
+AFTER_ARM_CHECK = 20.0
+# Log event types: an arm that failed (one "Arm Failed" per zone in the way,
+# after "Exit Error").
+LOG_EXIT_ERROR = 33
+LOG_ARM_FAILED = 85
 
 
 class CrestronPanel(ConnectionMixin, TexecomPanel):
@@ -67,6 +75,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         power_poll: float = POWER_POLL,
         power_first_delay: float = POWER_FIRST_DELAY,
         power_retry: float = POWER_RETRY,
+        after_arm_check: float = AFTER_ARM_CHECK,
     ) -> None:
         super().__init__(part_arms)
         self.zones = {z.number: z for z in zones}
@@ -85,6 +94,13 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self.power_first_delay = power_first_delay
         self.power_retry = power_retry
         self._power_task: asyncio.Task | None = None
+        self.after_arm_check = after_arm_check
+        self._after_arm_task: asyncio.Task | None = None
+        # The stored event log (read through Texecom Connect): its entry size
+        # and ring size for this panel, and the next index to read.
+        self.log_entry_size = P.C.log_entry_size(len(zones))
+        self.log_capacity = P.C.LOG_CAPACITY.get(len(zones))
+        self._log_pointer: int | None = None
         self._writer: asyncio.StreamWriter | None = None
         self._task: asyncio.Task | None = None
         self._stopped = False
@@ -117,7 +133,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self._stopped = True
         for handle in self._deferred.values():
             handle.cancel()
-        for task in (self._power_task, self._task):
+        for task in (self._after_arm_task, self._power_task, self._task):
             if task and not task.done():
                 task.cancel()
                 with contextlib.suppress(asyncio.CancelledError, Exception):
@@ -143,14 +159,61 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             # Every attempt holds back the panel's events for ~30 s, so a
             # failed one waits for the next regular reading, not the retry.
             try:
-                power = await self._read_power_once()
+                power, entries = await self._session_reads(power=True, log=True)
             except (PanelError, CommandFailed) as err:
-                _LOGGER.debug("Crestron: power reading failed: %s", err)
+                _LOGGER.debug("Crestron: power and log reading failed: %s", err)
             else:
                 if power:
                     self.extra["power"] = power
                     self.notify()
+                self._on_log_entries(entries)
             await asyncio.sleep(self.power_poll)
+
+    # ─── Event log ──────────────────────────────────────────────────────────
+
+    async def _check_log_after_arm(self) -> None:
+        await asyncio.sleep(self.after_arm_check)
+        try:
+            _power, entries = await self._session_reads(power=False, log=True)
+        except (PanelError, CommandFailed) as err:
+            _LOGGER.debug("Crestron: reading the log after the arm failed: %s", err)
+            return
+        self._on_log_entries(entries)
+
+    def _on_log_entries(self, entries: list[tuple[int, dict[str, Any]]]) -> None:
+        """Each stored log entry becomes a "log" event; a failed arm also an
+        "arm_failed" event (as Texecom Connect gives), and the area no longer
+        shows Arming."""
+        for index, m in entries:
+            _LOGGER.debug("Crestron: log entry %d: %s", index, P.C.describe_log(m))
+            t = m["time"]
+            self.on_event(
+                "log",
+                {
+                    "log_type": m["type"],
+                    "name": P.C.LOG_EVENT_NAMES.get(m["type"], f"Log event {m['type']}"),
+                    "group": m["group"],
+                    "parameter": m["parameter"],
+                    "areas": m["areas"],
+                    "communicated": m["communicated"],
+                    "panel_time": "{year:04d}-{month:02d}-{day:02d}T{hours:02d}:{minutes:02d}:{seconds:02d}".format(
+                        **t
+                    ),
+                    "index": index,
+                },
+            )
+            if m["type"] == LOG_ARM_FAILED:
+                zone = self.zones.get(m["parameter"])
+                _LOGGER.warning("Crestron: arming failed: zone %s active", m["parameter"])
+                self.on_event(
+                    "arm_failed",
+                    {"areas": m["areas"], "zone": m["parameter"], "zone_name": zone.name if zone else None},
+                )
+            if m["type"] in (LOG_EXIT_ERROR, LOG_ARM_FAILED):
+                for number, area in self.areas.items():
+                    if m["areas"] & (1 << (number - 1)) and area.state == ARMING:
+                        self._requested_mode.pop(number, None)
+                        self.set_area(number, DISARMED)
 
     # ─── Incoming ───────────────────────────────────────────────────────────
 
@@ -260,10 +323,20 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self._requested_mode[area] = mode
         self._arming_since[area] = time.monotonic()
         try:
-            await self._transaction(command, fallback, (P.C.CMD_ARM_AREA, self._connect_body(area, arm_type)))
+            pointer = await self._transaction(command, fallback, (P.C.CMD_ARM_AREA, self._connect_body(area, arm_type)))
         except PanelError:
             self._requested_mode.pop(area, None)
             raise
+        if pointer is not None:
+            # Went through Texecom Connect: read the log once the exit delay
+            # is over, from where it ended (if nothing was read before).
+            if self._log_pointer is None:
+                self._log_pointer = pointer
+            if self._after_arm_task and not self._after_arm_task.done():
+                self._after_arm_task.cancel()
+            self._after_arm_task = asyncio.get_running_loop().create_task(
+                self._check_log_after_arm(), name="texecom crestron after arm"
+            )
         # The panel's own events are held back for ~30 s after the session.
         if self.areas[area].state in (DISARMED, TRIGGERED):
             self.set_area(area, ARMING, None, "Home Assistant")

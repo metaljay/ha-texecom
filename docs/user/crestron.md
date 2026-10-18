@@ -7,7 +7,7 @@ It's useful for keeping the Texecom app on its SmartCom while Home Assistant use
 ## How it differs from Texecom Connect
 
 - **Zone names can't be read.** You enter how many zones and areas you have; they appear as *Zone 1*, *Zone 2*… and you rename them in Home Assistant.
-- **Only open/closed (active/clear)** is reported for zones: no tamper, mains or keypad display. **With the UDL code, the panel and battery voltages and currents** are read every 30 minutes (each reading holds back the panel's other updates for about 30 seconds; none is taken while an area is arming, in entry or in alarm).
+- **Only open/closed (active/clear)** is reported for zones: no tamper, mains or keypad display. **With the UDL code, the panel and battery voltages and currents** are read every 30 minutes (each reading holds back the panel's other updates for about 30 seconds; none is taken while an area is arming, in entry or in alarm). **The panel's event log** is read at the same time: each new entry shows in the activity list (*panel log: Remote Part Arm 2*) and is a `texecom_event` of type `log` for automations. **About 20 seconds after Home Assistant arms**, the log is read again, so an arm that failed (a door left open) shows *Alarm not set* and the alarm goes back to *Off* instead of staying on *Arming*.
 - **An arm at the keypad doesn't say whether it was full or part.** Choose how it shows (**When armed at the keypad, show as**).
 - **Part arms work for area 1 only.**
 - **After arming or disarming from Home Assistant**, the panel holds back its other updates for about 30 seconds. Nothing is lost, but sensors update late.

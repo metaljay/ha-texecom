@@ -38,6 +38,8 @@ CMD_GET_LCD_DISPLAY = 13
 CMD_GET_PANEL_IDENTIFICATION = 22
 CMD_GET_DATE_TIME = 23
 CMD_SET_DATE_TIME = 24
+CMD_GET_LOG_POINTER = 15  # the index the next log entry will be written to (uint16, little-endian)
+CMD_GET_LOG_EVENTS = 16  # [index lo][index hi][count]: count stored entries, oldest first from index
 CMD_GET_SYSTEM_POWER = 25
 CMD_GET_USER = 27  # its reply holds the user's code: only decode_user_name reads it
 CMD_GET_AREA_DETAILS = 35
@@ -103,6 +105,32 @@ ZONE_STATES = ("secure", "active", "tamper", "short")
 
 # Areas per panel size (zones -> areas).
 AREAS_FOR_ZONES = {12: 2, 24: 2, 48: 4, 64: 4, 88: 8, 168: 16, 640: 64}
+
+
+# The event log is a ring of this many entries (Texecom's installation manual).
+# Reading it is confirmed on a 168 only; other sizes follow the same layout.
+LOG_CAPACITY = {24: 500, 48: 500, 88: 1000, 168: 2000}
+MAX_LOG_EVENTS_PER_READ = 5  # read 5 at a time on a real panel (another project allows 10)
+
+
+def log_entry_size(panel_zones: int | None) -> int | None:
+    """Bytes per stored log entry (the live log message's layout), or None
+    where reading the stored log isn't supported."""
+    if panel_zones not in LOG_CAPACITY:
+        return None
+    return 9 if panel_zones == 168 else 8
+
+
+def encode_get_log_events(index: int, count: int) -> bytes:
+    return index.to_bytes(2, "little") + bytes([count])
+
+
+def decode_log_entries(payload: bytes, size: int) -> list[dict[str, Any]] | None:
+    """Stored log entries, decoded like live log messages; None if the reply
+    isn't a whole number of entries (e.g. a NAK)."""
+    if not payload or len(payload) % size:
+        return None
+    return [_decode_message(bytes([MSG_LOG]) + payload[i : i + size]) for i in range(0, len(payload), size)]
 
 
 def is_nak(payload: bytes) -> bool:

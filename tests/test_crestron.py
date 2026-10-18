@@ -64,8 +64,13 @@ class FakeCrestronPort:
         elite168: bool = False,
         udl: str = "1234",
         connect_arm_reply: int = C.ACK,
+        arm_fails: bool = False,
     ) -> None:
         self.elite168 = elite168
+        self.arm_fails = arm_fails  # a door left open: the arm logs Exit Error and Arm Failed
+        # The stored event log (a 168's 9-byte entries in a 2000-entry ring).
+        self.log: dict[int, bytes] = {}
+        self.log_pointer = 0
         self.login_ok = login_ok and not elite168
         self.text_error = text_error or elite168
         self.close_on_login = close_on_login
@@ -75,6 +80,21 @@ class FakeCrestronPort:
         self.received: list[bytes] = []
         self.connect_received: list[tuple[int, bytes]] = []  # (command, body)
         self.writers: set[asyncio.StreamWriter] = set()
+
+    def add_log(self, log_type: int, parameter: int = 0, group: int = 0, areas: int = 1) -> None:
+        stamp = 35 | 11 << 6 | 10 << 12 | 13 << 16 | 18 << 21 | 26 << 26  # 13:11:35 18/10/2026
+        entry = bytes([log_type, group, parameter, areas & 0xFF]) + stamp.to_bytes(4, "little") + bytes([areas >> 8])
+        self.log[self.log_pointer] = entry
+        self.log_pointer = (self.log_pointer + 1) % 2000
+
+    def _exit_delay_ended(self) -> None:
+        if self.arm_fails:
+            self.add_log(33)  # Exit Error (Arming Failed)
+            self.add_log(85, parameter=94)  # Arm Failed: zone 94 active
+        else:
+            self.armed = True
+            self.add_log(113, parameter=1, group=9)  # Remote Command
+            self.add_log(208, group=6)  # Remote Part Arm 2
 
     def _connect(self, writer, frame: bytes) -> None:
         sequence, command, body = frame[3], frame[4], frame[5:-1]
@@ -86,10 +106,28 @@ class FakeCrestronPort:
             # 13.63 V, 13.63 V, 297 mA, 18 mA (as read on mains)
             writer.write(C.encode_frame(C.TYPE_RESPONSE, sequence, bytes([command, 100, 99, 99, 33, 2])))
             return
+        elif command == C.CMD_GET_LOG_POINTER:
+            pointer = self.log_pointer.to_bytes(2, "little")
+            writer.write(C.encode_frame(C.TYPE_RESPONSE, sequence, bytes([command]) + pointer))
+            return
+        elif command == C.CMD_GET_LOG_EVENTS:
+            index, count = int.from_bytes(body[:2], "little"), body[2]
+            if index + count > 2000 or any((index + n) not in self.log for n in range(count)):
+                reply = C.NAK
+            else:
+                data = b"".join(self.log[index + n] for n in range(count))
+                writer.write(C.encode_frame(C.TYPE_RESPONSE, sequence, bytes([command]) + data))
+                return
         elif command in (C.CMD_ARM_AREA, C.CMD_DISARM_AREA):
             reply = self.connect_arm_reply
             if reply == C.ACK:
-                self.armed = command == C.CMD_ARM_AREA
+                if command == C.CMD_DISARM_AREA:
+                    self.armed = False
+                    self.add_log(42)  # Remote Open/Close
+                else:
+                    self.add_log(32)  # Exit Started
+                    # The rest is logged when the (short, simulated) exit delay ends.
+                    asyncio.get_running_loop().call_later(0.05, self._exit_delay_ended)
         else:
             reply = C.NAK
         writer.write(C.encode_frame(C.TYPE_RESPONSE, sequence, bytes([command, reply])))
@@ -298,7 +336,8 @@ async def test_refused_part_arm_falls_back_to_connect_with_its_part_arm():
         await asyncio.wait_for(panel.arm(1, "night"), 20)
         assert P.part_arm_frame(1, 2) in fake.received
         assert fake.connect_received[-1] == (C.CMD_ARM_AREA, bytes([C.ARM_PART_2, 0x01]))
-        assert fake.armed and panel.areas[1].state == ARMING
+        assert panel.areas[1].state == ARMING
+        await wait_for(lambda: fake.armed)  # once the exit delay ends
         fake.send('"A0010')
         await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
     finally:
@@ -313,7 +352,7 @@ async def test_connect_fallback_uses_the_panels_area_bitmap_size():
     panel = await make_panel(number, zones=[PanelZone(n, f"Zone {n}") for n in range(1, 169)])
     try:
         await asyncio.wait_for(panel.arm(1, "away"), 20)
-        assert fake.connect_received[-1] == (C.CMD_ARM_AREA, bytes([C.ARM_FULL, 0x01, 0x00]))
+        assert (C.CMD_ARM_AREA, bytes([C.ARM_FULL, 0x01, 0x00])) in fake.connect_received
     finally:
         await panel.stop()
         await fake.close()
@@ -475,6 +514,107 @@ async def test_the_connection_closing_during_a_command_says_not_connected():
     try:
         with pytest.raises(PanelNotConnected):
             await panel.arm(1, "away")
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+# ─── The stored event log (through Texecom Connect) ─────────────────────────
+
+ZONES_168 = [PanelZone(n, f"Zone {n}") for n in range(1, 169)]
+
+
+async def make_log_panel(fake, **kwargs):
+    events: list[tuple[str, dict]] = []
+    number = await fake.start()
+    opts = {
+        "zones": ZONES_168,
+        "power_poll": 0,
+        "after_arm_check": 0.1,
+        "on_event": lambda t, d: events.append((t, d)),
+    }
+    panel = await make_panel(number, **{**opts, **kwargs})
+    return panel, events
+
+
+def logs(events):
+    return [(d["index"], d["log_type"]) for t, d in events if t == "log"]
+
+
+async def test_a_failed_arm_is_read_from_the_log_and_reported():
+    fake = FakeCrestronPort(elite168=True, arm_fails=True)
+    fake.add_log(42)  # older entries are never reported
+    panel, events = await make_log_panel(fake, part_arms={"night": 2, "home": 0})
+    try:
+        await asyncio.wait_for(panel.arm(1, "night"), 20)
+        assert panel.areas[1].state == ARMING
+        await wait_for(lambda: any(t == "arm_failed" for t, _ in events))
+        failed = next(d for t, d in events if t == "arm_failed")
+        assert failed == {"areas": 1, "zone": 94, "zone_name": "Zone 94"}
+        assert [n for _i, n in logs(events)] == [33, 85]  # read from where the log ended at the arm
+        log = next(d for t, d in events if t == "log" and d["log_type"] == 85)
+        assert log["name"] == "Arm Failed" and log["panel_time"] == "2026-10-18T13:11:35"
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_a_good_arm_is_logged_but_not_reported_as_failed():
+    fake = FakeCrestronPort(elite168=True)
+    panel, events = await make_log_panel(fake, part_arms={"night": 2, "home": 0})
+    try:
+        await asyncio.wait_for(panel.arm(1, "night"), 20)
+        await wait_for(lambda: len(logs(events)) == 2)
+        assert [n for _i, n in logs(events)] == [113, 208]
+        assert not any(t == "arm_failed" for t, _ in events) and panel.areas[1].state == ARMING
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_the_regular_reading_catches_up_with_the_log():
+    fake = FakeCrestronPort(elite168=True)
+    for _ in range(3):
+        fake.add_log(42)
+    panel, events = await make_log_panel(fake, power_poll=0.2, power_first_delay=0.05)
+    try:
+        await wait_for(lambda: panel._log_pointer == 3)  # the first reading only notes where the log ends
+        assert not logs(events)
+        fake.add_log(32)
+        fake.add_log(42)
+        await wait_for(lambda: len(logs(events)) == 2)
+        assert logs(events) == [(3, 32), (4, 42)]
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_the_log_is_read_across_the_end_of_the_ring():
+    fake = FakeCrestronPort(elite168=True)
+    fake.log_pointer = 1997
+    fake.add_log(42)  # index 1997
+    panel, events = await make_log_panel(fake, power_poll=0.2, power_first_delay=0.05)
+    try:
+        await wait_for(lambda: panel._log_pointer == 1998)
+        for t in (32, 33, 85, 42):  # 1998, 1999, 0, 1
+            fake.add_log(t)
+        await wait_for(lambda: len(logs(events)) == 4)
+        assert logs(events) == [(1998, 32), (1999, 33), (0, 85), (1, 42)]
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_after_a_long_gap_only_the_latest_entries_are_read():
+    fake = FakeCrestronPort(elite168=True)
+    panel, events = await make_log_panel(fake, power_poll=0.3, power_first_delay=0.05)
+    try:
+        await wait_for(lambda: panel._log_pointer == 0)
+        for _ in range(40):
+            fake.add_log(42)
+        await wait_for(lambda: len(logs(events)) == 30)
+        assert [i for i, _ in logs(events)] == list(range(10, 40))
     finally:
         await panel.stop()
         await fake.close()

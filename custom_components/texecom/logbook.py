@@ -51,6 +51,12 @@ def _message(data: dict[str, Any], options: Any) -> str:
         return f"reported a fault: {data.get('source')}"
     if kind == "fault_cleared":
         return f"fault cleared: {data.get('source')}"
+    if kind == "log":
+        # A stored log entry (Crestron reads them through Texecom Connect).
+        name = data.get("name") or f"log event {data.get('log_type')}"
+        if isinstance(data.get("log_type"), int) and 1 <= data["log_type"] <= 21 and data.get("parameter"):
+            return f"panel log: {name} (zone {data['parameter']})"
+        return f"panel log: {name}"
     if kind == "user":
         how = {"code": "a code", "tag": "a tag", "code+tag": "a code and tag"}.get(data.get("method"), "the keypad")
         return f"keypad used by {user_name(options, data.get('user'))} ({how})"
@@ -59,8 +65,8 @@ def _message(data: dict[str, Any], options: Any) -> str:
 
 def _area_of(entry: Any, data: dict[str, Any]) -> int | None:
     """The area an event belongs to, where it says: a zone's area, or the
-    first area of an arm_failed event's area bitmap."""
-    if data.get("type") == "arm_failed" and (areas := data.get("areas")):
+    first area of an arm_failed or log event's area bitmap."""
+    if data.get("type") in ("arm_failed", "log") and (areas := data.get("areas")):
         return (areas & -areas).bit_length()
     panel = getattr(entry, "runtime_data", None)
     zone = getattr(panel, "zones", {}).get(data.get("zone"))

@@ -29,6 +29,9 @@ RECONNECT_MAX = 30.0
 QUIET_FAILURES = 3
 # Measured: the text feed resumes ~30 s after a Wintex logout.
 POST_LOGOUT_BLACKOUT = 35.0
+# At most this many stored log entries are read in one session (5 per read);
+# after a longer gap the oldest of them are skipped.
+MAX_LOG_CATCH_UP = 30
 SILENT_POLLS_BEFORE_RECONNECT = 3
 
 
@@ -60,6 +63,9 @@ class ConnectionMixin:
     _first_status_pending: bool
     _connect_sequence: int
     login_timeout: float
+    _log_pointer: int | None
+    log_entry_size: int | None
+    log_capacity: int | None
 
     @property
     def description(self) -> str:
@@ -265,8 +271,10 @@ class ConnectionMixin:
 
     async def _transaction(
         self, command: str | bytes, fallback: bytes | None, connect: tuple[int, bytes] | None = None
-    ) -> None:
-        """One arm or disarm command in a UDL session.
+    ) -> int | None:
+        """One arm or disarm command in a UDL session. Returns the event log's
+        pointer when the command went through Texecom Connect (read in the
+        same session, so a later read can find what the command caused).
 
         connect is the same command as a Texecom Connect (command, body), tried
         last inside the same session: a Premier Elite 168 (V6.06.03) refuses
@@ -292,11 +300,59 @@ class ConnectionMixin:
                 _LOGGER.debug("Crestron: %s; trying the Texecom Connect equivalent in the same session", err)
                 await self._send_connect(P.C.CMD_LOGIN, self.udl.encode("latin1"), "the panel refused the UDL code")
                 await self._send_connect(*connect, "the panel refused the command")
+                if self.log_entry_size:
+                    with contextlib.suppress(CommandFailed):
+                        return await self._log_pointer_now()
+        return None
 
-    async def _read_power_once(self) -> P.C.SystemPower | None:
-        """The panel's power readings, through Texecom Connect in a UDL
-        session (Crestron itself has no voltages)."""
+    async def _log_pointer_now(self) -> int | None:
+        reply = await self._connect_request(P.C.CMD_GET_LOG_POINTER)
+        return int.from_bytes(reply, "little") if len(reply) == 2 else None
+
+    async def _read_new_log_entries(self) -> list[tuple[int, dict[str, Any]]]:
+        """The stored log entries written since the last read, oldest first, as
+        (index, decoded entry). The first read only notes where the log ends.
+        Inside a session, after the Connect login."""
+        size, capacity = self.log_entry_size, self.log_capacity
+        if not size or not capacity:
+            return []
+        pointer = await self._log_pointer_now()
+        if pointer is None or not 0 <= pointer < capacity:
+            return []
+        if self._log_pointer is None:
+            self._log_pointer = pointer
+            return []
+        count = (pointer - self._log_pointer) % capacity
+        if count > MAX_LOG_CATCH_UP:
+            _LOGGER.info("Crestron: %d new log entries; reading only the last %d", count, MAX_LOG_CATCH_UP)
+            self._log_pointer = (pointer - MAX_LOG_CATCH_UP) % capacity
+            count = MAX_LOG_CATCH_UP
+        entries: list[tuple[int, dict[str, Any]]] = []
+        index = self._log_pointer
+        while count:
+            # A read never runs past the end of the ring.
+            chunk = min(count, P.C.MAX_LOG_EVENTS_PER_READ, capacity - index)
+            reply = await self._connect_request(P.C.CMD_GET_LOG_EVENTS, P.C.encode_get_log_events(index, chunk))
+            decoded = P.C.decode_log_entries(reply, size)
+            if decoded is None or len(decoded) != chunk:
+                _LOGGER.debug("Crestron: log read at %d refused (%s); trying again next time", index, reply.hex())
+                break
+            entries += [((index + n) % capacity, m) for n, m in enumerate(decoded)]
+            index = (index + chunk) % capacity
+            count -= chunk
+        self._log_pointer = index
+        return entries
+
+    async def _session_reads(
+        self, power: bool, log: bool
+    ) -> tuple[P.C.SystemPower | None, list[tuple[int, dict[str, Any]]]]:
+        """Power readings and new log entries, through Texecom Connect in one
+        UDL session (Crestron itself has neither)."""
+        reading, entries = None, []
         async with self._udl_session():
             await self._send_connect(P.C.CMD_LOGIN, self.udl.encode("latin1"), "the panel refused the UDL code")
-            reply = await self._connect_request(P.C.CMD_GET_SYSTEM_POWER)
-        return P.C.decode_system_power(reply)
+            if power:
+                reading = P.C.decode_system_power(await self._connect_request(P.C.CMD_GET_SYSTEM_POWER))
+            if log:
+                entries = await self._read_new_log_entries()
+        return reading, entries
