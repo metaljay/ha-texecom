@@ -52,6 +52,10 @@ AFTER_ARM_CHECK = 20.0
 # after "Exit Error").
 LOG_EXIT_ERROR = 33
 LOG_ARM_FAILED = 85
+# After the log shows a failed arm, the panel still releases the held-back
+# "exit delay started" when its text feed resumes (seen on a real panel 30 s
+# later); it's ignored until this long after the feed is due back.
+HELD_EXIT_GRACE = 10.0
 
 
 class CrestronPanel(ConnectionMixin, TexecomPanel):
@@ -101,6 +105,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self.log_entry_size = P.C.log_entry_size(len(zones))
         self.log_capacity = P.C.LOG_CAPACITY.get(len(zones))
         self._log_pointer: int | None = None
+        self._stale_exit_until: dict[int, float] = {}  # area -> ignore a held-back "X" until then
         self._writer: asyncio.StreamWriter | None = None
         self._task: asyncio.Task | None = None
         self._stopped = False
@@ -214,6 +219,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
                     if m["areas"] & (1 << (number - 1)) and area.state == ARMING:
                         self._requested_mode.pop(number, None)
                         self.set_area(number, DISARMED)
+                        self._stale_exit_until[number] = max(self._blackout_until, time.monotonic()) + HELD_EXIT_GRACE
 
     # ─── Incoming ───────────────────────────────────────────────────────────
 
@@ -238,6 +244,11 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             _LOGGER.exception("Crestron: error handling %r", line)
 
     def _on_area_event(self, number: int, event: str, user: str) -> None:
+        if event == "X" and time.monotonic() < self._stale_exit_until.get(number, 0.0):
+            # The exit delay of the arm the log already showed had failed.
+            _LOGGER.debug("Crestron: ignoring the held-back exit delay of area %s's failed arm", number)
+            return
+        self._stale_exit_until.pop(number, None)
         if (handle := self._deferred.pop(number, None)) is not None:
             handle.cancel()
         if event in ("X", "A") and self.event_coalesce > 0:

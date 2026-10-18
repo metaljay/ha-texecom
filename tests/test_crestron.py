@@ -555,6 +555,15 @@ async def test_a_failed_arm_is_read_from_the_log_and_reported():
         log = next(d for t, d in events if t == "log" and d["log_type"] == 85)
         assert log["name"] == "Arm Failed" and log["panel_time"] == "2026-10-18T13:11:35"
         await wait_for(lambda: panel.areas[1].state == DISARMED)
+        # When the text feed resumes, the panel releases the failed arm's
+        # held-back "exit delay started" (real panel, 18 Oct): still Off.
+        fake.send('"X0010')
+        await asyncio.sleep(1.0)  # past the 0.5 s coalescing
+        assert panel.areas[1].state == DISARMED
+        # A later arm at the keypad still shows.
+        panel._stale_exit_until[1] = 0.0
+        fake.send('"X0010')
+        await wait_for(lambda: panel.areas[1].state == ARMING)
     finally:
         await panel.stop()
         await fake.close()
