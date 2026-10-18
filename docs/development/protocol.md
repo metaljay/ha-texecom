@@ -235,6 +235,15 @@ A COM port set to *Crestron System*: text lines, plus binary UDL (Wintex) frames
 - **Keypad emulation (`KEY`)** is ignored on V6.05.03. **UDL memory addresses** differ between firmware versions, so the integration doesn't read memory.
 - **ASTATUS** doesn't report the exit delay or the end of an alarm.
 
+### Premier Elite 168, V6.06.03 (a tester's panel, Oct 2026)
+
+Its COM port set to *Crestron System*, behind a serial-to-network adapter:
+
+- **Neither command form above is accepted.** Seven attempts (armed and disarmed, with and without a Texecom Connect session open on the SmartCom's port) all went the same way: no `OK` to `\W<udl>/` within 8 s, `ERROR` to the text `\D<bitmask>/`, **NAK `03 0F ED` to the binary `D` frame**, then ACK `03 06 F6` to the logout `H` (so the session was open). The panel's event log recorded nothing for them.
+- **Texecom Connect frames work inside the same kind of session.** Bare, a Connect *Login* gets no reply on this port; after `\W<udl>/` (with or without its `OK`) the same Login gets ACK (`74 52 07 00 01 06 e3`). A Connect client kept in such a session armed Part Arm 2 (`ArmArea`, in exit, then part armed after the 10 s exit delay) and disarmed (`DisarmArea`); the event log showed *Remote Command*, *Remote Part Arm 2* and *Remote Open/Close*.
+- So the driver now tries, last, inside the same session: Connect *Login* (the UDL code), then Connect *ArmArea* (arm type = 0 full, or the part arm 1–3) or *DisarmArea*, with the area bitmap sized for the panel (2 bytes for 168 zones / 16 areas). The Connect replies (`t R len seq <command> <ACK|NAK> crc`) arrive on the same port, between text lines and binary frames. **Tested against the simulated panel only so far**; the evidence above came from a long-running Connect client, not from this one-command transaction.
+- **Never hold a UDL session open** or resend `\W` inside one: a client that did (re-login every 60 s, binary Connect frames passing through, for about a day) had its bytes taken as programming frames (garbage on the keypad display), and its later `\W` got no reply, then `ERROR`.
+
 ## Still unknown
 
 Things to find out on real panels (each is a task in the [live test plan](../testing/live-test-plan.md#part-d--mapping-the-protocol)):

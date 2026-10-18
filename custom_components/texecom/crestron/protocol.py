@@ -12,6 +12,10 @@ Elite over a serial-to-IP bridge:
   "U0030   user 003 entered a code at a keypad
   "NY      ASTATUS reply: one letter per area (Y armed / N not armed)
   OK / ERROR   command acknowledgement
+
+Inside a UDL session some panels (a Premier Elite 168, V6.06.03) refuse the
+text and binary UDL arm/disarm commands but answer Texecom Connect frames
+('t' ...), so those replies are pulled out of the stream too.
 """
 
 from __future__ import annotations
@@ -20,10 +24,16 @@ import re
 from collections.abc import Callable
 from typing import Any
 
+from ..connect import protocol as C
+
 MAX_COMMAND_AREA = 8  # highest area the single-byte bitmask can address
 
 WINTEX_ACK = 0x06
 WINTEX_NAK = 0x0F
+
+# A partial frame is waited for only up to this many bytes, so stray bytes
+# that look like a frame's start can't hold up the text lines behind them.
+MAX_PENDING_FRAME = 64  # the replies inside a session are a few bytes
 
 _AREA_RE = re.compile(r'^"([ADLXE])(\d{3})(\d*)')
 _USER_RE = re.compile(r'^"U(\d{3})')
@@ -73,6 +83,27 @@ def strip_wintex_frames(data: bytes, on_frame: Callable[[bytes], None]) -> bytes
     return data
 
 
+def strip_connect_frames(data: bytes, on_connect_frame: Callable[[C.Frame], None]) -> bytes:
+    """Remove complete Texecom Connect replies and messages ('t', type, total
+    length, sequence, body, CRC) from the start of the buffer. Text lines
+    never start with 't', and UDL frames start with a length byte below 0x20."""
+    while len(data) >= 3 and data[0] == C.START and data[1] in (C.TYPE_RESPONSE, C.TYPE_MESSAGE):
+        length = data[2]
+        if length < 5 or len(data) < length:
+            break
+        frame = data[:length]
+        if C.crc8(frame[:-1]) != frame[-1]:
+            break
+        on_connect_frame(C.Frame(frame[1], frame[3], frame[4:-1]))
+        data = data[length:]
+    return data
+
+
+def connect_command(sequence: int, command: int, body: bytes = b"") -> bytes:
+    """A Texecom Connect command frame, sent inside a UDL session."""
+    return C.encode_command(sequence, command, body)
+
+
 def part_arm_frame(area: int, part_arm: int) -> bytes:
     """Binary UDL part arm ('S' <area index> <part arm>). Unlike Crestron \\Y
     (always Part Arm 1) it reaches Part Arm 1-3. Confirmed for area 1 on an
@@ -109,23 +140,55 @@ def encode_command(command: str) -> bytes:
 
 
 class LineSplitter:
-    """Buffers a byte stream into lines, pulling out binary UDL frames."""
+    """Buffers a byte stream into lines, pulling out binary UDL frames and
+    Texecom Connect frames."""
 
-    def __init__(self, on_line: Callable[[str], None], on_frame: Callable[[bytes], None]) -> None:
+    def __init__(
+        self,
+        on_line: Callable[[str], None],
+        on_frame: Callable[[bytes], None],
+        on_connect_frame: Callable[[C.Frame], None] = lambda _f: None,
+    ) -> None:
         self.on_line = on_line
         self.on_frame = on_frame
+        self.on_connect_frame = on_connect_frame
         self.buffer = b""
 
     def reset(self) -> None:
         self.buffer = b""
 
+    def _strip_frames(self, data: bytes) -> bytes:
+        # Either kind can follow the other (e.g. a UDL NAK then a Connect ACK).
+        while True:
+            stripped = strip_connect_frames(strip_wintex_frames(data, self.on_frame), self.on_connect_frame)
+            if stripped == data:
+                return data
+            data = stripped
+
+    @staticmethod
+    def _frame_pending(data: bytes) -> bool:
+        """The start of a frame whose rest hasn't arrived yet. Its bytes can
+        include CR or LF, so it mustn't be cut up as a line meanwhile."""
+        if not data or len(data) >= MAX_PENDING_FRAME:
+            return False
+        if data[0] == C.START:
+            return len(data) < 2 or (
+                data[1] in (C.TYPE_RESPONSE, C.TYPE_MESSAGE) and (len(data) < 3 or len(data) < data[2])
+            )
+        return 3 <= data[0] < 0x20 and len(data) < data[0]
+
     def push(self, chunk: bytes) -> None:
-        self.buffer = strip_wintex_frames(self.buffer + chunk, self.on_frame)
-        *lines, self.buffer = re.split(rb"\r?\n", self.buffer)
-        for line in lines:
+        # Frames and lines can share one read (e.g. a NAK, an ACK and then a
+        # line), so take whatever comes first, one at a time.
+        self.buffer += chunk
+        while True:
+            self.buffer = self._strip_frames(self.buffer)
+            if self._frame_pending(self.buffer):
+                return
+            end = re.search(rb"\r?\n", self.buffer)
+            if not end:
+                return
+            line, self.buffer = self.buffer[: end.start()], self.buffer[end.end() :]
             text = line.decode("latin1")
             if text.strip():
                 self.on_line(text)
-        # A frame straight after a line (e.g. "OK\r\n" + ACK) shouldn't wait
-        # for more data to arrive.
-        self.buffer = strip_wintex_frames(self.buffer, self.on_frame)

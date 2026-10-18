@@ -12,6 +12,7 @@ It's useful for keeping the Texecom app on its SmartCom while Home Assistant use
 - **Part arms work for area 1 only.**
 - **After arming or disarming from Home Assistant**, the panel holds back its other updates for about 30 seconds. Nothing is lost, but sensors update late.
 - **The UDL code is only needed for arming and disarming.** Without it you get the sensors, and the alarm shows its state without arm buttons.
+- **Some panels only take arm and disarm commands in the Texecom Connect form** over this port (seen on a Premier Elite 168, V6.06.03). Home Assistant tries that last, in the same session, so it can take about 10 seconds to arm or disarm.
 
 ## Set up the COM port
 

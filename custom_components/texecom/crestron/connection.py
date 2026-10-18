@@ -58,6 +58,7 @@ class ConnectionMixin:
     _blackout_until: float
     _busy: bool
     _first_status_pending: bool
+    _connect_sequence: int
 
     @property
     def description(self) -> str:
@@ -207,10 +208,38 @@ class ConnectionMixin:
 
         await self._expect(lambda: self._write(frame), match, COMMAND_TIMEOUT)
 
-    async def _transaction(self, command: str | bytes, fallback: bytes | None) -> None:
+    def _on_connect_frame(self, frame: Any) -> None:
+        for waiter in list(self._waiters):
+            waiter("connect", frame)
+
+    async def _send_connect(self, command: int, body: bytes, refused: str) -> None:
+        """One Texecom Connect command inside the UDL session; its reply is
+        the command byte echoed, then ACK or NAK."""
+        sequence = self._connect_sequence
+        self._connect_sequence = (sequence + 1) & 0xFF
+
+        def match(kind: str, frame: Any) -> str | None:
+            if kind != "connect" or frame.type != P.C.TYPE_RESPONSE or frame.body[:1] != bytes([command]):
+                return None
+            if frame.body[1:2] == bytes([P.C.ACK]):
+                return "ok"
+            if frame.body[1:2] == bytes([P.C.NAK]):
+                return refused
+            return f"unexpected reply {frame.body.hex()} from the panel"
+
+        await self._expect(lambda: self._write(P.connect_command(sequence, command, body)), match, COMMAND_TIMEOUT)
+
+    async def _transaction(
+        self, command: str | bytes, fallback: bytes | None, connect: tuple[int, bytes] | None = None
+    ) -> None:
         """UDL login, one command, logout. A \\W<udl>/ login opens a Wintex
         session that silences the text feed; logging out shortens that to
-        ~30 s. Transactions never overlap."""
+        ~30 s. Transactions never overlap.
+
+        connect is the same command as a Texecom Connect (command, body), tried
+        last inside the same session: a Premier Elite 168 (V6.06.03) refuses
+        both the text and the binary UDL arm/disarm commands but carries out
+        Connect ones after a Connect login with the UDL code."""
         if not self.udl:
             raise PanelError("arming needs the UDL code: add it in the integration's options")
         async with self._lock:
@@ -225,18 +254,25 @@ class ConnectionMixin:
                     if "timed out" not in str(err):
                         raise
                     _LOGGER.debug("Crestron: no OK to the UDL login; continuing (the session usually opens)")
-                if isinstance(command, bytes):
-                    await self._send_frame(command)
-                else:
-                    try:
-                        await self._send_text(command)
-                    except CommandFailed as err:
-                        # Seen when the login got no OK: text commands get
-                        # ERROR while binary frames work.
-                        if not fallback or "rejected" not in str(err):
-                            raise
-                        _LOGGER.debug("Crestron: ERROR to the text command; sending the binary equivalent")
-                        await self._send_frame(fallback)
+                try:
+                    if isinstance(command, bytes):
+                        await self._send_frame(command)
+                    else:
+                        try:
+                            await self._send_text(command)
+                        except CommandFailed as err:
+                            # Seen when the login got no OK: text commands get
+                            # ERROR while binary frames work.
+                            if not fallback or "rejected" not in str(err):
+                                raise
+                            _LOGGER.debug("Crestron: ERROR to the text command; sending the binary equivalent")
+                            await self._send_frame(fallback)
+                except CommandFailed as err:
+                    if connect is None:
+                        raise
+                    _LOGGER.debug("Crestron: %s; trying the Texecom Connect equivalent in the same session", err)
+                    await self._send_connect(P.C.CMD_LOGIN, self.udl.encode("latin1"), "the panel refused the UDL code")
+                    await self._send_connect(*connect, "the panel refused the command")
             finally:
                 if self._writer:
                     self._writer.write(P.WINTEX_LOGOUT)
