@@ -2,7 +2,12 @@
 zones (the panel lid, the shared detector tamper circuit...), the internal
 alarm going off with nothing reported to explain it, faults from the event
 log, and mains power worked out from the power readings. They show in
-panel.extra["tampers"] and panel.extra["faults"]."""
+panel.extra["tampers"] and panel.extra["faults"].
+
+They log at INFO, not WARNING: they're the panel's state, which entities
+and notices already show, and Home Assistant presents a custom
+integration's warnings as faults in the integration (issue #45). Warnings
+are for problems with the integration or its connection."""
 
 from __future__ import annotations
 
@@ -72,7 +77,7 @@ class ConditionsMixin:
         (tampers.add if active else tampers.discard)(name)
         self.notify()
         if active:
-            self._log.warning("Connect: %s", name)
+            self._log.info("Connect: %s", name)
             self.on_event("tamper", {"source": name, "log_type": m["type"]})
         else:
             self._log.info("Connect: %s cleared", name)
@@ -133,7 +138,7 @@ class ConditionsMixin:
         (tampers.add if shown else tampers.discard)(INTERNAL_ALARM)
         self.notify()
         if shown:
-            self._log.warning("Connect: the panel's internal alarm is on, with no tamper or alarm reported")
+            self._log.info("Connect: the panel's internal alarm is on, with no tamper or alarm reported")
             self.on_event("tamper", {"source": INTERNAL_ALARM, "log_type": None})
         else:
             self._log.info("Connect: the panel's internal alarm is off again")
@@ -163,7 +168,7 @@ class ConditionsMixin:
         faults: set[str] = self.extra.setdefault("faults", set())
         if self._battery_readings >= BATTERY_READINGS and "AC Fail" not in faults:
             faults.add("AC Fail")
-            self._log.warning("Connect: running on battery (no mains current, %.2f V)", power.panel_voltage)
+            self._log.info("Connect: running on battery (no mains current, %.2f V)", power.panel_voltage)
             self.on_event("fault", {"source": "AC Fail", "log_type": None})
         elif mains_ok and "AC Fail" in faults:
             # Only the panel's own mains: a remote power supply's (PSU AC
@@ -189,5 +194,5 @@ class ConditionsMixin:
             return  # already known (logged twice, or seen in the power readings)
         (faults.add if active else faults.discard)(name)
         self.notify()
-        self._log.warning("Connect: %s%s", name, "" if active else " cleared")
+        self._log.info("Connect: %s%s", name, "" if active else " cleared")
         self.on_event("fault" if active else "fault_cleared", {"source": name, "log_type": m["type"]})

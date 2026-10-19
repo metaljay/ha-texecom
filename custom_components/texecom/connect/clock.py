@@ -36,7 +36,7 @@ class ClockMixin:
         try:
             clock = await self.client.date_time()
         except P.InvalidClock as err:
-            self._log.warning("Connect: %s", err)
+            self._log.info("Connect: %s", err)
             self.on_clock_drift(None)
             return
         if clock:
