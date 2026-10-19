@@ -82,7 +82,7 @@ async def port(socket_enabled):
     await fake.close()
 
 
-async def setup_crestron(hass, number: int, udl: str | None = UDL):
+async def setup_crestron(hass, number: int, udl: str | None = UDL, **options):
     entry = MockConfigEntry(
         domain=DOMAIN,
         title="Texecom Premier Elite",
@@ -96,7 +96,7 @@ async def setup_crestron(hass, number: int, udl: str | None = UDL):
             "zone_count": 3,
             "area_count": 1,
         },
-        options={"night_part_arm": 1, "home_part_arm": 0, "keypad_arm_mode": "away", "status_poll": 60},
+        options={"night_part_arm": 1, "home_part_arm": 0, "keypad_arm_mode": "away", "status_poll": 60, **options},
     )
     entry.add_to_hass(hass)
     assert await hass.config_entries.async_setup(entry.entry_id)
@@ -145,6 +145,35 @@ async def test_crestron_without_udl_is_sensors_only(hass, port):
     with pytest.raises(HomeAssistantError):
         await hass.services.async_call("alarm_control_panel", "alarm_arm_away", {"entity_id": ALARM}, blocking=True)
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+POWER_SENSORS = [
+    "sensor.texecom_panel_voltage",
+    "sensor.texecom_battery_voltage",
+    "sensor.texecom_panel_current",
+    "sensor.texecom_battery_current",
+]
+
+
+async def test_crestron_power_sensors_come_with_the_readings_option(hass, port):
+    """Crestron reads power through Texecom Connect in a UDL session: the
+    sensors exist only with the UDL code and the readings switched on."""
+    _fake, number = port
+    entry = await setup_crestron(hass, number, session_reads=True)
+    assert all(hass.states.get(e) for e in POWER_SENSORS)
+    assert hass.states.get("sensor.texecom_panel_voltage").state == "unavailable"  # until the first reading
+    assert entry.runtime_data.session_reads is True
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_crestron_has_no_power_sensors_without_the_option_or_the_udl_code(hass, port):
+    _fake, number = port
+    for kwargs in ({}, {"udl": None, "session_reads": True}):
+        entry = await setup_crestron(hass, number, **kwargs)
+        assert not any(hass.states.get(e) for e in POWER_SENSORS), kwargs
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        assert await hass.config_entries.async_remove(entry.entry_id)
+        await hass.async_block_till_done()
 
 
 async def test_a_failed_setup_leaves_no_connection_open(hass, fake):

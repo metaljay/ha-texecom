@@ -38,6 +38,16 @@ async def test_each_event_reads_as_a_sentence(hass, fake):
     assert line(type="tamper", source="Panel Box Tamper", log_type=60)["message"] == (
         "reported a tamper: Panel Box Tamper"
     )
+    # Stored event-log entries (Crestron reads them through Texecom Connect)
+    log = {"group": 6, "parameter": 0, "areas": 1, "communicated": False, "panel_time": "2026-10-18T13:10:22"}
+    assert line(type="log", log_type=208, name="Remote Part Arm 2", index=713, **log) == {
+        "name": "House Alarm",
+        "message": "panel log: Remote Part Arm 2",
+        "entity_id": ALARM,  # its area bitmap says area 1
+    }
+    assert line(type="log", log_type=3, name="Interior", index=716, **{**log, "parameter": 51})["message"] == (
+        "panel log: Interior (zone 51)"
+    )
     assert line(type="tamper_cleared", source="Panel Box Tamper", log_type=60)["message"] == (
         "tamper put right: Panel Box Tamper"
     )
