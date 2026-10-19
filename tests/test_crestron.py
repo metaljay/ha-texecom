@@ -66,7 +66,9 @@ class FakeCrestronPort:
         connect_arm_reply: int = C.ACK,
         arm_fails: bool = False,
         frames_unanswered: bool = False,
+        model: str = "Elite 168 ENG->SW V6.06.03LS1",
     ) -> None:
+        self.model = model  # GetPanelIdentification's answer
         self.frames_unanswered = frames_unanswered  # UDL arm/disarm frames get no reply at all
         self.elite168 = elite168
         self.arm_fails = arm_fails  # a door left open: the arm logs Exit Error and Arm Failed
@@ -107,6 +109,10 @@ class FakeCrestronPort:
             # reference, panel volts, battery volts, panel current, battery current:
             # 13.63 V, 13.63 V, 297 mA, 18 mA (as read on mains)
             writer.write(C.encode_frame(C.TYPE_RESPONSE, sequence, bytes([command, 100, 99, 99, 33, 2])))
+            return
+        elif command == C.CMD_GET_PANEL_IDENTIFICATION:
+            reply_body = self.model.encode("latin1")
+            writer.write(C.encode_frame(C.TYPE_RESPONSE, sequence, bytes([command]) + reply_body))
             return
         elif command == C.CMD_GET_LOG_POINTER:
             pointer = self.log_pointer.to_bytes(2, "little")
@@ -337,8 +343,13 @@ async def test_refused_disarm_falls_back_to_connect_inside_the_session():
     try:
         await asyncio.wait_for(panel.disarm(1), 20)
         assert b"W1234" in fake.received and P.udl_frame_for("D", 1) in fake.received
-        # 5 zones -> an 8-area panel -> 1-byte area bitmap
-        assert fake.connect_received == [(C.CMD_LOGIN, b"1234"), (C.CMD_DISARM_AREA, b"\x01")]
+        # Set up with 5 zones, but the panel says it's a 168: 16 areas, a 2-byte area bitmap
+        assert fake.connect_received == [
+            (C.CMD_LOGIN, b"1234"),
+            (C.CMD_GET_PANEL_IDENTIFICATION, b""),
+            (C.CMD_DISARM_AREA, b"\x01\x00"),
+            (C.CMD_GET_LOG_POINTER, b""),  # where the log ends, now its layout is known
+        ]
         await wait_for(lambda: fake.received[-1] == P.WINTEX_LOGOUT)
         assert panel.areas[1].state == DISARMED
     finally:
@@ -353,7 +364,7 @@ async def test_refused_part_arm_falls_back_to_connect_with_its_part_arm():
     try:
         await asyncio.wait_for(panel.arm(1, "night"), 20)
         assert P.part_arm_frame(1, 2) in fake.received
-        assert fake.connect_received[-1] == (C.CMD_ARM_AREA, bytes([C.ARM_PART_2, 0x01]))
+        assert (C.CMD_ARM_AREA, bytes([C.ARM_PART_2, 0x01, 0x00])) in fake.connect_received
         assert panel.areas[1].state == ARMING
         await wait_for(lambda: fake.armed)  # once the exit delay ends
         fake.send('"A0010')
@@ -363,14 +374,36 @@ async def test_refused_part_arm_falls_back_to_connect_with_its_part_arm():
         await fake.close()
 
 
-async def test_connect_fallback_uses_the_panels_area_bitmap_size():
-    """A 168-zone panel has 16 areas, so Connect area bitmaps are 2 bytes."""
-    fake = FakeCrestronPort(elite168=True)
+async def test_connect_fallback_sizes_the_area_bitmap_from_the_panel():
+    """The zones typed in at setup aren't the panel's size: a 168 set up with
+    8 zones still needs a 2-byte area bitmap, and a 24 set up with 168 a
+    1-byte one. The identification is read once per run."""
+    for model, zones, bitmap in (
+        ("Elite 168 ENG->SW V6.06.03LS1", 8, b"\x01\x00"),
+        ("Elite 24     V6.05.03LS1", 168, b"\x01"),
+    ):
+        fake = FakeCrestronPort(elite168=True, model=model)
+        number = await fake.start()
+        panel = await make_panel(number, zones=[PanelZone(n, f"Zone {n}") for n in range(1, zones + 1)])
+        try:
+            await asyncio.wait_for(panel.arm(1, "away"), 20)
+            assert (C.CMD_ARM_AREA, bytes([C.ARM_FULL]) + bitmap) in fake.connect_received
+            await asyncio.wait_for(panel.disarm(1), 20)
+            assert [c for c, _ in fake.connect_received].count(C.CMD_GET_PANEL_IDENTIFICATION) == 1
+        finally:
+            await panel.stop()
+            await fake.close()
+
+
+async def test_an_unknown_model_is_not_armed_through_connect():
+    fake = FakeCrestronPort(elite168=True, model="Something 99 V1")
     number = await fake.start()
-    panel = await make_panel(number, zones=[PanelZone(n, f"Zone {n}") for n in range(1, 169)])
+    panel = await make_panel(number)
     try:
-        await asyncio.wait_for(panel.arm(1, "away"), 20)
-        assert (C.CMD_ARM_AREA, bytes([C.ARM_FULL, 0x01, 0x00])) in fake.connect_received
+        with pytest.raises(PanelError, match="model"):
+            await asyncio.wait_for(panel.disarm(1), 20)
+        assert C.CMD_DISARM_AREA not in [c for c, _ in fake.connect_received]
+        await wait_for(lambda: fake.received[-1] == P.WINTEX_LOGOUT)
     finally:
         await panel.stop()
         await fake.close()
@@ -435,7 +468,11 @@ async def test_power_is_read_inside_a_short_udl_session():
             18,
         )
         assert any(seen)  # entities were told
-        assert fake.connect_received[:2] == [(C.CMD_LOGIN, b"1234"), (C.CMD_GET_SYSTEM_POWER, b"")]
+        assert fake.connect_received[:3] == [
+            (C.CMD_LOGIN, b"1234"),
+            (C.CMD_GET_PANEL_IDENTIFICATION, b""),
+            (C.CMD_GET_SYSTEM_POWER, b""),
+        ]
         await wait_for(lambda: fake.received[-1] == P.WINTEX_LOGOUT)
         await wait_for(lambda: [c for c, _ in fake.connect_received].count(C.CMD_GET_SYSTEM_POWER) >= 2)  # repeats
     finally:
@@ -556,6 +593,7 @@ async def test_the_connection_closing_during_a_command_says_not_connected():
 # ─── The stored event log (through Texecom Connect) ─────────────────────────
 
 ZONES_168 = [PanelZone(n, f"Zone {n}") for n in range(1, 169)]
+ZONES_88 = [PanelZone(n, f"Zone {n}") for n in range(1, 89)]
 
 
 async def make_log_panel(fake, **kwargs):
@@ -658,6 +696,23 @@ async def test_after_a_long_gap_only_the_latest_entries_are_read():
             fake.add_log(42)
         await wait_for(lambda: len(logs(events)) == 30)
         assert [i for i, _ in logs(events)] == list(range(10, 40))
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_the_log_layout_follows_the_panel_not_the_zones_set_up():
+    """A 168 set up with 88 zones has a 9-byte, 2000-entry log, not an 88's."""
+    fake = FakeCrestronPort(elite168=True)
+    fake.log_pointer = 1999
+    panel, events = await make_log_panel(fake, zones=ZONES_88, power_poll=0.2, power_first_delay=0.05)
+    try:
+        await wait_for(lambda: panel._log_pointer == 1999)
+        assert (panel.log_entry_size, panel.log_capacity) == (9, 2000)
+        fake.add_log(85, parameter=94)  # index 1999
+        fake.add_log(42)  # index 0
+        await wait_for(lambda: len(logs(events)) == 2)
+        assert logs(events) == [(1999, 85), (0, 42)]
     finally:
         await panel.stop()
         await fake.close()

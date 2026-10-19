@@ -69,6 +69,7 @@ class ConnectionMixin:
     _connect_sequence: int
     login_timeout: float
     _log_pointer: int | None
+    panel_zones: int | None
     log_entry_size: int | None
     log_capacity: int | None
 
@@ -254,6 +255,22 @@ class ConnectionMixin:
         if reply[:1] != bytes([P.C.ACK]):
             raise CommandFailed(f"unexpected reply {reply.hex()} from the panel")
 
+    async def _connect_login(self) -> None:
+        """Texecom Connect login inside the UDL session, then (once per run)
+        the panel's identification: the zone count typed in at setup isn't
+        the panel's size, and the area bitmap and the log layout follow the
+        model, not the zones in use."""
+        await self._send_connect(P.C.CMD_LOGIN, self.udl.encode("latin1"), "the panel refused the UDL code")
+        if self.panel_zones is not None:
+            return
+        ident = P.C.decode_panel_identification(await self._connect_request(P.C.CMD_GET_PANEL_IDENTIFICATION))
+        if ident.zones not in P.C.AREAS_FOR_ZONES:
+            raise CommandFailed(f"couldn't tell the panel's model from {ident.text!r}")
+        self.panel_zones = ident.zones
+        self.log_entry_size = P.C.log_entry_size(ident.zones)
+        self.log_capacity = P.C.LOG_CAPACITY.get(ident.zones)
+        _LOGGER.info("Crestron: the panel is a %s %s (%s)", ident.model, ident.zones, ident.firmware)
+
     @contextlib.asynccontextmanager
     async def _udl_session(self) -> AsyncIterator[None]:
         """UDL login, the caller's commands, logout. A \\W<udl>/ login opens a
@@ -281,14 +298,18 @@ class ConnectionMixin:
                 self._busy = False
 
     async def _transaction(
-        self, command: str | bytes, fallback: bytes | None, connect: tuple[int, bytes] | None = None
+        self,
+        command: str | bytes,
+        fallback: bytes | None,
+        connect: Callable[[int], tuple[int, bytes]] | None = None,
     ) -> int | None:
         """One arm or disarm command in a UDL session. Returns the event log's
         pointer when the command went through Texecom Connect (read in the
         same session, so a later read can find what the command caused).
 
-        connect is the same command as a Texecom Connect (command, body), tried
-        last inside the same session: a Premier Elite 168 (V6.06.03) refuses
+        connect gives the same command as a Texecom Connect (command, body)
+        for the panel's size (its zone count), tried last inside the same
+        session: a Premier Elite 168 (V6.06.03) refuses
         both the text and the binary UDL arm/disarm commands but carries out
         Connect ones after a Connect login with the UDL code."""
         async with self._udl_session():
@@ -311,8 +332,9 @@ class ConnectionMixin:
                 if connect is None:
                     raise
                 _LOGGER.debug("Crestron: %s; trying the Texecom Connect equivalent in the same session", err)
-                await self._send_connect(P.C.CMD_LOGIN, self.udl.encode("latin1"), "the panel refused the UDL code")
-                await self._send_connect(*connect, "the panel refused the command")
+                await self._connect_login()
+                assert self.panel_zones is not None
+                await self._send_connect(*connect(self.panel_zones), "the panel refused the command")
                 if self.log_entry_size:
                     with contextlib.suppress(CommandFailed):
                         return await self._log_pointer_now()
@@ -363,7 +385,7 @@ class ConnectionMixin:
         UDL session (Crestron itself has neither)."""
         reading, entries = None, []
         async with self._udl_session():
-            await self._send_connect(P.C.CMD_LOGIN, self.udl.encode("latin1"), "the panel refused the UDL code")
+            await self._connect_login()
             if power:
                 reading = P.C.decode_system_power(await self._connect_request(P.C.CMD_GET_SYSTEM_POWER))
             if log:

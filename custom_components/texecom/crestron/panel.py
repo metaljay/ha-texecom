@@ -102,8 +102,11 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self._after_arm_task: asyncio.Task | None = None
         # The stored event log (read through Texecom Connect): its entry size
         # and ring size for this panel, and the next index to read.
-        self.log_entry_size = P.C.log_entry_size(len(zones))
-        self.log_capacity = P.C.LOG_CAPACITY.get(len(zones))
+        # The panel's size (from its identification, read over Connect the
+        # first time it's needed) and, from that, the stored log's layout.
+        self.panel_zones: int | None = None
+        self.log_entry_size: int | None = None
+        self.log_capacity: int | None = None
         self._log_pointer: int | None = None
         self._stale_exit_until: dict[int, float] = {}  # area -> ignore a held-back "X" until then
         self._writer: asyncio.StreamWriter | None = None
@@ -310,13 +313,6 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
 
     # ─── Arm / disarm ───────────────────────────────────────────────────────
 
-    def _connect_body(self, area: int, arm_type: int | None = None) -> bytes:
-        """The Texecom Connect arm (arm_type given) or disarm body for an area;
-        its area bitmap size follows the panel's size."""
-        if arm_type is None:
-            return P.C.encode_disarm_or_reset(area, len(self.zones))
-        return P.C.encode_arm(area, arm_type, len(self.zones))
-
     async def arm(self, area: int, mode: str) -> None:
         if mode == "away":
             command: str | bytes = "A" + P.area_bitmask(area)
@@ -334,7 +330,9 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self._requested_mode[area] = mode
         self._arming_since[area] = time.monotonic()
         try:
-            pointer = await self._transaction(command, fallback, (P.C.CMD_ARM_AREA, self._connect_body(area, arm_type)))
+            pointer = await self._transaction(
+                command, fallback, lambda zones: (P.C.CMD_ARM_AREA, P.C.encode_arm(area, arm_type, zones))
+            )
         except PanelError:
             self._requested_mode.pop(area, None)
             raise
@@ -357,7 +355,11 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             command = "D" + P.area_bitmask(area)
         except ValueError as err:
             raise PanelError(str(err)) from err
-        await self._transaction(command, P.udl_frame_for("D", area), (P.C.CMD_DISARM_AREA, self._connect_body(area)))
+        await self._transaction(
+            command,
+            P.udl_frame_for("D", area),
+            lambda zones: (P.C.CMD_DISARM_AREA, P.C.encode_disarm_or_reset(area, zones)),
+        )
         self._requested_mode.pop(area, None)
         self.set_area(area, DISARMED, None, "Home Assistant")
 
