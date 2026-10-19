@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -699,6 +700,48 @@ async def test_a_login_turned_away_is_not_logged_as_a_session_ending(fake, caplo
     with pytest.raises(ConnectError):
         await client.connect()
     assert not [r for r in caplog.records if r.levelname == "INFO" and "session ended" in r.getMessage()]
+
+
+async def test_the_panels_own_conditions_are_no_warnings(fake, caplog, quick_internal_alarm):
+    """Issue #45: Home Assistant shows a custom integration's warnings as
+    faults to report. Tampers, faults, mains off, alarms, a failed arm and an
+    impossible clock are the panel's state, which entities and notices
+    already show, so they log at INFO."""
+    from fake_connect_panel import run_command
+
+    caplog.set_level("DEBUG", logger="custom_components.texecom")
+    events, drifts = [], []
+    fake.clock_raw = bytes(6)  # day 0, month 0
+    panel = await make_panel(fake, on_event=lambda t, d: events.append(t), on_clock_drift=drifts.append)
+    try:
+        run_command(fake, "aux open unlogged")  # the internal alarm, with nothing logged
+        await panel.refresh_areas()
+        await wait_for(lambda: panel.extra.get("tampers") == {"Internal Alarm"})
+        fake.send_log(60, 11, 0, areas=0)  # lid off
+        fake.send_log(47, 9, 0, areas=0)  # AC Fail, from the log
+        fake.send_log(85, 0, 3)  # arming failed: zone 3 active
+        run_command(fake, "zone 3 alarm")
+        await wait_for(lambda: events.count("tamper") == 2 and {"fault", "arm_failed", "zone_alarm"} <= set(events))
+        fake.send_log(47, 10, 0, areas=0)  # mains back
+        await wait_for(lambda: "fault_cleared" in events)
+        fake.on_battery = True  # mains off again, this time from the power readings
+        await panel.read_power()
+        await panel.read_power()
+        assert events.count("fault") == 2 and drifts == [None]
+    finally:
+        await panel.stop()
+    assert [r.getMessage() for r in caplog.records if r.levelno >= logging.WARNING] == []
+    info = "\n".join(r.getMessage() for r in caplog.records if r.levelno == logging.INFO)
+    for line in (
+        "internal alarm is on",
+        "Panel Box Tamper",
+        "AC Fail",
+        "arming failed",
+        "zone 3 (Kitchen) in alarm",
+        "running on battery",
+        "panel clock reads",
+    ):
+        assert line in info
 
 
 async def test_arm_failed_names_the_zone(fake):

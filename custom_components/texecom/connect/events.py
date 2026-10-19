@@ -144,7 +144,7 @@ class EventsMixin:
                 self._recent_alarms[key] = now
                 self._last_cause_at = now
                 self._credit_alarm_zone(m["parameter"])
-                self._log.warning(
+                self._log.info(
                     "Connect: zone %s (%s) in %s",
                     m["parameter"],
                     zone.name if zone else "unknown",
@@ -165,7 +165,7 @@ class EventsMixin:
                 # zones active at the end of the exit time).
                 self._last_cause_at = time.monotonic()  # the panel's fail-to-set warning sounds
                 zone = self.zones.get(m["parameter"])
-                self._log.warning(
+                self._log.info(
                     "Connect: arming failed: zone %s (%s) active", m["parameter"], zone.name if zone else "unknown"
                 )
                 self.on_event(
