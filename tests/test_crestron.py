@@ -69,7 +69,11 @@ class FakeCrestronPort:
         model: str = "Elite 168 ENG->SW V6.06.03LS1",
         connect_silent: bool = False,
         exit_delay: float = 0.05,
+        connect_after: float = 0.0,
     ) -> None:
+        # A slow panel: Connect frames this soon after a \\W login go unanswered.
+        self.connect_after = connect_after
+        self.login_at = 0.0
         self.exit_delay = exit_delay  # simulated: Exit Started now, the outcome this much later
         self.connect_silent = connect_silent  # Connect frames get no answer (a panel without Connect here)
         self.model = model  # GetPanelIdentification's answer
@@ -107,7 +111,7 @@ class FakeCrestronPort:
     def _connect(self, writer, frame: bytes) -> None:
         sequence, command, body = frame[3], frame[4], frame[5:-1]
         self.connect_received.append((command, body))
-        if self.connect_silent:
+        if self.connect_silent or asyncio.get_running_loop().time() - self.login_at < self.connect_after:
             return
         if command == C.CMD_LOGIN:
             reply = C.ACK if body.decode("latin1") == self.udl else C.NAK
@@ -175,6 +179,7 @@ class FakeCrestronPort:
                         cmd, buf = buf[1 : end - 1], buf[end:]
                         self.received.append(cmd)
                         if cmd.startswith(b"W"):
+                            self.login_at = asyncio.get_running_loop().time()
                             if self.close_on_login:
                                 writer.close()
                                 return
@@ -801,6 +806,27 @@ async def test_read_sessions_skip_the_login_wait_once_connect_works_without_the_
         start = loop.time()
         await asyncio.wait_for(panel.disarm(1), 20)  # arming and disarming still wait for the OK
         assert loop.time() - start >= 1.0
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_a_short_login_wait_that_is_too_short_is_retried_with_the_full_wait(monkeypatch):
+    """Once Connect has worked without the login's OK, readings wait only
+    briefly for it; a slower panel that hasn't opened the session by then is
+    tried once more with the full wait, rather than readings stopping."""
+    from custom_components.texecom.crestron import connection
+
+    monkeypatch.setattr(connection, "COMMAND_TIMEOUT", 0.3)
+    fake = FakeCrestronPort(elite168=True, connect_after=0.2)  # answers Connect from 0.2 s after the login
+    panel, _events = await make_log_panel(fake, login_timeout=0.4, read_login_wait=0.05)
+    try:
+        panel._connect_without_ok = True
+        power, _entries = await panel._session_reads(power=True, log=False)
+        assert power is not None and panel._short_wait_ok is False
+        assert fake.received.count(b"W1234") == 2  # the short try, then the full one
+        power, _entries = await panel._session_reads(power=True, log=False)
+        assert power is not None and fake.received.count(b"W1234") == 3  # from now on, the full wait only
     finally:
         await panel.stop()
         await fake.close()

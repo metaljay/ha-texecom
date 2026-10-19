@@ -118,6 +118,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self.read_login_wait = read_login_wait
         self._login_ok = False
         self._connect_without_ok = False
+        self._short_wait_ok = True
         self.power_poll = power_poll
         self.power_first_delay = power_first_delay
         self.power_retry = power_retry

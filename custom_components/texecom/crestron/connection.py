@@ -84,6 +84,7 @@ class ConnectionMixin:
     log_capacity: int | None
     _login_ok: bool  # whether this session's UDL login got its OK
     _connect_without_ok: bool  # this panel answers Connect after a login with no OK
+    _short_wait_ok: bool  # False once a short login wait has proved too short (for this run)
     read_login_wait: float
 
     @property
@@ -303,7 +304,8 @@ class ConnectionMixin:
                 raise PanelNotConnected("not connected to the panel")
             self._busy = True
             try:
-                wait = self.read_login_wait if connect_only and self._connect_without_ok else self.login_timeout
+                short = connect_only and self._connect_without_ok and self._short_wait_ok
+                wait = self.read_login_wait if short else self.login_timeout
                 self._login_ok = False
                 try:
                     # Sent once: a resend would open a second session.
@@ -406,11 +408,25 @@ class ConnectionMixin:
     ) -> tuple[P.C.SystemPower | None, list[tuple[int, dict[str, Any]]]]:
         """Power readings and new log entries, through Texecom Connect in one
         UDL session (Crestron itself has neither)."""
-        reading, entries = None, []
-        async with self._udl_session(connect_only=True):
-            await self._connect_login()
-            if power:
-                reading = P.C.decode_system_power(await self._connect_request(P.C.CMD_GET_SYSTEM_POWER))
-            if log:
-                entries = await self._read_new_log_entries()
-        return reading, entries
+        short_wait = self._connect_without_ok and self._short_wait_ok
+
+        async def session() -> tuple[P.C.SystemPower | None, list[tuple[int, dict[str, Any]]]]:
+            reading, entries = None, []
+            async with self._udl_session(connect_only=True):
+                await self._connect_login()
+                if power:
+                    reading = P.C.decode_system_power(await self._connect_request(P.C.CMD_GET_SYSTEM_POWER))
+                if log:
+                    entries = await self._read_new_log_entries()
+            return reading, entries
+
+        try:
+            return await session()
+        except ConnectUnanswered:
+            if not short_wait:
+                raise
+            # A slow panel may not have opened the session within the short
+            # wait: once more with the full login wait before giving up.
+            _LOGGER.debug("Crestron: no Connect answer after the short login wait; using the full wait from now on")
+            self._short_wait_ok = False
+            return await session()
