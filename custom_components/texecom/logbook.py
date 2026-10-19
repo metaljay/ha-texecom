@@ -54,7 +54,12 @@ def _message(data: dict[str, Any], options: Any) -> str:
     if kind == "log":
         # A stored log entry (Crestron reads them through Texecom Connect).
         name = data.get("name") or f"log event {data.get('log_type')}"
-        if isinstance(data.get("log_type"), int) and 1 <= data["log_type"] <= 21 and data.get("parameter"):
+        # Zone events (types 1-21) and Arm Failed (85) carry the zone in `parameter`.
+        if (
+            isinstance(data.get("log_type"), int)
+            and (1 <= data["log_type"] <= 21 or data["log_type"] == 85)
+            and data.get("parameter")
+        ):
             return f"panel log: {name} (zone {data['parameter']})"
         return f"panel log: {name}"
     if kind == "user":

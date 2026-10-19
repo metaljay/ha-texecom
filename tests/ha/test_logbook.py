@@ -48,6 +48,9 @@ async def test_each_event_reads_as_a_sentence(hass, fake):
     assert line(type="log", log_type=3, name="Interior", index=716, **{**log, "parameter": 51})["message"] == (
         "panel log: Interior (zone 51)"
     )
+    assert line(type="log", log_type=85, name="Arm Failed", index=718, **{**log, "parameter": 94})["message"] == (
+        "panel log: Arm Failed (zone 94)"
+    )
     assert line(type="tamper_cleared", source="Panel Box Tamper", log_type=60)["message"] == (
         "tamper put right: Panel Box Tamper"
     )
