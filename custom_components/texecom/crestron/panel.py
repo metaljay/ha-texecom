@@ -55,6 +55,11 @@ POWER_RETRY = 300.0
 # later (past a Part Arm's 10 s exit delay) to see whether the arm failed:
 # Crestron's text feed says nothing when it does.
 AFTER_ARM_CHECK = 20.0
+# ...and again, this often, while the log shows the exit delay still running
+# (Exit Started with nothing after it) or nothing yet: a full arm's exit delay
+# can be longer. Each read is a session, so at most this many.
+AFTER_ARM_TRIES = 6
+LOG_EXIT_STARTED = 32
 # Log event types: an arm that failed (one "Arm Failed" per zone in the way,
 # after "Exit Error").
 LOG_EXIT_ERROR = 33
@@ -197,13 +202,23 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
     # ─── Event log ──────────────────────────────────────────────────────────
 
     async def _check_log_after_arm(self) -> None:
-        await asyncio.sleep(self.after_arm_check)
-        try:
-            _power, entries = await self._session_reads(power=False, log=True)
-        except (PanelError, CommandFailed) as err:
-            _LOGGER.debug("Crestron: reading the log after the arm failed: %s", err)
-            return
-        self._on_log_entries(entries)
+        last: int | None = None  # the newest log type read since the arm
+        for _try in range(AFTER_ARM_TRIES):
+            await asyncio.sleep(self.after_arm_check)
+            try:
+                _power, entries = await self._session_reads(power=False, log=True)
+            except (PanelError, CommandFailed) as err:
+                _LOGGER.debug("Crestron: reading the log after the arm failed: %s", err)
+                return
+            self._on_log_entries(entries)
+            if entries:
+                last = entries[-1][1]["type"]
+            # Decided (armed, or failed and back to Off), or no longer arming.
+            if (last is not None and last != LOG_EXIT_STARTED) or not any(
+                a.state == ARMING for a in self.areas.values()
+            ):
+                return
+        _LOGGER.debug("Crestron: the log showed no outcome for the arm after %d reads", AFTER_ARM_TRIES)
 
     def _on_log_entries(self, entries: list[tuple[int, dict[str, Any]]]) -> None:
         """Each stored log entry becomes a "log" event; a failed arm also an

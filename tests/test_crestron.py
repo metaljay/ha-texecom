@@ -68,7 +68,9 @@ class FakeCrestronPort:
         frames_unanswered: bool = False,
         model: str = "Elite 168 ENG->SW V6.06.03LS1",
         connect_silent: bool = False,
+        exit_delay: float = 0.05,
     ) -> None:
+        self.exit_delay = exit_delay  # simulated: Exit Started now, the outcome this much later
         self.connect_silent = connect_silent  # Connect frames get no answer (a panel without Connect here)
         self.model = model  # GetPanelIdentification's answer
         self.frames_unanswered = frames_unanswered  # UDL arm/disarm frames get no reply at all
@@ -139,7 +141,7 @@ class FakeCrestronPort:
                 else:
                     self.add_log(32)  # Exit Started
                     # The rest is logged when the (short, simulated) exit delay ends.
-                    asyncio.get_running_loop().call_later(0.05, self._exit_delay_ended)
+                    asyncio.get_running_loop().call_later(self.exit_delay, self._exit_delay_ended)
         else:
             reply = C.NAK
         writer.write(C.encode_frame(C.TYPE_RESPONSE, sequence, bytes([command, reply])))
@@ -747,6 +749,24 @@ async def test_the_log_layout_follows_the_panel_not_the_zones_set_up():
         fake.add_log(42)  # index 0
         await wait_for(lambda: len(logs(events)) == 2)
         assert logs(events) == [(1999, 85), (0, 42)]
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_a_long_exit_delay_is_read_again_until_the_arm_is_decided():
+    """A full arm's exit delay can outlast the first read: while the log shows
+    Exit Started with nothing after it (or nothing yet), it's read again."""
+    fake = FakeCrestronPort(elite168=True, arm_fails=True, exit_delay=0.45)
+    panel, events = await make_log_panel(fake, part_arms={"night": 2, "home": 0})
+    try:
+        await asyncio.wait_for(panel.arm(1, "away"), 20)
+        await wait_for(lambda: any(t == "arm_failed" for t, _ in events))
+        assert [n for _i, n in logs(events)] == [33, 85]
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+        reads = [c for c, _ in fake.connect_received].count(C.CMD_GET_LOG_POINTER)
+        await asyncio.sleep(0.5)  # decided: no more reads
+        assert [c for c, _ in fake.connect_received].count(C.CMD_GET_LOG_POINTER) == reads
     finally:
         await panel.stop()
         await fake.close()
