@@ -29,6 +29,11 @@ RECONNECT_MAX = 30.0
 QUIET_FAILURES = 3
 # Measured: the text feed resumes ~30 s after a Wintex logout.
 POST_LOGOUT_BLACKOUT = 35.0
+# Read-only sessions (power, the log) only use Texecom Connect, which works
+# whether or not the UDL login got its OK. Once this panel has shown that (a
+# Connect login ACKed after a login with no OK), they wait this long for the
+# OK instead of login_timeout, so a reading takes ~1 s rather than ~9 s.
+READ_LOGIN_WAIT = 1.0
 # At most this many stored log entries are read in one session (5 per read);
 # after a longer gap the oldest of them are skipped.
 MAX_LOG_CATCH_UP = 30
@@ -77,6 +82,9 @@ class ConnectionMixin:
     panel_zones: int | None
     log_entry_size: int | None
     log_capacity: int | None
+    _login_ok: bool  # whether this session's UDL login got its OK
+    _connect_without_ok: bool  # this panel answers Connect after a login with no OK
+    read_login_wait: float
 
     @property
     def description(self) -> str:
@@ -271,6 +279,8 @@ class ConnectionMixin:
             raise
         except CommandFailed as err:
             raise ConnectUnanswered(f"no answer to the Texecom Connect login ({err})") from err
+        if not self._login_ok:
+            self._connect_without_ok = True
         if self.panel_zones is not None:
             return
         ident = P.C.decode_panel_identification(await self._connect_request(P.C.CMD_GET_PANEL_IDENTIFICATION))
@@ -282,7 +292,7 @@ class ConnectionMixin:
         _LOGGER.info("Crestron: the panel is a %s %s (%s)", ident.model, ident.zones, ident.firmware)
 
     @contextlib.asynccontextmanager
-    async def _udl_session(self) -> AsyncIterator[None]:
+    async def _udl_session(self, connect_only: bool = False) -> AsyncIterator[None]:
         """UDL login, the caller's commands, logout. A \\W<udl>/ login opens a
         Wintex session that silences the text feed; logging out shortens that
         to ~30 s. Sessions never overlap, and are never held open."""
@@ -293,9 +303,12 @@ class ConnectionMixin:
                 raise PanelNotConnected("not connected to the panel")
             self._busy = True
             try:
+                wait = self.read_login_wait if connect_only and self._connect_without_ok else self.login_timeout
+                self._login_ok = False
                 try:
                     # Sent once: a resend would open a second session.
-                    await self._send_text(f"W{self.udl}", self.login_timeout)
+                    await self._send_text(f"W{self.udl}", wait)
+                    self._login_ok = True
                 except CommandFailed as err:
                     if "timed out" not in str(err):
                         raise
@@ -394,7 +407,7 @@ class ConnectionMixin:
         """Power readings and new log entries, through Texecom Connect in one
         UDL session (Crestron itself has neither)."""
         reading, entries = None, []
-        async with self._udl_session():
+        async with self._udl_session(connect_only=True):
             await self._connect_login()
             if power:
                 reading = P.C.decode_system_power(await self._connect_request(P.C.CMD_GET_SYSTEM_POWER))

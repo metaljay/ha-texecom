@@ -17,6 +17,7 @@ from typing import Any
 
 from ..panel import (
     ARMED_STATE_FOR_MODE,
+    ARMED_STATES,
     ARMING,
     DISARMED,
     PENDING,
@@ -30,6 +31,7 @@ from . import protocol as P
 from .connection import (
     LOGIN_TIMEOUT,
     POST_LOGOUT_BLACKOUT,
+    READ_LOGIN_WAIT,
     RECONNECT_MIN,
     CommandFailed,
     ConnectionMixin,
@@ -54,7 +56,7 @@ POWER_RETRY = 300.0
 # After an arm from Home Assistant, the stored event log is read this long
 # later (past a Part Arm's 10 s exit delay) to see whether the arm failed:
 # Crestron's text feed says nothing when it does.
-AFTER_ARM_CHECK = 20.0
+AFTER_ARM_CHECK = 12.0
 # ...and again, this often, while the log shows the exit delay still running
 # (Exit Started with nothing after it) or nothing yet: a full arm's exit delay
 # can be longer. Each read is a session, so at most this many.
@@ -64,6 +66,11 @@ LOG_EXIT_STARTED = 32
 # after "Exit Error").
 LOG_EXIT_ERROR = 33
 LOG_ARM_FAILED = 85
+# Log event types that say an area has armed (unambiguous ones only: the
+# Open/Close types are logged for disarms too). On an arm through Connect the
+# area shows armed as soon as the log says so, instead of ~30 s later when the
+# panel releases the held-back "A".
+LOG_ARMED = {38, 43, 78, 79, 80, 204, 205, 206, 207, 208, 209}
 # After the log shows a failed arm, the panel still releases the held-back
 # "exit delay started" when its text feed resumes (seen on a real panel 30 s
 # later); it's ignored until this long after the feed is due back.
@@ -88,6 +95,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         event_coalesce: float | None = None,
         blackout: float | None = None,
         login_timeout: float = LOGIN_TIMEOUT,
+        read_login_wait: float = READ_LOGIN_WAIT,
         power_poll: float = POWER_POLL,
         power_first_delay: float = POWER_FIRST_DELAY,
         power_retry: float = POWER_RETRY,
@@ -107,6 +115,9 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self.event_coalesce = EVENT_COALESCE if event_coalesce is None else event_coalesce
         self.blackout = POST_LOGOUT_BLACKOUT if blackout is None else blackout
         self.login_timeout = login_timeout
+        self.read_login_wait = read_login_wait
+        self._login_ok = False
+        self._connect_without_ok = False
         self.power_poll = power_poll
         self.power_first_delay = power_first_delay
         self.power_retry = power_retry
@@ -249,11 +260,18 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
                     "arm_failed",
                     {"areas": m["areas"], "zone": m["parameter"], "zone_name": zone.name if zone else None},
                 )
-            if m["type"] in (LOG_EXIT_ERROR, LOG_ARM_FAILED):
+            if m["type"] in (LOG_EXIT_ERROR, LOG_ARM_FAILED) or m["type"] in LOG_ARMED:
+                failed = m["type"] in (LOG_EXIT_ERROR, LOG_ARM_FAILED)
                 for number, area in self.areas.items():
                     if m["areas"] & (1 << (number - 1)) and area.state == ARMING:
-                        self._requested_mode.pop(number, None)
-                        self.set_area(number, DISARMED)
+                        if failed:
+                            self._requested_mode.pop(number, None)
+                            self.set_area(number, DISARMED)
+                        else:
+                            self.set_area(number, self._armed_state(number))  # keeps "changed by"
+                        # The panel still releases the held-back "exit delay
+                        # started" once its feed resumes: it must not show
+                        # Arming again.
                         self._stale_exit_until[number] = max(self._blackout_until, time.monotonic()) + HELD_EXIT_GRACE
 
     # ─── Incoming ───────────────────────────────────────────────────────────
@@ -316,6 +334,10 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         elif event == "D":
             self.set_area(number, DISARMED, None, by)
         elif event == "A":
+            if area.state in ARMED_STATES:
+                # Already armed (the log said so first): this is the held-back
+                # "A", and Crestron doesn't say the mode, so keep the state.
+                return
             self.set_area(number, self._armed_state(number), None, by)
 
     def _armed_state(self, number: int) -> str:

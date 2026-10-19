@@ -211,6 +211,7 @@ async def make_panel(port: int, **kwargs) -> CrestronPanel:
         "reconnect_min": 0.05,
         "blackout": 0.1,
         "login_timeout": 0.3,
+        "read_login_wait": 0.05,
         "session_reads": True,  # the option; tests that read power set power_poll
         "zones": [PanelZone(n, f"Zone {n}") for n in range(1, 6)],
     }
@@ -682,9 +683,19 @@ async def test_a_good_arm_is_logged_but_not_reported_as_failed():
     panel, events = await make_log_panel(fake, part_arms={"night": 2, "home": 0})
     try:
         await asyncio.wait_for(panel.arm(1, "night"), 20)
+        assert panel.areas[1].state == ARMING
         await wait_for(lambda: len(logs(events)) == 2)
         assert [n for _i, n in logs(events)] == [113, 208]
-        assert not any(t == "arm_failed" for t, _ in events) and panel.areas[1].state == ARMING
+        assert not any(t == "arm_failed" for t, _ in events)
+        # Armed as soon as the log says Remote Part Arm 2, not when the held-back "A" comes
+        assert panel.areas[1].state == ARMED_NIGHT
+        assert panel.areas[1].changed_by == "Home Assistant"
+        fake.send('"X0010')  # the held-back exit delay, released later: still armed
+        await asyncio.sleep(1.0)
+        assert panel.areas[1].state == ARMED_NIGHT
+        fake.send('"A0010')
+        await asyncio.sleep(1.0)
+        assert panel.areas[1].state == ARMED_NIGHT
     finally:
         await panel.stop()
         await fake.close()
@@ -767,6 +778,29 @@ async def test_a_long_exit_delay_is_read_again_until_the_arm_is_decided():
         reads = [c for c, _ in fake.connect_received].count(C.CMD_GET_LOG_POINTER)
         await asyncio.sleep(0.5)  # decided: no more reads
         assert [c for c, _ in fake.connect_received].count(C.CMD_GET_LOG_POINTER) == reads
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_read_sessions_skip_the_login_wait_once_connect_works_without_the_ok():
+    """This panel often doesn't OK the UDL login but answers Connect anyway:
+    once it has, read-only sessions stop waiting the full login time for the
+    OK (here 1 s), so the reading after an arm is quick."""
+    fake = FakeCrestronPort(elite168=True)  # never OKs the login
+    panel, _events = await make_log_panel(fake, login_timeout=1.0, read_login_wait=0.05)
+    try:
+        loop = asyncio.get_running_loop()
+        start = loop.time()
+        await panel._session_reads(power=True, log=False)  # first: waits the full second
+        first = loop.time() - start
+        start = loop.time()
+        await panel._session_reads(power=True, log=False)
+        second = loop.time() - start
+        assert first >= 1.0 and second < 0.5, (first, second)
+        start = loop.time()
+        await asyncio.wait_for(panel.disarm(1), 20)  # arming and disarming still wait for the OK
+        assert loop.time() - start >= 1.0
     finally:
         await panel.stop()
         await fake.close()
