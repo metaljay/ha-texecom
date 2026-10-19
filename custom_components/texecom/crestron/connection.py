@@ -39,6 +39,11 @@ class CommandFailed(PanelError):
     pass
 
 
+class CommandRefused(CommandFailed):
+    """The panel answered and said no (ERROR or NAK), as opposed to not
+    answering: only a refusal is safe to retry another way."""
+
+
 class ConnectionMixin:
     """Part of CrestronPanel: the connection and sending commands."""
 
@@ -168,7 +173,13 @@ class ConnectionMixin:
 
     # ─── Commands ───────────────────────────────────────────────────────────
 
-    async def _expect(self, send: Callable[[], None], match: Callable[[str, Any], str | None], timeout: float) -> None:
+    async def _expect(
+        self,
+        send: Callable[[], None],
+        match: Callable[[str, Any], str | None],
+        timeout: float,
+        refused: type[CommandFailed] = CommandFailed,
+    ) -> None:
         """Sends and waits until match() returns "ok" or an error message."""
         loop = asyncio.get_running_loop()
         future: asyncio.Future[None] = loop.create_future()
@@ -183,7 +194,7 @@ class ConnectionMixin:
             if result == "ok":
                 future.set_result(None)
             elif result:
-                future.set_exception(CommandFailed(result))
+                future.set_exception(refused(result))
             return result is not None
 
         self._waiters.append(waiter)
@@ -203,7 +214,7 @@ class ConnectionMixin:
                 return "the panel rejected the command"
             return None
 
-        await self._expect(lambda: self._write(P.encode_command(command)), match, timeout)
+        await self._expect(lambda: self._write(P.encode_command(command)), match, timeout, CommandRefused)
 
     async def _send_frame(self, frame: bytes) -> None:
         def match(kind: str, reply: Any) -> str | None:
@@ -213,7 +224,7 @@ class ConnectionMixin:
                 return "the panel refused the command"
             return None
 
-        await self._expect(lambda: self._write(frame), match, COMMAND_TIMEOUT)
+        await self._expect(lambda: self._write(frame), match, COMMAND_TIMEOUT, CommandRefused)
 
     def _on_connect_frame(self, frame: Any) -> None:
         for waiter in list(self._waiters):
@@ -239,7 +250,7 @@ class ConnectionMixin:
         """A Connect command whose reply is ACK or NAK."""
         reply = await self._connect_request(command, body)
         if reply[:1] == bytes([P.C.NAK]):
-            raise CommandFailed(refused)
+            raise CommandRefused(refused)
         if reply[:1] != bytes([P.C.ACK]):
             raise CommandFailed(f"unexpected reply {reply.hex()} from the panel")
 
@@ -287,14 +298,16 @@ class ConnectionMixin:
                 else:
                     try:
                         await self._send_text(command)
-                    except CommandFailed as err:
+                    except CommandRefused:
                         # Seen when the login got no OK: text commands get
                         # ERROR while binary frames work.
-                        if not fallback or "rejected" not in str(err):
+                        if not fallback:
                             raise
                         _LOGGER.debug("Crestron: ERROR to the text command; sending the binary equivalent")
                         await self._send_frame(fallback)
-            except CommandFailed as err:
+            except CommandRefused as err:
+                # Only a refusal: after no answer the command may still have
+                # been carried out, and a second one could arm twice.
                 if connect is None:
                     raise
                 _LOGGER.debug("Crestron: %s; trying the Texecom Connect equivalent in the same session", err)

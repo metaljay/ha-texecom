@@ -65,7 +65,9 @@ class FakeCrestronPort:
         udl: str = "1234",
         connect_arm_reply: int = C.ACK,
         arm_fails: bool = False,
+        frames_unanswered: bool = False,
     ) -> None:
+        self.frames_unanswered = frames_unanswered  # UDL arm/disarm frames get no reply at all
         self.elite168 = elite168
         self.arm_fails = arm_fails  # a door left open: the arm logs Exit Error and Arm Failed
         # The stored event log (a 168's 9-byte entries in a 2000-entry ring).
@@ -175,7 +177,9 @@ class FakeCrestronPort:
                     elif 3 <= buf[0] < 0x20 and len(buf) >= buf[0]:
                         frame, buf = buf[: buf[0]], buf[buf[0] :]
                         self.received.append(frame)
-                        if self.elite168:
+                        if self.frames_unanswered and frame[1] != 0x48:
+                            pass
+                        elif self.elite168:
                             # The real panel ACKs the logout and NAKs the arm/disarm frames.
                             writer.write(P.wintex_frame(0x06 if frame[1] == 0x48 else 0x0F))
                         elif frame[1] != 0x48:  # no reply to logout
@@ -353,6 +357,22 @@ async def test_connect_fallback_uses_the_panels_area_bitmap_size():
     try:
         await asyncio.wait_for(panel.arm(1, "away"), 20)
         assert (C.CMD_ARM_AREA, bytes([C.ARM_FULL, 0x01, 0x00])) in fake.connect_received
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_no_answer_is_not_retried_through_connect():
+    """Only a refusal falls back to Connect: after no answer the panel may
+    have carried the command out, and a Connect one could arm twice."""
+    fake = FakeCrestronPort(elite168=True, frames_unanswered=True)
+    number = await fake.start()
+    panel = await make_panel(number)
+    try:
+        with pytest.raises(PanelError, match="timed out"):
+            await asyncio.wait_for(panel.disarm(1), 20)
+        assert fake.connect_received == []
+        await wait_for(lambda: fake.received[-1] == P.WINTEX_LOGOUT)
     finally:
         await panel.stop()
         await fake.close()
