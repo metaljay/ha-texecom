@@ -65,12 +65,26 @@ async def test_the_menu_for_crestron(hass):
     entry = MockConfigEntry(domain=DOMAIN, data=CRESTRON, options={"night_part_arm": 1, "home_part_arm": 0})
     entry.add_to_hass(hass)
     result = await hass.config_entries.options.async_init(entry.entry_id)
-    assert result["menu_options"] == ["arm_modes", "alarm_code", "user_names", "status_poll", "dashboard"]
+    # "readings" (power and the event log through Connect) only with a UDL code
+    assert result["menu_options"] == ["arm_modes", "alarm_code", "user_names", "status_poll", "readings", "dashboard"]
     result = await hass.config_entries.options.async_configure(result["flow_id"], {"next_step_id": "arm_modes"})
     assert result["step_id"] == "arm_modes_crestron"  # with "when armed at the keypad, show as"
     result = await options(hass, entry, "status_poll", status_poll=120)
     assert result["type"] is FlowResultType.CREATE_ENTRY
     assert entry.options == {"night_part_arm": 1, "home_part_arm": 0, "status_poll": 120}
+    result = await open_options(hass, entry, "readings")
+    assert [str(k) for k in result["data_schema"].schema] == ["session_reads"]
+    assert result["data_schema"]({})["session_reads"] is False  # off by default
+    result = await options(hass, entry, "readings", session_reads=True)
+    assert result["type"] is FlowResultType.CREATE_ENTRY
+    assert entry.options["session_reads"] is True
+
+
+async def test_crestron_without_a_udl_code_has_no_readings(hass):
+    entry = MockConfigEntry(domain=DOMAIN, data={**CRESTRON, "udl": None}, options={"night_part_arm": 1})
+    entry.add_to_hass(hass)
+    result = await hass.config_entries.options.async_init(entry.entry_id)
+    assert "readings" not in result["menu_options"]
     result = await open_options(hass, entry, "user_names")
     assert [str(k) for k in result["data_schema"].schema] == ["user_names"]  # can't read names over Crestron
 

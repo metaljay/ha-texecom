@@ -36,8 +36,10 @@ from ..const import (
     CONF_NOTIFY_MAINS,
     CONF_NOTIFY_TAMPER,
     CONF_PROTOCOL,
+    CONF_SESSION_READS,
     CONF_STATUS_POLL,
     CONF_TIME_SYNC,
+    CONF_UDL,
     CONF_USER_NAMES,
     DEFAULT_STATUS_POLL,
     HELP_CODES,
@@ -67,7 +69,12 @@ class TexecomOptionsFlow(OptionsFlow):
 
     async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         menu = ["arm_modes", "alarm_code", "user_names"]
-        menu += ["notices", "clock", "rediscover"] if self._is_connect else ["status_poll"]
+        if self._is_connect:
+            menu += ["notices", "clock", "rediscover"]
+        else:
+            menu.append("status_poll")
+            if self.config_entry.data.get(CONF_UDL):
+                menu.append("readings")
         menu.append("dashboard")
         return self.async_show_menu(step_id="init", menu_options=menu, description_placeholders={"help": HELP_OPTIONS})
 
@@ -190,6 +197,14 @@ class TexecomOptionsFlow(OptionsFlow):
             }
         )
         return self.async_show_form(step_id="status_poll", data_schema=schema)
+
+    async def async_step_readings(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        """Crestron with the UDL code: power and event-log readings (off by default)."""
+        if user_input is not None:
+            return self._save({CONF_SESSION_READS: bool(user_input[CONF_SESSION_READS])})
+        default = bool(self.config_entry.options.get(CONF_SESSION_READS, False))
+        schema = vol.Schema({vol.Required(CONF_SESSION_READS, default=default): BooleanSelector()})
+        return self.async_show_form(step_id="readings", data_schema=schema)
 
     def _save(self, changes: dict[str, Any]) -> ConfigFlowResult:
         return self.async_create_entry(data={**self.config_entry.options, **changes})

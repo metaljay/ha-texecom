@@ -27,7 +27,14 @@ from ..panel import (
     TexecomPanel,
 )
 from . import protocol as P
-from .connection import LOGIN_TIMEOUT, POST_LOGOUT_BLACKOUT, RECONNECT_MIN, CommandFailed, ConnectionMixin
+from .connection import (
+    LOGIN_TIMEOUT,
+    POST_LOGOUT_BLACKOUT,
+    RECONNECT_MIN,
+    CommandFailed,
+    ConnectionMixin,
+    ConnectUnanswered,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -80,6 +87,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         power_first_delay: float = POWER_FIRST_DELAY,
         power_retry: float = POWER_RETRY,
         after_arm_check: float = AFTER_ARM_CHECK,
+        session_reads: bool = False,
     ) -> None:
         super().__init__(part_arms)
         self.zones = {z.number: z for z in zones}
@@ -99,6 +107,10 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self.power_retry = power_retry
         self._power_task: asyncio.Task | None = None
         self.after_arm_check = after_arm_check
+        # Power and log readings every power_poll seconds: an option, off by
+        # default, as each one holds back the panel's text feed for a while
+        # (~30 s on an Elite 168, over 2 minutes on an Elite 24).
+        self.session_reads = session_reads
         self._after_arm_task: asyncio.Task | None = None
         # The stored event log (read through Texecom Connect): its entry size
         # and ring size for this panel, and the next index to read.
@@ -134,7 +146,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self._stopped = False
         loop = asyncio.get_running_loop()
         self._task = loop.create_task(self._run(), name="texecom crestron")
-        if self.udl and self.power_poll > 0:
+        if self.udl and self.session_reads and self.power_poll > 0:
             self._power_task = loop.create_task(self._power_loop(), name="texecom crestron power")
 
     async def stop(self) -> None:
@@ -168,6 +180,11 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             # failed one waits for the next regular reading, not the retry.
             try:
                 power, entries = await self._session_reads(power=True, log=True)
+            except ConnectUnanswered as err:
+                _LOGGER.warning(
+                    "Crestron: %s; power and log readings stop until Home Assistant restarts or reloads", err
+                )
+                return
             except (PanelError, CommandFailed) as err:
                 _LOGGER.debug("Crestron: power and log reading failed: %s", err)
             else:

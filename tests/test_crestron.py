@@ -67,7 +67,9 @@ class FakeCrestronPort:
         arm_fails: bool = False,
         frames_unanswered: bool = False,
         model: str = "Elite 168 ENG->SW V6.06.03LS1",
+        connect_silent: bool = False,
     ) -> None:
+        self.connect_silent = connect_silent  # Connect frames get no answer (a panel without Connect here)
         self.model = model  # GetPanelIdentification's answer
         self.frames_unanswered = frames_unanswered  # UDL arm/disarm frames get no reply at all
         self.elite168 = elite168
@@ -103,6 +105,8 @@ class FakeCrestronPort:
     def _connect(self, writer, frame: bytes) -> None:
         sequence, command, body = frame[3], frame[4], frame[5:-1]
         self.connect_received.append((command, body))
+        if self.connect_silent:
+            return
         if command == C.CMD_LOGIN:
             reply = C.ACK if body.decode("latin1") == self.udl else C.NAK
         elif command == C.CMD_GET_SYSTEM_POWER:
@@ -205,6 +209,7 @@ async def make_panel(port: int, **kwargs) -> CrestronPanel:
         "reconnect_min": 0.05,
         "blackout": 0.1,
         "login_timeout": 0.3,
+        "session_reads": True,  # the option; tests that read power set power_poll
         "zones": [PanelZone(n, f"Zone {n}") for n in range(1, 6)],
     }
     opts.update(kwargs)
@@ -491,6 +496,35 @@ async def test_power_isnt_read_without_a_udl_code_or_when_switched_off():
         finally:
             await panel.stop()
     await fake.close()
+
+
+async def test_power_and_log_readings_are_off_unless_switched_on():
+    """Each reading holds back the panel's updates (over 2 minutes on an
+    Elite 24), so they're an option, off by default."""
+    fake = FakeCrestronPort(elite168=True)
+    number = await fake.start()
+    panel = await make_panel(number, session_reads=False, power_poll=0.1, power_first_delay=0.05)
+    try:
+        await asyncio.sleep(0.5)
+        assert "power" not in panel.extra and not fake.connect_received
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_readings_stop_when_the_connect_login_gets_no_answer():
+    fake = FakeCrestronPort(elite168=True, connect_silent=True)
+    number = await fake.start()
+    panel = await make_panel(number, power_poll=0.1, power_first_delay=0.05)
+    try:
+        await wait_for(lambda: fake.connect_received, timeout=10)  # one login, unanswered (5 s)
+        await wait_for(lambda: panel._power_task.done(), timeout=10)
+        await asyncio.sleep(0.5)
+        assert [c for c, _ in fake.connect_received] == [C.CMD_LOGIN]
+        assert panel.connected  # the zones and the alarm carry on
+    finally:
+        await panel.stop()
+        await fake.close()
 
 
 async def test_power_isnt_read_while_arming_entering_or_in_alarm():

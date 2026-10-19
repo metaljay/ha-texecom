@@ -25,6 +25,7 @@ from .const import (
     CONF_KEYPAD_ARM_MODE,
     CONF_PROTOCOL,
     CONF_SERIAL_DEVICE,
+    CONF_SESSION_READS,
     CONF_STATUS_POLL,
     CONF_TIME_SYNC,
     CONF_UDL,
@@ -116,5 +117,6 @@ def create_panel(hass: HomeAssistant, entry: ConfigEntry) -> TexecomPanel:
         baud_rate=data.get(CONF_BAUD_RATE, DEFAULT_BAUD_RATE),
         keypad_arm_mode=options.get(CONF_KEYPAD_ARM_MODE, "away"),
         status_poll=options.get(CONF_STATUS_POLL, DEFAULT_STATUS_POLL),
+        session_reads=bool(options.get(CONF_SESSION_READS, False)),
         on_event=fire,
     )

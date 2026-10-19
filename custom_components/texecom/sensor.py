@@ -1,4 +1,4 @@
-"""Power readings (Texecom Connect, and Crestron with the UDL code) and the keypad text (Connect)."""
+"""Power readings (Texecom Connect, and Crestron with the UDL code and readings on) and the keypad text (Connect)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from . import TexecomConfigEntry
-from .const import CONF_PROTOCOL, CONF_UDL, PROTOCOL_CONNECT
+from .const import CONF_PROTOCOL, CONF_SESSION_READS, CONF_UDL, PROTOCOL_CONNECT
 from .entity import TexecomEntity
 from .panel import TexecomPanel
 
@@ -28,9 +28,9 @@ async def async_setup_entry(
     power = [TexecomPowerSensor(entry, panel, *spec) for spec in POWER_SENSORS]
     if entry.data[CONF_PROTOCOL] == PROTOCOL_CONNECT:
         async_add_entities([*power, TexecomDisplaySensor(entry, panel)])
-    elif entry.data.get(CONF_UDL):
-        # Crestron reads power through Texecom Connect in a short UDL
-        # session (every 30 minutes), so only with the UDL code.
+    elif entry.data.get(CONF_UDL) and entry.options.get(CONF_SESSION_READS):
+        # Crestron reads power through Texecom Connect in a short UDL session
+        # every 30 minutes: only with the UDL code and the readings switched on.
         async_add_entities(power)
 
 

@@ -39,6 +39,11 @@ class CommandFailed(PanelError):
     pass
 
 
+class ConnectUnanswered(CommandFailed):
+    """No answer to the Texecom Connect login inside a UDL session: the
+    panel doesn't speak Connect on this port."""
+
+
 class CommandRefused(CommandFailed):
     """The panel answered and said no (ERROR or NAK), as opposed to not
     answering: only a refusal is safe to retry another way."""
@@ -260,7 +265,12 @@ class ConnectionMixin:
         the panel's identification: the zone count typed in at setup isn't
         the panel's size, and the area bitmap and the log layout follow the
         model, not the zones in use."""
-        await self._send_connect(P.C.CMD_LOGIN, self.udl.encode("latin1"), "the panel refused the UDL code")
+        try:
+            await self._send_connect(P.C.CMD_LOGIN, self.udl.encode("latin1"), "the panel refused the UDL code")
+        except CommandRefused:
+            raise
+        except CommandFailed as err:
+            raise ConnectUnanswered(f"no answer to the Texecom Connect login ({err})") from err
         if self.panel_zones is not None:
             return
         ident = P.C.decode_panel_identification(await self._connect_request(P.C.CMD_GET_PANEL_IDENTIFICATION))

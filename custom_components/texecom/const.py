@@ -38,6 +38,9 @@ CONF_ALARM_CODE = "alarm_code"
 CONF_CODE_ARM_REQUIRED = "code_arm_required"
 CONF_TIME_SYNC = "time_sync"
 CONF_STATUS_POLL = "status_poll"
+# Crestron with the UDL code: read power and the event log every 30 minutes
+# through Texecom Connect (each reading holds back the panel's updates).
+CONF_SESSION_READS = "session_reads"
 CONF_REDISCOVER = "rediscover"
 CONF_CREATE_DASHBOARD = "create_dashboard"
 
@@ -56,7 +59,13 @@ CONF_NOTIFY_TAMPER = "notify_tamper"
 
 # Options a running panel driver depends on: changing one reconnects to the
 # panel. Others (codes, names, notifications) apply straight away.
-DRIVER_OPTIONS = (*PART_ARM_OPTIONS.values(), CONF_KEYPAD_ARM_MODE, CONF_TIME_SYNC, CONF_STATUS_POLL)
+DRIVER_OPTIONS = (
+    *PART_ARM_OPTIONS.values(),
+    CONF_KEYPAD_ARM_MODE,
+    CONF_TIME_SYNC,
+    CONF_STATUS_POLL,
+    CONF_SESSION_READS,
+)
 
 # Help pages linked from the screens (links can't be written into strings.json).
 DOCS_URL = "https://github.com/metaljay/ha-texecom/blob/main/docs/user/"

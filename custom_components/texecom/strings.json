@@ -166,7 +166,8 @@
           "clock": "Panel clock",
           "status_poll": "Checking the panel",
           "rediscover": "Read zones and areas from the panel again",
-          "dashboard": "Create or refresh the Alarm dashboard"
+          "dashboard": "Create or refresh the Alarm dashboard",
+          "readings": "Power and event-log readings"
         }
       },
       "arm_modes": {
@@ -240,6 +241,13 @@
       },
       "rediscover": {
         "title": "Reading the panel"
+      },
+      "readings": {
+        "title": "Power and event-log readings",
+        "description": "Every 30 minutes Home Assistant can read the panel's voltages and currents and any new entries in its event log, through a short UDL session on this port. Each reading holds back the panel's other updates (zones and the alarm) for a while: about 30 seconds on some panels, over 2 minutes on others. None is taken while an area is arming, in entry or in alarm.\n\nSaving reconnects to the panel.",
+        "data": {
+          "session_reads": "Read power and the event log every 30 minutes"
+        }
       }
     },
     "progress": {
