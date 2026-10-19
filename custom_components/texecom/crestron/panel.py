@@ -298,10 +298,14 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             _LOGGER.exception("Crestron: error handling %r", line)
 
     def _on_area_event(self, number: int, event: str, user: str) -> None:
-        if event == "X" and time.monotonic() < self._stale_exit_until.get(number, 0.0):
-            # The exit delay of the arm the log already showed had failed.
-            _LOGGER.debug("Crestron: ignoring the held-back exit delay of area %s's failed arm", number)
-            return
+        if time.monotonic() < self._stale_exit_until.get(number, 0.0):
+            # The log has just decided this area's arm (armed, or failed and
+            # back to Off): the panel's held-back "X" and "A" for it are stale.
+            # Crestron doesn't say the mode, so an "A" would only lose it.
+            area = self.areas.get(number)
+            if event == "X" or (event == "A" and area is not None and area.state in ARMED_STATES):
+                _LOGGER.debug("Crestron: ignoring held-back %s for area %s (the log already decided)", event, number)
+                return
         self._stale_exit_until.pop(number, None)
         if (handle := self._deferred.pop(number, None)) is not None:
             handle.cancel()
@@ -335,10 +339,6 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         elif event == "D":
             self.set_area(number, DISARMED, None, by)
         elif event == "A":
-            if area.state in ARMED_STATES:
-                # Already armed (the log said so first): this is the held-back
-                # "A", and Crestron doesn't say the mode, so keep the state.
-                return
             self.set_area(number, self._armed_state(number), None, by)
 
     def _armed_state(self, number: int) -> str:

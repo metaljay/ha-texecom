@@ -830,3 +830,20 @@ async def test_a_short_login_wait_that_is_too_short_is_retried_with_the_full_wai
     finally:
         await panel.stop()
         await fake.close()
+
+
+async def test_an_arm_while_armed_still_shows_when_the_log_didnt_just_decide_it(port):
+    """Ignoring a held-back "A" is only for an area the log has just shown
+    armed: on a panel that never uses Connect (or after a missed "D"), an
+    "A" re-arming in another mode shows as before."""
+    fake, number = port
+    panel = await make_panel(number, event_coalesce=0)  # keypad arm mode: away
+    try:
+        await asyncio.wait_for(panel.arm(1, "night"), 20)  # text commands work here: no Connect, no log
+        fake.send('"A0010')
+        await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
+        fake.send('"A0013')  # re-armed at a keypad after a missed disarm
+        await wait_for(lambda: panel.areas[1].state == ARMED_AWAY)
+        assert panel.areas[1].changed_by == "User 3"
+    finally:
+        await panel.stop()
