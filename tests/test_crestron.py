@@ -316,6 +316,20 @@ def test_splitter_pulls_out_connect_replies():
     assert [(f.type, f.sequence, f.body) for f in connect] == [(C.TYPE_RESPONSE, 7, bytes([C.CMD_LOGIN, C.ACK]))]
 
 
+def test_a_blank_line_doesnt_hold_up_the_next_line():
+    """CR and LF look like the length byte of a 13- or 10-byte UDL frame;
+    they must not make the splitter wait for one (review of PR #46)."""
+    lines = []
+    splitter = P.LineSplitter(lines.append, lambda _f: None)
+    splitter.push(b"OK\r\n\r\n")
+    splitter.push(b'"Z0011\r\n')
+    assert lines == ["OK", '"Z0011']
+    lines.clear()
+    splitter.push(b'"Z0010\n\r')  # \n\r line endings
+    splitter.push(b'"Z0021\n\r')
+    assert [line.strip() for line in lines] == ['"Z0010', '"Z0021']  # parse_line strips the stray CR
+
+
 async def test_refused_disarm_falls_back_to_connect_inside_the_session():
     fake = FakeCrestronPort(elite168=True)
     number = await fake.start()

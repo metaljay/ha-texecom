@@ -175,7 +175,9 @@ class LineSplitter:
             return len(data) < 2 or (
                 data[1] in (C.TYPE_RESPONSE, C.TYPE_MESSAGE) and (len(data) < 3 or len(data) < data[2])
             )
-        return 3 <= data[0] < 0x20 and len(data) < data[0]
+        # CR and LF (0x0D, 0x0A) end lines: never the start of a 13- or
+        # 10-byte UDL frame, or a blank line would hold up the next line.
+        return 3 <= data[0] < 0x20 and data[0] not in (0x0A, 0x0D) and len(data) < data[0]
 
     def push(self, chunk: bytes) -> None:
         # Frames and lines can share one read (e.g. a NAK, an ACK and then a
