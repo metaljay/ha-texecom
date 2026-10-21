@@ -138,6 +138,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self.log_capacity: int | None = None
         self._log_pointer: int | None = None
         self._stale_exit_until: dict[int, float] = {}  # area -> ignore a held-back "X" until then
+        self._stale_arm_until: dict[int, float] = {}  # area -> after our disarm, ignore held-back "X"/"A" until then
         self._writer: asyncio.StreamWriter | None = None
         self._task: asyncio.Task | None = None
         self._stopped = False
@@ -299,6 +300,14 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             _LOGGER.exception("Crestron: error handling %r", line)
 
     def _on_area_event(self, number: int, event: str, user: str) -> None:
+        if number in self._stale_arm_until:
+            if event in ("X", "A") and time.monotonic() < self._stale_arm_until[number]:
+                # Home Assistant has disarmed this area since: an arm's
+                # held-back "X" and "A", released with the disarm's "D"
+                # (real panel, 21 Oct: X, A, D 30 s after the disarm), are stale.
+                _LOGGER.debug("Crestron: ignoring held-back %s for area %s (disarmed since)", event, number)
+                return
+            self._stale_arm_until.pop(number)
         if time.monotonic() < self._stale_exit_until.get(number, 0.0):
             # The log has just decided this area's arm (armed, or failed and
             # back to Off): the panel's held-back "X" and "A" for it are stale.
@@ -417,6 +426,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             lambda zones: (P.C.CMD_DISARM_AREA, P.C.encode_disarm_or_reset(area, zones)),
         )
         self._requested_mode.pop(area, None)
+        self._stale_arm_until[area] = max(self._blackout_until, time.monotonic()) + HELD_EXIT_GRACE
         self.set_area(area, DISARMED, None, "Home Assistant")
 
     def diagnostics(self) -> dict[str, Any]:

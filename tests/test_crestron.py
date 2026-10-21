@@ -853,6 +853,33 @@ async def test_a_good_arm_is_logged_but_not_reported_as_failed():
         await fake.close()
 
 
+async def test_a_disarm_soon_after_an_arm_ignores_the_arms_held_back_events():
+    """Real panel, 21 Oct: armed from HA, disarmed from HA 20 s later; 30 s
+    after the disarm the panel released the arm's held-back "X" and "A",
+    then the disarm's "D". The area must stay Off throughout."""
+    fake = FakeCrestronPort(elite168=True)
+    panel, events = await make_log_panel(fake, part_arms={"night": 2, "home": 0}, event_coalesce=0.1)
+    seen = []
+    try:
+        await asyncio.wait_for(panel.arm(1, "night"), 20)
+        await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
+        await asyncio.wait_for(panel.disarm(1), 20)
+        assert panel.areas[1].state == DISARMED
+        panel._stale_exit_until.clear()  # on the real panel the arm's own grace had run out by then
+        panel.add_listener(lambda: seen.append(panel.areas[1].state))
+        for line in ('"X0010', '"A001204', '"D0010'):  # spaced wider than the coalescing
+            fake.send(line)
+            await asyncio.sleep(0.3)
+        assert panel.areas[1].state == DISARMED
+        assert set(seen) <= {DISARMED}
+        assert panel.areas[1].changed_by == "Home Assistant"
+        fake.send('"X0013')  # a later arm at the keypad still shows
+        await wait_for(lambda: panel.areas[1].state == ARMING)
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
 async def test_the_regular_reading_catches_up_with_the_log():
     fake = FakeCrestronPort(elite168=True)
     for _ in range(3):
