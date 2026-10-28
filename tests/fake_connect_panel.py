@@ -135,6 +135,8 @@ class FakeConnectPanel:
         # A real panel kept Part Arming set while armed with a part arm that
         # has nothing programmed (Premier Elite 24, V6.05.03, 14 Oct 2026).
         self.sticky_part_arming = False
+        # After "part armed" (4), V6 panels send 5 + the part arm (6, 7 or 8); a V5.02 panel didn't.
+        self.part_armed_states = True
         self.display: str | None = None  # the keypad's text; None: "Premier Elite" and the time
         # A SmartCom reports an alarm itself: about 1.5 s after the disarm that follows it, it hangs
         # up, and turns logins away for about 2 minutes (seen on a real panel). 0: never.
@@ -246,6 +248,8 @@ class FakeConnectPanel:
             self._flags_before[area] = (self.area_states[area], self.part_arms[area], until)
         self.area_states[area], self.part_arms[area] = state, part_arm
         self.send(bytes([P.MSG_AREA, area, state]))
+        if state == 4 and part_arm and self.part_armed_states:
+            self.send(bytes([P.MSG_AREA, area, 5 + part_arm]))
 
     def _report_alarm(self) -> None:
         """Hangs up to send its own alarm report, and is busy meanwhile."""

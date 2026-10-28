@@ -163,7 +163,9 @@ def test_message_decoding():
     zone = P.decode_message(bytes([P.MSG_ZONE, 3, 0x21]))
     assert zone["zone"] == 3 and zone["state"].active and zone["state"].manual_bypass
     assert P.decode_message(bytes([P.MSG_AREA, 1, 4]))["state"] == "part armed"
-    assert P.decode_message(bytes([P.MSG_AREA, 1, 6]))["state"] == "unknown (6)"
+    six = P.decode_message(bytes([P.MSG_AREA, 1, 6]))
+    assert (six["state"], six["part_arm"]) == ("part armed", 1)
+    assert P.decode_message(bytes([P.MSG_AREA, 1, 9]))["state"] == "unknown (9)"
 
 
 def test_display_message_drops_the_clock():
@@ -436,6 +438,24 @@ async def test_keypad_part_arm_not_mapped_never_looks_like_a_mapped_one(fake):
         fake.send_log(80, 0, 0)  # PART_ARM_3 log
         fake.set_area(4, 3)
         await wait_for(lambda: panel.areas[1].state == ARMED_VACATION and panel.areas[1].part_arm == 3)
+    finally:
+        await panel.stop()
+
+
+async def test_area_states_6_to_8_say_which_part_arm(fake):
+    """Straight after *part armed* (4), V6 panels send 6, 7 or 8 for Part Arm
+    1, 2 or 3 (issue #55: an Elite 24 on V6.06.02 sent 6). The area shows that
+    part arm without waiting for the flags, and the diagnostics don't ask the
+    user to share a message the driver knows."""
+    panel = await make_panel(fake, part_arms={"night": 1, "home": 2})
+    try:
+        fake.nak_next[P.CMD_GET_AREA_FLAGS] = 99  # the flags can't say
+        fake.send(bytes([P.MSG_AREA, 1, 4]))
+        fake.send(bytes([P.MSG_AREA, 1, 7]))
+        await wait_for(lambda: panel.areas[1].state == ARMED_HOME and panel.areas[1].part_arm == 2)
+        fake.send(bytes([P.MSG_AREA, 1, 6]))
+        await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT and panel.areas[1].part_arm == 1)
+        assert panel.capture.unrecognised == {}
     finally:
         await panel.stop()
 

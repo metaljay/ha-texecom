@@ -52,7 +52,7 @@ The protocol follows Joseph Heenan's [texecom-connect](https://github.com/davidM
 | Message | Content |
 |---|---|
 | **Zone** | Zone number and a state byte: bits 0–1 secure/active/tamper/short, bit 2 fault, bit 3 failed test, bit 4 **alarmed**, bit 5 manual bypass, bit 6 auto bypass, bit 7 masked |
-| **Area** | Area and state: 0 disarmed, 1 in exit, 2 in entry, 3 armed, 4 part armed, 5 in alarm. **6, 7 and 8** arrive straight after the *part armed* (4) for Part Arm 1, 2 and 3 (5 + the part arm; Part Arm 2 remote and Part Arm 3 at the keypad on 14 Oct 2026): the driver re-reads the area flags instead. A V5.02 panel [didn't send them](#seen-on-testers-panels). On 8 Oct 2026 state 6 came with log entries 113 (*Remote Command*, group 9, parameter 1) and 207 (*Remote Part Arm 1*, group 6). Neither value is in the published lists, so the debug log shows `unknown (6)` |
+| **Area** | Area and state: 0 disarmed, 1 in exit, 2 in entry, 3 armed, 4 part armed, 5 in alarm. **6, 7 and 8** arrive straight after the *part armed* (4) for Part Arm 1, 2 and 3 (5 + the part arm; Part Arm 2 remote and Part Arm 3 at the keypad on 14 Oct 2026; [an Elite 24 on V6.06.02](#seen-on-testers-panels) too): the driver takes the part arm from them (`PART_ARMED_STATES`). A V5.02 panel [didn't send them](#seen-on-testers-panels). On 8 Oct 2026 state 6 came with log entries 113 (*Remote Command*, group 9, parameter 1) and 207 (*Remote Part Arm 1*, group 6). Neither value is in the published lists; any other value shows as `unknown (N)` and the driver re-reads the area flags |
 | **User** | User number and method (code, tag, code + tag) when someone uses a keypad |
 | **Log** | Event type, group (low 6 bits; bit 6 "communication delayed", bit 7 "communicated"), parameter (a zone or user number), areas, timestamp |
 | **Output** | Output location and state: decoded but not used yet |
@@ -202,6 +202,7 @@ From diagnostics that users shared (their panels, not this one):
 - **Output messages** (same panel): arming (full or part) set outputs 1, 2 and 4 to state 8, and 17 and 18 to state 3; disarming set them back to 0 and 1.
 - **System flags' last byte** differs: `01` here (V6.05.03), `03` on an Elite 24 V6.06.03 and on the V5.02.01 panel, `00` on an Elite 64 V5.00.03. Meaning unknown.
 - **ComWiFi** listens on port **10002** (Elite 24, V6.06.03).
+- **Area state 6 and log type 137** (Elite 24, V6.06.02, Connect on port 10001, issue #55, 27–28 Oct 2026): a remote Part Arm 1 sent *in exit* (1) with log 32 *Exit Started* and log 33 *Exit Error (Arming Failed)* (group 6) in the same second, then 9 s later *part armed* (4) followed by **6**, with log 113 *Remote Command* and 207 *Remote Part Arm 1*, as on the test panel. The next morning log **137 group 9, parameter 102, areas 1** came three times between 08:36 and 08:51, around a remote disarm (log 42 *Remote Open/Close* group 5) at 08:36:58. Outputs 1, 2 and 4 went to state 8 and 17, 18 to state 2 when it armed, and all to 0 when it disarmed. Log 73 *Automatic Test Transmission* (group 13) came three times between 01:00 and 08:00.
 
 ## Seen by other projects
 
@@ -258,9 +259,9 @@ Its COM port set to *Crestron System*, behind a serial-to-network adapter:
 
 Things to find out on real panels (each is a task in the [live test plan](../testing/live-test-plan.md#part-d--mapping-the-protocol)):
 
-- What **area states 6 and 7** mean exactly, and whether other values exist.
+- Whether **area states above 8** exist.
 - **Output messages**: which outputs (bell, strobe, others) report, what their states mean, and what the two-byte `03 e0` is.
-- **Log event types** not in the tables above, including **type 137** (observed during testing, meaning unknown) and **type 127** ([a tester's panel](#seen-on-testers-panels)).
+- **Log event types** not in the tables above, including **type 137** (observed during testing, and [on a tester's V6.06.02](#seen-on-testers-panels); meaning unknown) and **type 127** ([a tester's panel](#seen-on-testers-panels)).
 - Whether a remote **arm is refused** (NAK) with a zone open or a fault present, and what the panel sends then.
 - Commands not used yet that could help: **user names** (its reply includes the code), **zone bypass**, **outputs**, **the keypad text** (command 14).
 - What the **system flags** (command 10) mean beyond the [first clues](#system-flags), and which **area flags** show tampers and faults that are already there when Home Assistant connects (D11–D13).

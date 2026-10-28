@@ -112,11 +112,11 @@ class EventsMixin:
             if zs.alarmed and zs.active:
                 self._credit_alarm_zone(m["zone"])
         elif kind == "area":
-            if m["state_code"] > 5:
-                # Seen straight after "Part Armed 1" (settled part arm?): not
-                # in the published lists, so re-read the flags instead.
+            if m["state"].startswith("unknown"):
                 self._log.debug("Connect: area %s reported state %s; re-reading", m["area"], m["state_code"])
                 self._refresh_areas_soon()
+            elif "part_arm" in m:  # states 6-8 say which part arm
+                self._apply_area(m["area"], "part armed", m["part_arm"], self._recent_user(m["area"]))
             elif m["state"] == "part armed":
                 self._apply_area(m["area"], "part armed", self._last_part_arm, self._recent_user(m["area"]))
                 self._refresh_areas_soon()  # confirm which part arm from the flags

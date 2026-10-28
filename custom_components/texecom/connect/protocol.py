@@ -101,6 +101,9 @@ AREA_FLAGS = (
 )
 
 AREA_STATES = ("disarmed", "in exit", "in entry", "armed", "part armed", "in alarm")
+# Not in the published lists: V6 panels follow "part armed" (4) with 5 + the
+# part arm, so 6, 7 and 8 are part armed with Part Arm 1, 2 and 3.
+PART_ARMED_STATES = {6: 1, 7: 2, 8: 3}
 ZONE_STATES = ("secure", "active", "tamper", "short")
 
 # Areas per panel size (zones -> areas).
@@ -495,6 +498,14 @@ def _decode_message(body: bytes) -> dict[str, Any]:
         zone = p[0] if len(p) == 2 else p[0] | (p[1] << 8)
         return {"kind": "zone", "zone": zone, "state": decode_zone_state(p[-1])}
     if kind == MSG_AREA and len(p) >= 2:
+        if p[1] in PART_ARMED_STATES:
+            return {
+                "kind": "area",
+                "area": p[0],
+                "state_code": p[1],
+                "state": "part armed",
+                "part_arm": PART_ARMED_STATES[p[1]],
+            }
         state = AREA_STATES[p[1]] if p[1] < len(AREA_STATES) else f"unknown ({p[1]})"
         return {"kind": "area", "area": p[0], "state_code": p[1], "state": state}
     if kind == MSG_OUTPUT and len(p) >= 2:
