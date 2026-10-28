@@ -562,7 +562,13 @@ FAULT_LOG_NAMES = {
     119: "Battery Charger Fault",
     122: "Radio Config. Failure",
 }
-ZONE_FAULT_LOGS = {104, 105}  # Zone Fault, Zone Masked: the zone is in `parameter`
+# Fault log types whose `parameter` is a zone, so the fault can name it: Zone
+# Fault, Zone Masked, and Supervision Fault, which a wireless detector that has
+# stopped answering raises against its own zone (seen on an Elite 168: type 97
+# parameter 118, and zone 118 was the wireless contact whose radio had dropped).
+# Types 99 RF Device Low Battery, 101 Radio Jamming and 122 Radio Config. Failure
+# may be the same shape, but none has been seen yet, so they stay unnamed.
+ZONE_FAULT_LOGS = {97, 104, 105}
 # Groups: 1 priority alarm, 3 alarm, 9 maintenance alarm, 11 tamper, 20 fault
 # start one; 2, 4, 10, 12 are the matching restores.
 GROUPS_STARTING = {1, 3, 9, 11, 20}

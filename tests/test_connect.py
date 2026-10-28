@@ -1138,6 +1138,39 @@ async def test_a_remote_psu_mains_failure_waits_for_its_own_restore(fake):
         await panel.stop()
 
 
+async def test_a_supervision_fault_names_its_zone(fake):
+    """A wireless detector that stops answering raises Supervision Fault
+    against its own zone, in `parameter`. Naming it is the point: told only
+    "Supervision Fault", nobody can tell which detector to go and look at, and
+    the fault stops the panel arming."""
+    events = []
+    panel = await make_panel(fake, on_event=lambda t, d: events.append((t, d)))
+    try:
+        fake.send_log(97, 3, 5)  # Supervision Fault, zone 5 (Landing)
+        await wait_for(lambda: panel.extra.get("faults") == {"Supervision Fault: Landing"})
+        fake.send_log(97, 4, 5)  # the detector answers again
+        await wait_for(lambda: panel.extra.get("faults") == set())
+        assert [(t, d["source"]) for t, d in events] == [
+            ("fault", "Supervision Fault: Landing"),
+            ("fault_cleared", "Supervision Fault: Landing"),
+        ]
+    finally:
+        await panel.stop()
+
+
+async def test_a_supervision_fault_on_an_unknown_zone_keeps_its_bare_name(fake):
+    """A zone the driver doesn't know (nothing programmed against it) still
+    raises the fault, without a name rather than not at all."""
+    panel = await make_panel(fake)
+    try:
+        fake.send_log(97, 3, 200)
+        await wait_for(lambda: panel.extra.get("faults") == {"Supervision Fault"})
+        fake.send_log(97, 4, 200)
+        await wait_for(lambda: panel.extra.get("faults") == set())
+    finally:
+        await panel.stop()
+
+
 async def test_clock_drift_is_reported_when_not_syncing(fake):
     drifts = []
     fake.clock_offset = timedelta(days=-700)
