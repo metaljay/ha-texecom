@@ -389,7 +389,8 @@ class FakeConnectPanel:
             start, count = args[0], args[1]
             reply(bytes(self.zone_state.get(start + i, 0) for i in range(count)))
         elif cmd == P.CMD_GET_AREA_FLAGS:
-            reply(bytes(self._area_flags()[args[0] : args[0] + args[1]]))
+            flags = self._area_flags()
+            reply(bytes(flags[args[0] : args[0] + args[1]]) if args[0] < len(flags) else bytes([P.NAK]))
         elif cmd == P.CMD_GET_LCD_DISPLAY:
             if self.display is not None:
                 reply(self.display.encode("latin1").ljust(32)[:32])
@@ -446,7 +447,7 @@ class FakeConnectPanel:
 
     def _area_flags(self) -> bytearray:
         """GET_AREA_FLAGS from flag 0: one byte per flag, a bit per area."""
-        flags = bytearray(73)
+        flags = bytearray(72)  # flags 0-71: a real Elite 24 NAKs 72 on (28 Oct 2026)
         now = asyncio.get_running_loop().time()
         for area, s in self.area_states.items():
             part_arm = self.part_arms[area]

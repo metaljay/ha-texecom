@@ -734,6 +734,19 @@ async def test_a_login_turned_away_is_not_logged_as_a_session_ending(fake, caplo
     assert not [r for r in caplog.records if r.levelname == "INFO" and "session ended" in r.getMessage()]
 
 
+async def test_area_flags_stop_at_71_as_on_a_real_elite_24(fake):
+    """An Elite 24 (V6.05.03, 28 Oct 2026) answers flags 0-71 and a NAK from
+    flag 72 (Seismic Alarm in the published names) on."""
+    client = ConnectClient("127.0.0.1", fake.port, "1234", timing=FAST)
+    await client.connect()
+    try:
+        assert len(await client.command(P.CMD_GET_AREA_FLAGS, bytes([0, 72]))) == 72
+        for flag in (72, 79):
+            assert P.is_nak(await client.command(P.CMD_GET_AREA_FLAGS, bytes([flag, 1])))
+    finally:
+        await client.close()
+
+
 async def test_the_panels_own_conditions_are_no_warnings(fake, caplog, quick_internal_alarm):
     """Issue #45: Home Assistant shows a custom integration's warnings as
     faults to report. Tampers, faults, mains off, alarms, a failed arm and an
