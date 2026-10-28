@@ -97,7 +97,24 @@ Also learnt from the comparison:
 - **Home Assistant logging in doesn't write to the event log.** Its many logins over the SmartCom left no *Download Start* (53); only Wintex did.
 - **The event log can miss what was sent live.** An alarm on 8 Oct (entry by zone 1, the Kitchen in alarm, disarmed by user 3, panel time 14:30:50–14:30:58) arrived over Connect as log types 34, 31, 3, 37 and 3 (restore) but isn't in the event log at all. Don't treat the event log as complete.
 - **The panel's clock ran about 7 s ahead** of Home Assistant that day (clock sync was off): log timestamps are the panel's clock, not when the message arrived.
-- **In the event log but not yet seen live** (so their type numbers are still to confirm): *Bell Active*, *Alarm Active*, *Alarm Abort*, *Confirmed Intruder*, *Confirmed Alarm*, *Zone nnn Locked Out*, *Remote Command Via Com Port*, *Site Data Changed (via Wintex)*, *Date/Time Changed by Remote PC*, *Manual Test Transmission*, *ARC 1 Test Call via Com-IP Passed*, *ARC ATS Fault*, *Panel Lid Tamper*, *Mains AC Restore*, *Area(s) Part ARMED n by User nn*.
+- **Their type numbers, confirmed** (28 Oct 2026): the whole stored log (500 entries, 7–28 Oct) read over the SmartCom with *Get log events* and matched, to the second, against the 12 Oct Wintex export. Every type in it is in the published list. Entries Wintex shows that hadn't been seen live:
+
+  | Type, group | Wintex shows |
+  |---|---|
+  | 27, 0 / 28, 0 | *Alarm Active* / *Bell Active* |
+  | 41, 5 | *Alarm Abort* (with the user's disarm) |
+  | 47, 10 | *Mains AC Restore* (the late restore above) |
+  | 56, 0 / 57, 0 | *Date / Time Changed by Remote PC* |
+  | 60, 11 / 60, 12 | *Panel Lid Tamper Alarm / Restore* |
+  | 72, 13 / 72, 14 | *Manual Test Transmission* |
+  | 78, 6 / 79, 6 | *Area(s) Part ARMED 1 / 2 by User nn* |
+  | 82, 3 | *Confirmed Alarm* (with the zone) |
+  | 100, 9 | *Site Data Changed via Wintex* |
+  | 103, 0 | ***ARC 1 Test Call via Com-IP Passed*** (parameter 4). The published list calls 103 *Test Call Failed* and 102 *Passed*: on this panel 103 is a pass |
+  | 113, 9 | *Remote Command Via Com Port* |
+  | 120, 1 | *Confirmed Intruder* |
+
+  *Zone nnn Locked Out* and *ARC ATS Fault* (6 Oct) were older than the ring. Log **137 isn't in the stored log at all**, so it has only been seen live.
 
 ### Walk test
 
@@ -126,7 +143,7 @@ The type number the panel reports (zone details, and the type of a zone's alarm 
 
 ### Area flags
 
-`Get area flags` returns one area bitmap per flag. Texecom's protocol specification names all 73; the names are in `connect/protocol.py` (`AREA_FLAG_NAMES`, from the texecom-connect forks), and the debug log and diagnostics show the flags set for each area by name, so the rest can be mapped on a real panel ([live test plan](../testing/live-test-plan.md#part-d--mapping-the-protocol), D12).
+`Get area flags` returns one area bitmap per flag. Texecom's protocol specification names 73, but **the Elite 24 (V6.05.03) has 72**: it answers flags 0–71 and a NAK for 72 (*Seismic Alarm*) and beyond (28 Oct 2026; the simulated panel does the same). The names are in `connect/protocol.py` (`AREA_FLAG_NAMES`, from the texecom-connect forks), and the debug log and diagnostics show the flags set for each area by name, so the rest can be mapped on a real panel ([live test plan](../testing/live-test-plan.md#part-d--mapping-the-protocol), D12).
 
 | Flag | Name | Used for | Status |
 |---|---|---|---|
@@ -261,14 +278,14 @@ Things to find out on real panels (each is a task in the [live test plan](../tes
 
 - Whether **area states above 8** exist.
 - **Output messages**: which outputs (bell, strobe, others) report, what their states mean, and what the two-byte `03 e0` is.
-- **Log event types** not in the tables above, including **type 137** (observed during testing, and [on a tester's V6.06.02](#seen-on-testers-panels); meaning unknown) and **type 127** ([a tester's panel](#seen-on-testers-panels)).
+- **Log event types** not in the tables above, including **type 137** (observed live during testing, and [on a tester's V6.06.02](#seen-on-testers-panels); never in this panel's stored log; meaning unknown) and **type 127** ([a tester's panel](#seen-on-testers-panels)).
 - Whether a remote **arm is refused** (NAK) with a zone open or a fault present, and what the panel sends then.
 - Commands not used yet that could help: **user names** (its reply includes the code), **zone bypass**, **outputs**, **the keypad text** (command 14).
 - What the **system flags** (command 10) mean beyond the [first clues](#system-flags), and which **area flags** show tampers and faults that are already there when Home Assistant connects (D11–D13).
 - Why the panel sometimes **doesn't log a tamper** (a limit on repeats?), and what else sets area flag 44 *Internal Alarm* while disarmed (chime, walk test, the fail-to-set warning, a 24-hour zone).
 - Whether **Ready** (flag 16) is set exactly when the area can be armed, and what it shows while armed.
 - The type numbers of the event-log entries [not yet seen live](#matched-against-the-panels-own-event-log), and what log 53's parameter means with a SmartCom or ComIP.
-- The exact **refusal window** after a session closes, and what affects it.
+- The exact **refusal window** after a session closes, and what affects it. **First measurements** (SmartCom, Elite 24 V6.05.03, 28 Oct 2026): 20 sessions in a row, each a login and logout, then a new login tried every 2 s. For the first 16 the next login got in after about 9 or 18 s (a turned-away login takes about 15 s to fail, so these are upper bounds); the last four took **53, 64, 69 and 134 s**. So many short sessions close together make the SmartCom refuse for longer. Home Assistant got back in 4 s after a single 10-minute session.
 - Why the SmartCom waited for the disarm before reporting an alarm (and dropping the session), and whether that depends on how the panel is set to report alarms.
 - The SmartCom's **network name (DHCP hostname)**, which could let Home Assistant discover it automatically.
 - Whether the panel changes its own clock for **summer time**, and how that interacts with clock sync (UK clocks change on 25 October 2026 and 28 March 2027).
