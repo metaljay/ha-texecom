@@ -74,7 +74,7 @@ class Capture:
 
     def add(self, m: dict[str, Any]) -> None:
         entry = {
-            "at": datetime.now().isoformat(sep=" ", timespec="seconds"),
+            "at": datetime.now().isoformat(sep=" ", timespec="milliseconds"),
             "raw": m.get("raw", ""),
             "read": describe(m),
         }

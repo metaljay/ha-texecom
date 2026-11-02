@@ -1505,6 +1505,14 @@ async def test_diagnostics_keep_the_recent_messages_and_the_unrecognised_ones(fa
         await panel.stop()
 
 
+def test_the_capture_keeps_millisecond_times():
+    # Replays need real timings: a part arm's two messages come 1 ms apart.
+    recorded = capture.Capture()
+    recorded.add(P.decode_message(bytes([P.MSG_ZONE, 1, 0])))
+    assert datetime.fromisoformat(recorded.recent[0]["at"]).microsecond % 1000 == 0
+    assert len(recorded.recent[0]["at"]) == len("2026-11-02 14:05:04.609")
+
+
 SHARED = sorted((Path(__file__).parent / "diagnostics").glob("*.json"))
 
 
