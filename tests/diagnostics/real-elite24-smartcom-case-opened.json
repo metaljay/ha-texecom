@@ -1,0 +1,121 @@
+{
+ "panel": {
+  "info": {
+   "model": "Premier Elite",
+   "zones": 24,
+   "firmware": "V6.05.03LS1"
+  },
+  "part_arms": {
+   "home": 0,
+   "night": 1
+  },
+  "areas": [
+   {
+    "number": 1,
+    "name": "HOUSE",
+    "state": "disarmed",
+    "part_arm": null
+   }
+  ],
+  "zones": [
+   {
+    "number": 1,
+    "name": "Hallway",
+    "panel_type": 1,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 2,
+    "name": "Lounge",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 3,
+    "name": "Kitchen",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 4,
+    "name": "Garage",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 5,
+    "name": "Landing",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   }
+  ],
+  "recent_messages": [
+   {
+    "at": "2026-11-02 14:41:21.127",
+    "raw": "05 81 09 00 00 54 ba 4e 68",
+    "read": "log: unknown (129), group Maintenance Alarm (9), parameter 0, areas 0x0"
+   },
+   {
+    "at": "2026-11-02 14:41:23.127",
+    "raw": "05 81 0a 00 00 56 ba 4e 68",
+    "read": "log: unknown (129), group Maintenance Restore (10), parameter 0, areas 0x0"
+   },
+   {
+    "at": "2026-11-02 14:41:24.209",
+    "raw": "04 03 00",
+    "read": "user: user 3, method code"
+   },
+   {
+    "at": "2026-11-02 14:41:24.209",
+    "raw": "05 1f 00 03 01 57 ba 4e 68",
+    "read": "log: User Code (31), group Not Reported (0), parameter 3, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:41:24.767",
+    "raw": "03 10 f0",
+    "read": "output: location 16, state 240"
+   },
+   {
+    "at": "2026-11-02 14:41:24.833",
+    "raw": "03 11 00",
+    "read": "output: location 17, state 0"
+   },
+   {
+    "at": "2026-11-02 14:41:24.833",
+    "raw": "03 12 00",
+    "read": "output: location 18, state 0"
+   },
+   {
+    "at": "2026-11-02 14:41:25.063",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:41:29.486",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   }
+  ],
+  "expect": {
+   "area_states": [],
+   "events": [
+    "user 3"
+   ]
+  }
+ }
+}

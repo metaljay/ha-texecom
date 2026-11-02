@@ -159,6 +159,8 @@ class FakeConnectPanel:
         self.log_pointer = 0
         self.stored_log = True
         self.tasks: set[asyncio.Task] = set()  # replays running (asyncio holds tasks weakly)
+        # A recorded scenario brings the panel's own answers: arm and disarm commands are only acknowledged.
+        self.scripted = False
 
     @classmethod
     def from_diagnostics(cls, panel: dict, **kwargs) -> FakeConnectPanel:
@@ -406,6 +408,8 @@ class FakeConnectPanel:
         elif cmd == P.CMD_ARM_AREA:
             arm_type, bitmap = args[0], args[1]
             reply(ack)
+            if self.scripted:
+                return
             if arm_type != P.ARM_FULL:
                 self.send_log(77 + arm_type, 0, 0, bitmap)  # PART_ARM_n log, as the panel does
             armed = (3, None) if arm_type == P.ARM_FULL else (4, arm_type)
@@ -419,6 +423,8 @@ class FakeConnectPanel:
                     self.set_area(*armed, area=area)  # no exit time: armed at once
         elif cmd == P.CMD_DISARM_AREA:
             reply(ack)
+            if self.scripted:
+                return
             for area in self._areas_in(args[0]):
                 if timer := self._exit_timers.pop(area, None):
                     timer.cancel()

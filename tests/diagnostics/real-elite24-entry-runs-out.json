@@ -1,0 +1,216 @@
+{
+ "panel": {
+  "info": {
+   "model": "Premier Elite",
+   "zones": 24,
+   "firmware": "V6.05.03LS1"
+  },
+  "part_arms": {
+   "home": 0,
+   "night": 1
+  },
+  "areas": [
+   {
+    "number": 1,
+    "name": "HOUSE",
+    "state": "triggered",
+    "part_arm": null
+   }
+  ],
+  "zones": [
+   {
+    "number": 1,
+    "name": "Hallway",
+    "panel_type": 1,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 2,
+    "name": "Lounge",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 3,
+    "name": "Kitchen",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 4,
+    "name": "Garage",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 5,
+    "name": "Landing",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   }
+  ],
+  "recent_messages": [
+   {
+    "at": "2026-11-02 14:19:26.083",
+    "raw": "02 01 01",
+    "read": "area: area 1, state_code 1, state in exit"
+   },
+   {
+    "at": "2026-11-02 14:19:26.084",
+    "raw": "05 20 10 00 01 d9 b4 4e 68",
+    "read": "log: Exit Started (32), group Armed (16), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:19:35.272",
+    "raw": "05 2a 06 00 01 e3 b4 4e 68",
+    "read": "log: Remote Open/Close (42), group Close (6), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:19:35.272",
+    "raw": "02 01 03",
+    "read": "area: area 1, state_code 3, state armed"
+   },
+   {
+    "at": "2026-11-02 14:19:35.320",
+    "raw": "03 01 08",
+    "read": "output: location 1, state 8"
+   },
+   {
+    "at": "2026-11-02 14:19:35.320",
+    "raw": "03 04 08",
+    "read": "output: location 4, state 8"
+   },
+   {
+    "at": "2026-11-02 14:19:35.320",
+    "raw": "03 02 08",
+    "read": "output: location 2, state 8"
+   },
+   {
+    "at": "2026-11-02 14:19:35.411",
+    "raw": "03 11 03",
+    "read": "output: location 17, state 3"
+   },
+   {
+    "at": "2026-11-02 14:19:35.411",
+    "raw": "03 12 03",
+    "read": "output: location 18, state 3"
+   },
+   {
+    "at": "2026-11-02 14:19:58.174",
+    "raw": "02 01 02",
+    "read": "area: area 1, state_code 2, state in entry"
+   },
+   {
+    "at": "2026-11-02 14:19:58.175",
+    "raw": "05 22 12 01 01 fa b4 4e 68",
+    "read": "log: Entry Started (34), group Started (18), parameter 1, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:19:58.176",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:19:59.121",
+    "raw": "03 06 dc",
+    "read": "output: location 6, state 220"
+   },
+   {
+    "at": "2026-11-02 14:20:02.367",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:20:06.577",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:20:14.068",
+    "raw": "05 01 03 01 01 0e b5 4e 68",
+    "read": "log: Entry/Exit 1 (1), group Alarm (3), parameter 1, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:20:14.097",
+    "raw": "05 01 03 01 01 0e b5 4e 68",
+    "read": "log: Entry/Exit 1 (1), group Alarm (3), parameter 1, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:20:14.149",
+    "raw": "03 01 0c",
+    "read": "output: location 1, state 12"
+   },
+   {
+    "at": "2026-11-02 14:20:14.149",
+    "raw": "03 02 0c",
+    "read": "output: location 2, state 12"
+   },
+   {
+    "at": "2026-11-02 14:20:15.122",
+    "raw": "02 01 05",
+    "read": "area: area 1, state_code 5, state in alarm"
+   },
+   {
+    "at": "2026-11-02 14:20:15.123",
+    "raw": "05 1c 00 00 01 0f b5 4e 68",
+    "read": "log: Bell Active (28), group Not Reported (0), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:20:15.123",
+    "raw": "05 01 44 01 01 0f b5 4e 68",
+    "read": "log: Entry/Exit 1 (1), group Restore (4), parameter 1, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:20:15.123",
+    "raw": "01 01 10",
+    "read": "zone: zone 1, state ZoneState(raw=16, state='secure', fault=False, failed_test=False, alarmed=True, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:20:15.123",
+    "raw": "03 04 0c",
+    "read": "output: location 4, state 12"
+   },
+   {
+    "at": "2026-11-02 14:20:16.104",
+    "raw": "03 00 00",
+    "read": "output: location 0, state 0"
+   },
+   {
+    "at": "2026-11-02 14:20:17.110",
+    "raw": "03 00 00",
+    "read": "output: location 0, state 0"
+   },
+   {
+    "at": "2026-11-02 14:20:18.102",
+    "raw": "03 00 00",
+    "read": "output: location 0, state 0"
+   }
+  ],
+  "expect": {
+   "area_states": [
+    "arming",
+    "armed_away",
+    "pending",
+    "triggered"
+   ],
+   "events": [
+    "zone_alarm Hallway"
+   ]
+  }
+ }
+}

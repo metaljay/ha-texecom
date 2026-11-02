@@ -117,6 +117,8 @@ Gaps longer than 5 seconds are cut to 5. In a test, use `FakeConnectPanel.from_d
 
 **Every file in `tests/diagnostics/` is a test** (`test_a_shared_diagnostics_file_replays_to_the_same_picture`): the driver must read the same zones and areas, receive the same messages, and end with the same zone and area states. It checks that the driver still handles that panel the way it did when the file was made, so a change can't quietly break a panel we don't own. It doesn't prove the panel's messages are understood correctly: that still needs a timeline from the owner. To add one:
 
+**The `real-*.json` files are one session on a real Elite 24**, a step each (2 Nov 2026), with millisecond times: arms from Home Assistant and the keypad, entry, both kinds of alarm, tampers, mains off. Each also holds what really happened (`expect`): `test_a_recorded_session_on_a_real_panel_goes_the_same_way` sends it through the driver and checks the same area states and events come out, so a change that breaks how the real panel is handled fails here. In these tests the simulated panel only acknowledges arm and disarm commands (`scripted`), as the recording brings its answers.
+
 1. Ask the person first (their issue or thread), and only use a file they posted publicly.
 2. Make it anonymous: replace zone, area and user names that say anything about them (*Smith's Room* → *Bedroom 2*) in the `zones` and `areas` lists **and** in the `read` text of the messages. Keep the `raw` bytes as they are (they carry no names or codes), and check that the address and codes still read `**REDACTED**`.
 3. Name it after the panel, e.g. `elite24-v6.06-comwifi.json`, and run the driver tests.

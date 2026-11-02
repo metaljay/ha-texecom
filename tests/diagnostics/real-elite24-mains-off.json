@@ -1,0 +1,234 @@
+{
+ "panel": {
+  "info": {
+   "model": "Premier Elite",
+   "zones": 24,
+   "firmware": "V6.05.03LS1"
+  },
+  "part_arms": {
+   "home": 0,
+   "night": 1
+  },
+  "areas": [
+   {
+    "number": 1,
+    "name": "HOUSE",
+    "state": "disarmed",
+    "part_arm": null
+   }
+  ],
+  "zones": [
+   {
+    "number": 1,
+    "name": "Hallway",
+    "panel_type": 1,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 2,
+    "name": "Lounge",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 3,
+    "name": "Kitchen",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 4,
+    "name": "Garage",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 5,
+    "name": "Landing",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   }
+  ],
+  "recent_messages": [
+   {
+    "at": "2026-11-02 14:34:00.660",
+    "raw": "05 2f 89 00 01 80 b8 4e 68",
+    "read": "log: AC Fail (47), group Maintenance Alarm (9), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:34:04.918",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:34:08.051",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:34:29.934",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:34:34.098",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:38:25.016",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:38:27.311",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:38:39.744",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:38:41.169",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:38:41.867",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:38:45.753",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:39:01.608",
+    "raw": "05 2f 09 00 01 c1 b9 4e 68",
+    "read": "log: AC Fail (47), group Maintenance Alarm (9), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:39:01.660",
+    "raw": "03 03 02",
+    "read": "output: location 3, state 2"
+   },
+   {
+    "at": "2026-11-02 14:39:02.496",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:39:07.733",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:39:12.550",
+    "raw": "05 2f 0a 00 01 cc b9 4e 68",
+    "read": "log: AC Fail (47), group Maintenance Restore (10), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:39:12.592",
+    "raw": "03 03 00",
+    "read": "output: location 3, state 0"
+   },
+   {
+    "at": "2026-11-02 14:39:19.787",
+    "raw": "04 03 00",
+    "read": "user: user 3, method code"
+   },
+   {
+    "at": "2026-11-02 14:39:19.787",
+    "raw": "05 1f 00 03 01 d3 b9 4e 68",
+    "read": "log: User Code (31), group Not Reported (0), parameter 3, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:39:20.608",
+    "raw": "03 10 f0",
+    "read": "output: location 16, state 240"
+   },
+   {
+    "at": "2026-11-02 14:39:20.676",
+    "raw": "03 11 00",
+    "read": "output: location 17, state 0"
+   },
+   {
+    "at": "2026-11-02 14:39:20.676",
+    "raw": "03 12 00",
+    "read": "output: location 18, state 0"
+   },
+   {
+    "at": "2026-11-02 14:39:24.442",
+    "raw": "04 00 00",
+    "read": "user: user 0, method code"
+   },
+   {
+    "at": "2026-11-02 14:39:24.442",
+    "raw": "05 1f 00 00 03 d7 b9 4e 68",
+    "read": "log: User Code (31), group Not Reported (0), parameter 0, areas 0x3"
+   },
+   {
+    "at": "2026-11-02 14:39:24.483",
+    "raw": "05 3a 09 00 01 d7 b9 4e 68",
+    "read": "log: Installer Programming Start (58), group Maintenance Alarm (9), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:39:27.066",
+    "raw": "05 3b 09 00 01 da b9 4e 68",
+    "read": "log: Installer Programming End (59), group Maintenance Alarm (9), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:39:28.676",
+    "raw": "03 10 ff",
+    "read": "output: location 16, state 255"
+   },
+   {
+    "at": "2026-11-02 14:39:28.741",
+    "raw": "03 11 01",
+    "read": "output: location 17, state 1"
+   },
+   {
+    "at": "2026-11-02 14:39:28.742",
+    "raw": "03 12 01",
+    "read": "output: location 18, state 1"
+   },
+   {
+    "at": "2026-11-02 14:39:31.323",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:39:35.483",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   }
+  ],
+  "expect": {
+   "area_states": [],
+   "events": [
+    "fault AC Fail",
+    "fault_cleared AC Fail",
+    "user 3",
+    "user 0"
+   ]
+  }
+ }
+}

@@ -1,0 +1,393 @@
+{
+ "panel": {
+  "info": {
+   "model": "Premier Elite",
+   "zones": 24,
+   "firmware": "V6.05.03LS1"
+  },
+  "part_arms": {
+   "home": 0,
+   "night": 1
+  },
+  "areas": [
+   {
+    "number": 1,
+    "name": "HOUSE",
+    "state": "disarmed",
+    "part_arm": null
+   }
+  ],
+  "zones": [
+   {
+    "number": 1,
+    "name": "Hallway",
+    "panel_type": 1,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 2,
+    "name": "Lounge",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 3,
+    "name": "Kitchen",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 4,
+    "name": "Garage",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 5,
+    "name": "Landing",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   }
+  ],
+  "recent_messages": [
+   {
+    "at": "2026-11-02 14:23:42.243",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:23:44.902",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:23:45.337",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:23:47.972",
+    "raw": "01 03 01",
+    "read": "zone: zone 3, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:23:50.101",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:23:53.696",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:23:55.103",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:23:55.105",
+    "raw": "01 03 00",
+    "read": "zone: zone 3, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:23:56.466",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:23:56.858",
+    "raw": "05 3e 8b 00 00 f9 b5 4e 68",
+    "read": "log: Auxiliary Tamper (62), group Tamper Alarm (11), parameter 0, areas 0x0"
+   },
+   {
+    "at": "2026-11-02 14:24:01.618",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:24:17.862",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:24:19.752",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:24:22.052",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:24:23.918",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:24:55.226",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:24:57.859",
+    "raw": "05 3e 8c 00 00 3a b6 4e 68",
+    "read": "log: Auxiliary Tamper (62), group Tamper Restore (12), parameter 0, areas 0x0"
+   },
+   {
+    "at": "2026-11-02 14:24:58.593",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:25:30.936",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:25:34.456",
+    "raw": "05 3e 8b 00 00 62 b6 4e 68",
+    "read": "log: Auxiliary Tamper (62), group Tamper Alarm (11), parameter 0, areas 0x0"
+   },
+   {
+    "at": "2026-11-02 14:25:41.049",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:26:14.631",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:26:17.355",
+    "raw": "05 3e 8c 00 00 91 b6 4e 68",
+    "read": "log: Auxiliary Tamper (62), group Tamper Restore (12), parameter 0, areas 0x0"
+   },
+   {
+    "at": "2026-11-02 14:26:18.510",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:26:37.344",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:26:41.504",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:26:43.110",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:26:44.468",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:26:48.839",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:26:52.657",
+    "raw": "05 3e 8b 00 00 b4 b6 4e 68",
+    "read": "log: Auxiliary Tamper (62), group Tamper Alarm (11), parameter 0, areas 0x0"
+   },
+   {
+    "at": "2026-11-02 14:27:00.009",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:11.250",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:13.535",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:22.178",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:32.405",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:34.068",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:36.901",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:37.518",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:41.954",
+    "raw": "05 3e 8c 00 00 ea b6 4e 68",
+    "read": "log: Auxiliary Tamper (62), group Tamper Restore (12), parameter 0, areas 0x0"
+   },
+   {
+    "at": "2026-11-02 14:27:45.456",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:45.993",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:47.709",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:47.710",
+    "raw": "04 03 00",
+    "read": "user: user 3, method code"
+   },
+   {
+    "at": "2026-11-02 14:27:47.710",
+    "raw": "05 1f 00 03 01 ef b6 4e 68",
+    "read": "log: User Code (31), group Not Reported (0), parameter 3, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:27:47.912",
+    "raw": "03 10 f0",
+    "read": "output: location 16, state 240"
+   },
+   {
+    "at": "2026-11-02 14:27:47.980",
+    "raw": "03 11 00",
+    "read": "output: location 17, state 0"
+   },
+   {
+    "at": "2026-11-02 14:27:47.980",
+    "raw": "03 12 00",
+    "read": "output: location 18, state 0"
+   },
+   {
+    "at": "2026-11-02 14:27:50.899",
+    "raw": "04 00 00",
+    "read": "user: user 0, method code"
+   },
+   {
+    "at": "2026-11-02 14:27:50.900",
+    "raw": "05 1f 00 00 03 f3 b6 4e 68",
+    "read": "log: User Code (31), group Not Reported (0), parameter 0, areas 0x3"
+   },
+   {
+    "at": "2026-11-02 14:27:50.946",
+    "raw": "05 3a 09 00 01 f3 b6 4e 68",
+    "read": "log: Installer Programming Start (58), group Maintenance Alarm (9), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:27:53.200",
+    "raw": "05 3b 09 00 01 f5 b6 4e 68",
+    "read": "log: Installer Programming End (59), group Maintenance Alarm (9), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:27:54.797",
+    "raw": "03 10 ff",
+    "read": "output: location 16, state 255"
+   },
+   {
+    "at": "2026-11-02 14:27:54.885",
+    "raw": "03 11 01",
+    "read": "output: location 17, state 1"
+   },
+   {
+    "at": "2026-11-02 14:27:54.885",
+    "raw": "03 12 01",
+    "read": "output: location 18, state 1"
+   },
+   {
+    "at": "2026-11-02 14:27:54.885",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:56.499",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:56.500",
+    "raw": "01 03 01",
+    "read": "zone: zone 3, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:27:56.902",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:28:00.483",
+    "raw": "01 03 00",
+    "read": "zone: zone 3, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:28:00.534",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:28:05.559",
+    "raw": "01 01 01",
+    "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:28:07.622",
+    "raw": "01 01 00",
+    "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   }
+  ],
+  "expect": {
+   "area_states": [],
+   "events": [
+    "tamper Auxiliary Tamper",
+    "tamper_cleared Auxiliary Tamper",
+    "tamper Auxiliary Tamper",
+    "tamper_cleared Auxiliary Tamper",
+    "tamper Auxiliary Tamper",
+    "tamper_cleared Auxiliary Tamper",
+    "user 3",
+    "user 0"
+   ]
+  }
+ }
+}

@@ -1541,6 +1541,54 @@ async def test_a_shared_diagnostics_file_replays_to_the_same_picture(path):
         await fake.close()
 
 
+RECORDED = [p for p in SHARED if p.stem.startswith("real-")]
+
+
+@pytest.mark.parametrize("path", RECORDED, ids=[p.stem for p in RECORDED])
+async def test_a_recorded_session_on_a_real_panel_goes_the_same_way(path):
+    # Each real-*.json is one step of a session on a real Elite 24, with millisecond
+    # times: sent through the driver, it must give the states Home Assistant really
+    # went through and the same events. Commands sent during the step go in "commands".
+    shared = load_diagnostics(path)
+    expect = shared["expect"]
+    fake = FakeConnectPanel.from_diagnostics(shared)
+    fake.area_states[1] = 0
+    fake.zone_state = dict.fromkeys(fake.zone_state, 0)
+    fake.scripted = True
+    await fake.start()
+    events: list[str] = []
+
+    def on_event(kind: str, data: dict) -> None:
+        about = data.get("source") or data.get("zone_name") or data.get("user")
+        events.append(f"{kind} {about}")
+
+    panel = await make_panel(fake, on_event=on_event)
+    states = [panel.areas[1].state]
+
+    def note() -> None:
+        if panel.areas[1].state != states[-1]:
+            states.append(panel.areas[1].state)
+
+    async def received(count: int) -> None:
+        await wait_for(lambda: len(panel.capture.recent) >= count)
+
+    panel.add_listener(note)
+    try:
+        start = 0
+        for index, mode in sorted((int(i), m) for i, m in expect.get("commands", {}).items()):
+            await fake.replay(shared["recent_messages"][start:index], speed=0)
+            await received(index)
+            await panel.arm(1, mode)
+            start = index
+        await received(start + await fake.replay(shared["recent_messages"][start:], speed=0))
+        await asyncio.sleep(0.1)
+        assert states[1:] == expect["area_states"]
+        assert events == expect["events"]
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
 @pytest.mark.parametrize(
     ("log_type", "how"),
     [(59, "engineer programming at a keypad"), (54, "a Wintex session ending"), (100, "Wintex writing settings")],

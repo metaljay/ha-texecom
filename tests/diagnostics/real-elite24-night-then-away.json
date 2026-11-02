@@ -1,0 +1,295 @@
+{
+ "panel": {
+  "info": {
+   "model": "Premier Elite",
+   "zones": 24,
+   "firmware": "V6.05.03LS1"
+  },
+  "part_arms": {
+   "home": 0,
+   "night": 1
+  },
+  "areas": [
+   {
+    "number": 1,
+    "name": "HOUSE",
+    "state": "disarmed",
+    "part_arm": null
+   }
+  ],
+  "zones": [
+   {
+    "number": 1,
+    "name": "Hallway",
+    "panel_type": 1,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 2,
+    "name": "Lounge",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 3,
+    "name": "Kitchen",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 4,
+    "name": "Garage",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   },
+   {
+    "number": 5,
+    "name": "Landing",
+    "panel_type": 3,
+    "areas": [
+     1
+    ],
+    "state": "secure"
+   }
+  ],
+  "recent_messages": [
+   {
+    "at": "2026-11-02 14:06:48.712",
+    "raw": "01 05 40",
+    "read": "zone: zone 5, state ZoneState(raw=64, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=True, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:06:48.713",
+    "raw": "02 01 01",
+    "read": "area: area 1, state_code 1, state in exit"
+   },
+   {
+    "at": "2026-11-02 14:06:48.714",
+    "raw": "05 20 10 00 01 b1 b1 4e 68",
+    "read": "log: Exit Started (32), group Armed (16), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:06:57.914",
+    "raw": "05 71 09 01 00 bb b1 4e 68",
+    "read": "log: Remote Command (113), group Maintenance Alarm (9), parameter 1, areas 0x0"
+   },
+   {
+    "at": "2026-11-02 14:06:57.915",
+    "raw": "05 cf 06 00 01 bb b1 4e 68",
+    "read": "log: Remote Part Arm 1 (207), group Close (6), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:06:57.915",
+    "raw": "02 01 04",
+    "read": "area: area 1, state_code 4, state part armed"
+   },
+   {
+    "at": "2026-11-02 14:06:57.916",
+    "raw": "02 01 06",
+    "read": "area: area 1, state_code 6, state part armed, part_arm 1"
+   },
+   {
+    "at": "2026-11-02 14:06:57.975",
+    "raw": "03 01 08",
+    "read": "output: location 1, state 8"
+   },
+   {
+    "at": "2026-11-02 14:06:57.975",
+    "raw": "03 04 08",
+    "read": "output: location 4, state 8"
+   },
+   {
+    "at": "2026-11-02 14:06:57.976",
+    "raw": "03 02 08",
+    "read": "output: location 2, state 8"
+   },
+   {
+    "at": "2026-11-02 14:06:58.059",
+    "raw": "03 11 03",
+    "read": "output: location 17, state 3"
+   },
+   {
+    "at": "2026-11-02 14:06:58.059",
+    "raw": "03 12 03",
+    "read": "output: location 18, state 3"
+   },
+   {
+    "at": "2026-11-02 14:07:27.287",
+    "raw": "02 01 00",
+    "read": "area: area 1, state_code 0, state disarmed"
+   },
+   {
+    "at": "2026-11-02 14:07:27.287",
+    "raw": "05 2a 05 00 01 dc b1 4e 68",
+    "read": "log: Remote Open/Close (42), group Open (5), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:07:27.287",
+    "raw": "01 05 00",
+    "read": "zone: zone 5, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
+   },
+   {
+    "at": "2026-11-02 14:07:27.615",
+    "raw": "02 01 01",
+    "read": "area: area 1, state_code 1, state in exit"
+   },
+   {
+    "at": "2026-11-02 14:07:27.615",
+    "raw": "05 20 10 00 01 dc b1 4e 68",
+    "read": "log: Exit Started (32), group Armed (16), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:07:27.923",
+    "raw": "03 01 00",
+    "read": "output: location 1, state 0"
+   },
+   {
+    "at": "2026-11-02 14:07:27.923",
+    "raw": "03 04 00",
+    "read": "output: location 4, state 0"
+   },
+   {
+    "at": "2026-11-02 14:07:27.923",
+    "raw": "03 02 00",
+    "read": "output: location 2, state 0"
+   },
+   {
+    "at": "2026-11-02 14:07:28.009",
+    "raw": "03 11 01",
+    "read": "output: location 17, state 1"
+   },
+   {
+    "at": "2026-11-02 14:07:28.009",
+    "raw": "03 12 01",
+    "read": "output: location 18, state 1"
+   },
+   {
+    "at": "2026-11-02 14:07:36.823",
+    "raw": "05 2a 06 00 01 e6 b1 4e 68",
+    "read": "log: Remote Open/Close (42), group Close (6), parameter 0, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:07:36.823",
+    "raw": "02 01 03",
+    "read": "area: area 1, state_code 3, state armed"
+   },
+   {
+    "at": "2026-11-02 14:07:36.879",
+    "raw": "03 01 08",
+    "read": "output: location 1, state 8"
+   },
+   {
+    "at": "2026-11-02 14:07:36.879",
+    "raw": "03 04 08",
+    "read": "output: location 4, state 8"
+   },
+   {
+    "at": "2026-11-02 14:07:36.879",
+    "raw": "03 02 08",
+    "read": "output: location 2, state 8"
+   },
+   {
+    "at": "2026-11-02 14:07:36.966",
+    "raw": "03 11 03",
+    "read": "output: location 17, state 3"
+   },
+   {
+    "at": "2026-11-02 14:07:36.966",
+    "raw": "03 12 03",
+    "read": "output: location 18, state 3"
+   },
+   {
+    "at": "2026-11-02 14:08:23.136",
+    "raw": "04 03 00",
+    "read": "user: user 3, method code"
+   },
+   {
+    "at": "2026-11-02 14:08:23.137",
+    "raw": "05 1f 00 03 01 18 b2 4e 68",
+    "read": "log: User Code (31), group Not Reported (0), parameter 3, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:08:23.953",
+    "raw": "03 10 f0",
+    "read": "output: location 16, state 240"
+   },
+   {
+    "at": "2026-11-02 14:08:24.022",
+    "raw": "03 11 02",
+    "read": "output: location 17, state 2"
+   },
+   {
+    "at": "2026-11-02 14:08:24.022",
+    "raw": "03 12 02",
+    "read": "output: location 18, state 2"
+   },
+   {
+    "at": "2026-11-02 14:08:24.918",
+    "raw": "02 01 00",
+    "read": "area: area 1, state_code 0, state disarmed"
+   },
+   {
+    "at": "2026-11-02 14:08:24.919",
+    "raw": "05 25 05 03 01 1a b2 4e 68",
+    "read": "log: Open/Close (Away Armed) (37), group Open (5), parameter 3, areas 0x1"
+   },
+   {
+    "at": "2026-11-02 14:08:24.966",
+    "raw": "03 02 00",
+    "read": "output: location 2, state 0"
+   },
+   {
+    "at": "2026-11-02 14:08:25.054",
+    "raw": "03 11 00",
+    "read": "output: location 17, state 0"
+   },
+   {
+    "at": "2026-11-02 14:08:25.054",
+    "raw": "03 12 00",
+    "read": "output: location 18, state 0"
+   },
+   {
+    "at": "2026-11-02 14:08:26.940",
+    "raw": "03 10 ff",
+    "read": "output: location 16, state 255"
+   },
+   {
+    "at": "2026-11-02 14:08:27.009",
+    "raw": "03 11 01",
+    "read": "output: location 17, state 1"
+   },
+   {
+    "at": "2026-11-02 14:08:27.009",
+    "raw": "03 12 01",
+    "read": "output: location 18, state 1"
+   }
+  ],
+  "expect": {
+   "area_states": [
+    "arming",
+    "armed_night",
+    "arming",
+    "armed_away",
+    "disarmed"
+   ],
+   "events": [
+    "user 3"
+   ],
+   "commands": {
+    "12": "away"
+   }
+  }
+ }
+}
