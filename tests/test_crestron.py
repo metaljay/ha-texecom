@@ -944,6 +944,43 @@ async def test_the_regular_reading_catches_up_with_the_log():
         await fake.close()
 
 
+async def test_the_log_carries_on_from_where_it_was_left():
+    """Home Assistant hands back where the last run stopped reading: entries
+    logged while it was reloading or restarting are read, not skipped."""
+    fake = FakeCrestronPort(elite168=True)
+    for log_type in (42, 32, 42):
+        fake.add_log(log_type)
+    number = await fake.start()
+    events: list[tuple[str, dict]] = []
+    panel = CrestronPanel(
+        areas=[PanelArea(1, "Area A")],
+        host="127.0.0.1",
+        port=number,
+        part_arms={"night": 1, "home": 0},
+        udl="1234",
+        status_poll=0,
+        reconnect_min=0.05,
+        blackout=0.1,
+        login_timeout=0.3,
+        read_login_wait=0.05,
+        session_reads=True,
+        zones=ZONES_168,
+        power_poll=0.2,
+        power_first_delay=0.05,
+        on_event=lambda t, d: events.append((t, d)),
+    )
+    assert panel.log_pointer is None
+    panel.resume_log_from(1)
+    await panel.start()
+    try:
+        await wait_for(lambda: len(logs(events)) == 2)
+        assert logs(events) == [(1, 32), (2, 42)]
+        assert panel.log_pointer == 3
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
 async def test_the_log_is_read_across_the_end_of_the_ring():
     fake = FakeCrestronPort(elite168=True)
     fake.log_pointer = 1997

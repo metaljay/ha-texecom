@@ -5,7 +5,8 @@ Setting up and unloading a config entry. The panel driver is built in
 factory.py; the notices it raises are in notifications.py and issues.py.
 Changing an option the driver uses reloads the entry; the others apply at
 once. The names for keypad users are filled in from the panel when it first
-connects (users.py). Entries made before 0.2.11 get its defaults once
+connects (users.py). Where the panel's event log was read up to is kept
+across reloads and restarts (log_position.py). Entries made before 0.2.11 get its defaults once
 (async_migrate_entry). A zone or area the panel no longer has can have its
 device deleted."""
 
@@ -25,6 +26,7 @@ from .dashboard import async_create_dashboard, async_remove_dashboard, async_upd
 from .entity import panel_device_info
 from .factory import create_panel
 from .issues import clear_clock_issue, watch_connection, watch_unrecognised
+from .log_position import keep_log_position, remove_log_position, resume_log_position
 from .notifications import dismiss_when_armed, watch_conditions
 from .panel import TexecomPanel
 from .users import fill_in_names_once
@@ -69,6 +71,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> b
     entry.async_on_unload(dismiss_when_armed(hass, entry, panel))
     entry.async_on_unload(watch_conditions(hass, entry, panel))
     entry.async_on_unload(fill_in_names_once(hass, entry, panel))
+    await resume_log_position(hass, entry, panel)
+    entry.async_on_unload(keep_log_position(hass, entry, panel))
     if entry.data.get(CONF_CREATE_DASHBOARD):
         # Asked for at the end of setup; done once the entities exist.
         with contextlib.suppress(HomeAssistantError):
@@ -116,8 +120,9 @@ async def async_remove_config_entry_device(
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> None:
-    """The panel was deleted: delete its Alarm dashboard too."""
+    """The panel was deleted: delete its Alarm dashboard and saved log position too."""
     await async_remove_dashboard(hass, entry)
+    await remove_log_position(hass, entry)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: TexecomConfigEntry) -> bool:

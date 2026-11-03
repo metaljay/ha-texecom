@@ -136,7 +136,6 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self.panel_zones: int | None = None
         self.log_entry_size: int | None = None
         self.log_capacity: int | None = None
-        self._log_pointer: int | None = None
         self._stale_exit_until: dict[int, float] = {}  # area -> ignore a held-back "X" until then
         self._stale_arm_until: dict[int, float] = {}  # area -> after our disarm, ignore held-back "X"/"A" until then
         self._writer: asyncio.StreamWriter | None = None
