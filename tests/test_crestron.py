@@ -607,6 +607,53 @@ async def test_astatus_corrects_missed_events_but_keeps_triggered(port):
         await panel.stop()
 
 
+async def test_a_code_at_the_keypad_ends_an_alarm_in_a_disarmed_area(port):
+    """A tamper alarm while disarmed (3 Nov 2026: a receiver dropped out) never
+    gets a "D": the sounders stop when someone enters a code. That code and the
+    next "not armed" end it, rather than Triggered lasting until a reconnect
+    (and holding up the log readings all that time)."""
+    fake, number = port
+    panel = await make_panel(number, status_poll=0.1)
+    try:
+        fake.send('"L0010')
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        await asyncio.sleep(0.3)  # "not armed" alone keeps it
+        assert panel.areas[1].state == TRIGGERED
+        fake.send('"U0010')
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+    finally:
+        await panel.stop()
+
+
+async def test_a_code_before_an_alarm_doesnt_end_it(port):
+    fake, number = port
+    panel = await make_panel(number, status_poll=0.1)
+    try:
+        fake.send('"U0010')
+        await asyncio.sleep(0.2)
+        fake.send('"L0010')
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        await asyncio.sleep(0.3)
+        assert panel.areas[1].state == TRIGGERED
+    finally:
+        await panel.stop()
+
+
+async def test_a_code_while_armed_leaves_the_alarm_to_the_disarm(port):
+    fake, number = port
+    panel = await make_panel(number, status_poll=0.1, keypad_arm_mode="night")
+    try:
+        fake.armed = True
+        await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
+        fake.send('"L0010')
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        fake.send('"U0010')  # a wrong area, say: the panel still says armed
+        await asyncio.sleep(0.3)
+        assert panel.areas[1].state == TRIGGERED
+    finally:
+        await panel.stop()
+
+
 async def test_arming_without_udl_is_refused(port):
     _fake, number = port
     panel = await make_panel(number, udl=None)

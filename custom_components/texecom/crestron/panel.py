@@ -152,6 +152,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         self._first_status_pending = False
         self._deferred: dict[int, asyncio.TimerHandle] = {}
         self._arming_since: dict[int, float] = {}
+        self._code_since_alarm: set[int] = set()  # areas in alarm a code was entered for since
         self.last_error: str | None = None
         self._warned = False
 
@@ -291,6 +292,9 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             elif kind == "area":
                 self._on_area_event(msg["area"], msg["event"], msg["user"])
             elif kind == "user":
+                # The sounders stop at a code; an alarm in a disarmed area
+                # (a tamper) sends no "D" to say it's over: see _apply_armed_status.
+                self._code_since_alarm |= {n for n, a in self.areas.items() if a.state == TRIGGERED}
                 self.on_event("user", {"user": msg["user"], "method": "code"})
             elif kind == "astatus":
                 after_connect, self._first_status_pending = self._first_status_pending, False
@@ -345,6 +349,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
                 return
             self.set_area(number, PENDING, area.part_arm)
         elif event == "L":
+            self._code_since_alarm.discard(number)
             self.set_area(number, TRIGGERED, area.part_arm)
         elif event == "D":
             self.set_area(number, DISARMED, None, by)
@@ -361,14 +366,17 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         """Only corrects HA when it disagrees with the panel. The panel never
         reports an alarm ending, and an alarm can be raised in a disarmed area
         (24-hour zones, tamper), so a periodic "not armed" leaves Triggered
-        alone; only the first reply after connecting clears it."""
+        alone, unless a code has been entered at a keypad since the alarm
+        began (that stops the sounders); the first reply after connecting
+        clears it too."""
         area = self.areas.get(number)
         if area is None:
             return
         arming_for = time.monotonic() - self._arming_since.get(number, 0.0)
         if not armed:
-            if area.state == TRIGGERED and not after_connect:
+            if area.state == TRIGGERED and not after_connect and number not in self._code_since_alarm:
                 return
+            self._code_since_alarm.discard(number)
             if area.state in (ARMING, PENDING) and arming_for < ARMING_GRACE:
                 return
             if area.state != DISARMED or not area.known:
