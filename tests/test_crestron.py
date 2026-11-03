@@ -654,6 +654,37 @@ async def test_a_code_while_armed_leaves_the_alarm_to_the_disarm(port):
         await panel.stop()
 
 
+async def test_with_several_areas_a_code_doesnt_end_an_alarm(port):
+    """The "U" line doesn't say which area the code was for: it could be
+    another area's, so the alarm stays until its own disarm or a reconnect."""
+    fake, number = port
+    panel = await make_panel(number, status_poll=0.1)
+    await panel.stop()
+    panel = CrestronPanel(
+        areas=[PanelArea(1, "Area A"), PanelArea(2, "Area B")],
+        host="127.0.0.1",
+        port=number,
+        part_arms={"night": 1, "home": 0},
+        udl="1234",
+        status_poll=0.1,
+        reconnect_min=0.05,
+        blackout=0.1,
+        login_timeout=0.3,
+        read_login_wait=0.05,
+        zones=[PanelZone(n, f"Zone {n}") for n in range(1, 6)],
+    )
+    await panel.start()
+    try:
+        await wait_for(lambda: panel.connected and panel.areas[1].known)
+        fake.send('"L0010')
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        fake.send('"U0010')
+        await asyncio.sleep(0.3)
+        assert panel.areas[1].state == TRIGGERED
+    finally:
+        await panel.stop()
+
+
 async def test_arming_without_udl_is_refused(port):
     _fake, number = port
     panel = await make_panel(number, udl=None)

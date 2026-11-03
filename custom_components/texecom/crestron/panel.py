@@ -293,7 +293,10 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             elif kind == "user":
                 # The sounders stop at a code; an alarm in a disarmed area
                 # (a tamper) sends no "D" to say it's over: see _apply_armed_status.
-                self._code_since_alarm |= {n for n, a in self.areas.items() if a.state == TRIGGERED}
+                # The line doesn't say which area the code was for, so only
+                # with a single area can it be the one in alarm.
+                if len(self.areas) == 1:
+                    self._code_since_alarm |= {n for n, a in self.areas.items() if a.state == TRIGGERED}
                 self.on_event("user", {"user": msg["user"], "method": "code"})
             elif kind == "astatus":
                 after_connect, self._first_status_pending = self._first_status_pending, False
@@ -351,6 +354,7 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
             self._code_since_alarm.discard(number)
             self.set_area(number, TRIGGERED, area.part_arm)
         elif event == "D":
+            self._code_since_alarm.discard(number)
             self.set_area(number, DISARMED, None, by)
         elif event == "A":
             self.set_area(number, self._armed_state(number), None, by)
@@ -365,9 +369,9 @@ class CrestronPanel(ConnectionMixin, TexecomPanel):
         """Only corrects HA when it disagrees with the panel. The panel never
         reports an alarm ending, and an alarm can be raised in a disarmed area
         (24-hour zones, tamper), so a periodic "not armed" leaves Triggered
-        alone, unless a code has been entered at a keypad since the alarm
-        began (that stops the sounders); the first reply after connecting
-        clears it too."""
+        alone, unless the panel has a single area and a code has been entered
+        at a keypad since the alarm began (that stops the sounders); the first
+        reply after connecting clears it too."""
         area = self.areas.get(number)
         if area is None:
             return
