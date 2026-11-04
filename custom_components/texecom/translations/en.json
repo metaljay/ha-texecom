@@ -70,9 +70,11 @@
         "data": {
           "night_part_arm": "'Night' uses",
           "home_part_arm": "'Home' uses",
+          "time_sync": "Keep the panel clock right",
           "create_dashboard": "Add an 'Alarm' dashboard to the sidebar"
         },
         "data_description": {
+          "time_sync": "Sets the panel's clock if it's more than a minute out, when Home Assistant connects and once a day. This changes the panel's clock, so leave it off if your installer keeps the panel on a fixed time. You can change it later in the options.",
           "create_dashboard": "Built from Home Assistant's own cards: the alarm with its arm buttons, recent activity, and every zone grouped by type. You can edit or delete it like any dashboard."
         }
       },

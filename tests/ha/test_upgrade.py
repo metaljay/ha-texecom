@@ -231,7 +231,8 @@ async def test_upgrading_turns_on_what_new_setups_get(hass, fake):
 
     assert entry.minor_version == TexecomConfigFlow.MINOR_VERSION
     assert dict(entry.data) == data
-    assert dict(entry.options) == {**V0_2_10_CONNECT_OPTIONS, "time_sync": True}
+    # Keep the panel clock right writes to the panel: never switched on unasked.
+    assert dict(entry.options) == V0_2_10_CONNECT_OPTIONS
     assert registry.async_get(off_by_default.entity_id).disabled_by is None
     assert registry.async_get(off_by_user.entity_id).disabled_by is er.RegistryEntryDisabler.USER
     assert await hass.config_entries.async_unload(entry.entry_id)

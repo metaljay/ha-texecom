@@ -39,7 +39,7 @@
 
 If the panel loses all power (mains and battery), its clock resets (on one panel, to 31 October 2023). Its event log, and any timed arming your installer set up, use that clock.
 
-With **Keep the panel clock right** on (it is to start with), Home Assistant sets the clock itself, within a minute, when it connects and once a day. With it off, Home Assistant still checks the clock when it connects: if it's more than 5 minutes out, **Settings → Repairs** shows *"Your alarm panel's clock is wrong"*. Click it, then **Submit**: this turns on **Keep the panel clock right**, which sets the clock now and checks it once a day, using Home Assistant's time zone.
+With **Keep the panel clock right** on (you choose it at setup, or later under Options → Panel clock), Home Assistant sets the clock itself, within a minute, when it connects and once a day. With it off, Home Assistant still checks the clock when it connects: if it's more than 5 minutes out, **Settings → Repairs** shows *"Your alarm panel's clock is wrong"*. Click it, then **Submit**: this turns on **Keep the panel clock right**, which sets the clock now and checks it once a day, using Home Assistant's time zone.
 
 ## "Your alarm panel said something new"
 

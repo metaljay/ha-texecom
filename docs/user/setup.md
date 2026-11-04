@@ -66,6 +66,7 @@ Home Assistant shows what it found: your **areas** (usually just one) and your *
 
 - **'Away'** always arms the whole alarm.
 - **'Night'** and **'Home'** each use one of the panel's **part arms**, which arm only some zones. Choose which part arm each uses, or *'Not used'* to hide that button. Not sure? See [Part arms explained](#part-arms-explained).
+- **Keep the panel clock right** (Texecom Connect only, unticked to start with): tick it to let Home Assistant set the panel's clock when it's more than a minute out. Leave it off if your installer keeps the panel on a fixed time. You can change it later in the options.
 - Leave **Add an 'Alarm' dashboard to the sidebar** ticked.
 
 Click **Submit**. Home Assistant then lists the devices it added (the panel, the alarm and each zone), where you can rename them or put them in rooms. Zones named after a room you already have are put there for you. Click **Finish**. That's it 🎉

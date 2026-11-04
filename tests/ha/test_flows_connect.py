@@ -31,9 +31,23 @@ async def test_connect_happy_path(hass, fake, no_setup):
     assert result["title"] == "Texecom Premier Elite 24"
     assert result["data"]["protocol"] == "connect" and result["data"]["create_dashboard"] is True
     assert [z["name"] for z in result["data"]["zones"]][:2] == ["Front Door", "Hallway"]
-    # Keep the panel clock right is on from the start (Texecom Connect only).
-    assert result["options"] == {"night_part_arm": 1, "home_part_arm": 0, "time_sync": True}
+    # Keep the panel clock right writes to the panel, so it's off unless ticked.
+    assert result["options"] == {"night_part_arm": 1, "home_part_arm": 0, "time_sync": False}
     assert result["result"].unique_id == f"127.0.0.1:{fake.port}"
+
+
+async def test_connect_clock_is_a_choice(hass, fake, no_setup):
+    """The arm modes step offers Keep the panel clock right, unticked."""
+    result = await start(hass, "connect")
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"host": "127.0.0.1", "port": fake.port, "udl": UDL}
+    )
+    result = await after_progress(hass, result)
+    assert result["data_schema"]({"night_part_arm": "1", "home_part_arm": "0"})["time_sync"] is False
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"], {"night_part_arm": "1", "home_part_arm": "0", "time_sync": True}
+    )
+    assert result["type"] is FlowResultType.CREATE_ENTRY and result["options"]["time_sync"] is True
 
 
 async def test_connect_wrong_udl(hass, fake, no_setup):

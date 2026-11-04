@@ -10,8 +10,10 @@ from __future__ import annotations
 
 from typing import Any
 
+import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
+from homeassistant.helpers.selector import BooleanSelector
 
 from .const import CONF_CREATE_DASHBOARD, CONF_PROTOCOL, CONF_TIME_SYNC, DOMAIN, HELP_PART_ARMS, PROTOCOL_CRESTRON
 from .entity import nice_name
@@ -50,18 +52,21 @@ class TexecomConfigFlow(ConnectSteps, CrestronSteps, ReauthReconfigureSteps, Con
                 data = {**self._data, CONF_CREATE_DASHBOARD: bool(user_input.get(CONF_CREATE_DASHBOARD))}
                 options = arm_mode_options(user_input)
                 if not crestron:
-                    # Keeps the panel clock right from the start: it only sets
-                    # the clock when it's more than a minute out (Options → Panel
-                    # clock turns it off). Entries made before 0.2.11 keep theirs.
-                    options[CONF_TIME_SYNC] = True
+                    # Setting the clock writes to the panel, so only when the
+                    # user ticks it (off otherwise; Repairs offers it later if
+                    # the clock is wrong, and Options → Panel clock changes it).
+                    options[CONF_TIME_SYNC] = bool(user_input.get(CONF_TIME_SYNC))
                 return self.async_create_entry(title=self._title(), data=data, options=options)
         placeholders = {"zones": "", "areas": "", "help": HELP_PART_ARMS}
         if not crestron:
             placeholders["zones"] = ", ".join(nice_name(z["name"]) for z in self._data["zones"])
             placeholders["areas"] = ", ".join(nice_name(a["name"]) for a in self._data["areas"])
+        schema = arm_modes_schema(user_input or {}, crestron)
+        if not crestron:
+            schema = schema.extend({vol.Required(CONF_TIME_SYNC, default=False): BooleanSelector()})
         return self.async_show_form(
             step_id="arm_modes_crestron" if crestron else "arm_modes",
-            data_schema=with_dashboard_choice(arm_modes_schema(user_input or {}, crestron)),
+            data_schema=with_dashboard_choice(schema),
             errors=errors,
             description_placeholders=placeholders,
             last_step=True,
