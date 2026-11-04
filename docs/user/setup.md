@@ -60,7 +60,7 @@ If it says **"Couldn't connect"** or **"The panel refused the UDL code"**, see [
 
 ## 4. Choose your arm modes
 
-<img src="../images/setup-3-arm-modes.png" width="420" alt="Found your panel: choose the part arms for Night and Home">
+<img src="../images/setup-3-arm-modes.png" width="420" alt="Found your panel: choose the part arms for Night and Home, whether to keep the panel clock right, and the Alarm dashboard">
 
 Home Assistant shows what it found: your **areas** (usually just one) and your **zones**.
 
