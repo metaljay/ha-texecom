@@ -1040,7 +1040,15 @@ def test_flag_and_log_names():
     assert len(P.AREA_FLAG_NAMES) == 73 and P.AREA_FLAG_NAMES[16] == "Ready"
     m = {"type": 85, "group": 0, "parameter": 3, "areas": 1}
     assert P.describe_log(m) == "Arm Failed (85), group Not Reported (0), parameter 3, areas 0x1"
-    assert P.describe_log({**m, "type": 137}).startswith("unknown (137)")
+    assert P.describe_log({**m, "type": 129}).startswith("unknown (129)")
+
+
+def test_remote_access_begin_is_a_known_log_entry():
+    # Issue #58 (Elite 64, ComIP): the panel's log as the Texecom app shows it calls 137
+    # "Remote Access Begin"; parameter 101 was an app user, 100 Texecom Cloud Services.
+    m = P.decode_message(bytes.fromhex("05 89 09 65 01 a5 b7 b0 68"))
+    assert P.describe_log(m) == ("Remote Access Begin (137), group Maintenance Alarm (9), parameter 101, areas 0x1")
+    assert capture.unrecognised(m) is None
 
 
 async def test_diagnostics_name_the_flags_and_read_the_system_flags(fake, caplog):

@@ -114,7 +114,7 @@ Also learnt from the comparison:
   | 113, 9 | *Remote Command Via Com Port* |
   | 120, 1 | *Confirmed Intruder* |
 
-  *Zone nnn Locked Out* and *ARC ATS Fault* (6 Oct) were older than the ring. Log **137 isn't in the stored log at all**, so it has only been seen live.
+  *Zone nnn Locked Out* and *ARC ATS Fault* (6 Oct) were older than the ring. Log **137** (*Remote Access Begin*, see [testers' panels](#seen-on-testers-panels)) isn't in this panel's stored log at all; it has only been seen live.
 
 ### Walk test
 
@@ -238,6 +238,7 @@ From diagnostics that users shared (their panels, not this one):
 - **System flags' last byte** differs: `01` here (V6.05.03), `03` on an Elite 24 V6.06.03 and on the V5.02.01 panel, `00` on an Elite 64 V5.00.03. Meaning unknown.
 - **ComWiFi** listens on port **10002** (Elite 24, V6.06.03).
 - **Area state 6 and log type 137** (Elite 24, V6.06.02, Connect on port 10001, issue #55, 27–28 Oct 2026): a remote Part Arm 1 sent *in exit* (1) with log 32 *Exit Started* and log 33 *Exit Error (Arming Failed)* (group 6) in the same second, then 9 s later *part armed* (4) followed by **6**, with log 113 *Remote Command* and 207 *Remote Part Arm 1*, as on the test panel. The next morning log **137 group 9, parameter 102, areas 1** came three times between 08:36 and 08:51, around a remote disarm (log 42 *Remote Open/Close* group 5) at 08:36:58. Outputs 1, 2 and 4 went to state 8 and 17, 18 to state 2 when it armed, and all to 0 when it disarmed. Log 73 *Automatic Test Transmission* (group 13) came three times between 01:00 and 08:00.
+- **Log type 137 is *Remote Access Begin*** (Elite 64, ComIP, issue #58, 5 Nov 2026): the panel's event log, read in the app, shows each one as *Remote Access Begin - Texecom Cloud Services* (parameter **100**) or *Remote Access Begin - Remote User ID: 101* (parameter **101**, the user's app account), group 9 *Maintenance Alarm*, areas 1. The 101 entry came as the user signed in with the Texecom app, the 100 one a few minutes later, so the parameter names who connected remotely: 100 is the cloud itself, 101 and up probably app users (the 102 on issue #55's panel was probably a second app user). The log type list the driver's names come from stops at 122 (then 204–209). No matching *end* entry was seen.
 
 ## Seen by other projects
 
@@ -296,7 +297,7 @@ Things to find out on real panels (each is a task in the [live test plan](../tes
 
 - Whether **area states above 8** exist.
 - **Output messages**: which outputs (bell, strobe, others) report, what their states mean, and what the two-byte `03 e0` is.
-- **Log event types** not in the tables above, including **type 129** (around the SmartCom's case being opened, 2 Nov 2026) and **type 137** (observed live during testing, and [on a tester's V6.06.02](#seen-on-testers-panels); never in this panel's stored log; meaning unknown) and **type 127** ([a tester's panel](#seen-on-testers-panels)).
+- **Log event types** not in the tables above, including **type 129** (around the SmartCom's case being opened, 2 Nov 2026) and **type 127** ([a tester's panel](#seen-on-testers-panels)).
 - Whether a remote **arm is refused** (NAK) with a zone held open or a fault present, and what the panel sends then. A cycling PIR isn't refused ([2 Nov 2026](#a-supervised-session-premier-elite-24-v60503-smartcom-2-nov-2026)).
 - Commands not used yet that could help: **user names** (its reply includes the code), **zone bypass**, **outputs**, **the keypad text** (command 14).
 - What the **system flags** (command 10) mean beyond the [first clues](#system-flags), and which **area flags** show tampers and faults that are already there when Home Assistant connects (D11–D13).

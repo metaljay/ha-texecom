@@ -793,6 +793,7 @@ LOG_EVENT_NAMES = {
     120: "Confirmed Intruder",
     121: "GSM Tamper",
     122: "Radio Config. Failure",
+    137: "Remote Access Begin",  # parameter: the remote user (100 Texecom Cloud Services, 101+ app users)
     204: "Quick Part Arm 1",
     205: "Quick Part Arm 2",
     206: "Quick Part Arm 3",
