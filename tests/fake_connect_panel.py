@@ -234,6 +234,11 @@ class FakeConnectPanel:
         return self.port
 
     async def close(self) -> None:
+        for timer in [self._ac_fail_timer, *self._exit_timers.values()]:
+            if timer:
+                timer.cancel()
+        self._ac_fail_timer = None
+        self._exit_timers.clear()
         for w in list(self.writers):
             w.close()
         if self.server:
