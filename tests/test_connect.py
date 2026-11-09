@@ -1144,6 +1144,32 @@ async def test_mains_from_a_real_panels_readings(fake):
         await panel.stop()
 
 
+async def test_mains_off_logs_ac_fail_again_after_the_repeat_time(fake):
+    """A real Premier Elite 24 logs AC Fail the moment the mains goes, and once
+    more 5 min 1 s later (8 Oct and 2 Nov 2026). The simulated panel does the
+    same; mains back before the repeat means no second entry."""
+    from fake_connect_panel import run_command
+
+    def ac_fails() -> int:
+        return sum(1 for entry in fake.log.values() if entry[0] == 47 and entry[1] == 9)
+
+    fake.ac_fail_repeat = 0.1
+    run_command(fake, "mains off")
+    assert ac_fails() == 1
+    await wait_for(lambda: ac_fails() == 2)
+    await asyncio.sleep(0.2)
+    assert ac_fails() == 2  # one repeat only
+    run_command(fake, "mains on")
+    run_command(fake, "mains off")
+    run_command(fake, "mains on")  # back before the repeat
+    await asyncio.sleep(0.2)
+    assert ac_fails() == 3  # only the new failure's own entry
+    fake.ac_fail_repeat = 0
+    run_command(fake, "mains off")
+    await asyncio.sleep(0.2)
+    assert ac_fails() == 4  # 0: never repeats
+
+
 async def test_a_single_battery_reading_is_a_blip(fake):
     """Issue #18 and our own panel (12 Oct: 0 mA at 13.14 V with mains on,
     333 mA at 13.63 V 30 s later): one "on battery" reading between mains

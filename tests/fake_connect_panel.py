@@ -126,6 +126,9 @@ class FakeConnectPanel:
         self.on_battery = False
         self.connections = 0  # TCP connections accepted (a SmartCom counts these, logged in or not)
         self.power_override: bytes | None = None  # raw GET_SYSTEM_POWER reply
+        # A real panel logs AC Fail again 5 min 1 s after the first (8 Oct and 2 Nov 2026): once.
+        self.ac_fail_repeat = 301.0  # seconds; 0: never
+        self._ac_fail_timer: asyncio.TimerHandle | None = None
         self.clock_raw: bytes | None = None  # raw GET_DATE_TIME reply (e.g. an impossible date)
         self.system_flags = bytes(8)  # GET_SYSTEM_FLAGS reply (its meaning isn't mapped yet)
         self.ready: bool | None = None  # area flag 16; None: ready while disarmed with no zone open
@@ -494,7 +497,8 @@ COMMANDS = """Commands, one per line:
   area [A] part N                    the area is part armed with part arm N
   area [A] exit full|part N          an exit delay whose flags say it's arming to a full arm or part arm N
   user N                             user N enters a code at a keypad
-  mains off|on                       mains fails (logged at once), or comes back (seen in the power readings)
+  mains off|on                       mains fails (logged at once, and again after ac_fail_repeat, 301 s),
+                                     or comes back (seen in the power readings)
   lid open|closed                    the panel's lid (Panel Box Tamper); while disarmed it sounds the
                                      internal alarm until a code is entered (user N)
   aux open|closed                    a detector's cover (Auxiliary Tamper, the shared circuit), the same
@@ -545,8 +549,17 @@ def run_command(panel: FakeConnectPanel, line: str) -> str:
             case ["mains", "off"]:
                 panel.on_battery = True
                 panel.send_log(47, 9, 0, areas=0)  # AC Fail, as a real panel logs it
+                if panel._ac_fail_timer:
+                    panel._ac_fail_timer.cancel()
+                if panel.ac_fail_repeat:
+                    panel._ac_fail_timer = asyncio.get_running_loop().call_later(
+                        panel.ac_fail_repeat, panel.send_log, 47, 9, 0, 0
+                    )
             case ["mains", "on"]:
                 panel.on_battery = False  # a real panel doesn't log the restore
+                if panel._ac_fail_timer:
+                    panel._ac_fail_timer.cancel()
+                    panel._ac_fail_timer = None
             case [place, "open", *how] if place in TAMPER_LOGS and how in ([], ["unlogged"]):
                 panel.open_tamper(TAMPER_LOGS[place], logged=not how)
             case [place, "closed"] if place in TAMPER_LOGS:
