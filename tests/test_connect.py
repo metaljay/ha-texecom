@@ -1623,6 +1623,55 @@ async def test_a_recorded_session_on_a_real_panel_goes_the_same_way(path):
         await fake.close()
 
 
+@pytest.mark.parametrize("path", RECORDED, ids=[p.stem for p in RECORDED])
+async def test_a_recorded_session_answers_readings_as_the_real_panel_did(path):
+    # A real-*.json also holds "recent_reads": what the real panel answered when asked for
+    # area flags and power. After the replay the simulated panel answers the same, so the
+    # driver reads what Home Assistant really read then.
+    shared = load_diagnostics(path)
+    reads = shared["recent_reads"]
+    flags = [r for r in reads if r["read"] == "area_flags"]
+    power = [r for r in reads if r["read"] == "power"]
+    assert flags
+    fake = FakeConnectPanel.from_diagnostics(shared)
+    fake.area_states[1] = 0
+    fake.zone_state = dict.fromkeys(fake.zone_state, 0)
+    fake.scripted = True
+    await fake.start()
+    panel = await make_panel(fake)
+    try:
+        sent = await fake.replay(speed=0)
+        await wait_for(lambda: len(panel.capture.recent) >= sent)
+        await asyncio.sleep(0.1)
+        await panel.refresh_areas()
+        assert P.area_flags_set(panel.client.last_area_flags, 1, panel.panel_zones) == sorted(flags[-1]["flags"])
+        if power:
+            await panel.read_power()
+            assert panel.extra["power"] == P.decode_system_power(bytes.fromhex(power[-1]["raw"]))
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_a_replay_in_parts_answers_each_reading_once_its_time_comes():
+    fake = FakeConnectPanel()
+    fake.recorded = [
+        {"at": "2026-11-02 10:00:00.000", "raw": "01 01 00"},
+        {"at": "2026-11-02 10:00:10.000", "raw": "01 01 00"},
+    ]
+    fake.recorded_reads = [
+        {"at": "2026-11-02 09:59:59.000", "read": "area_flags", "area": 1, "flags": [16, 25]},
+        {"at": "2026-11-02 10:00:05.000", "read": "power", "raw": "b0a4a60000"},
+        {"at": "2026-11-02 10:00:10.000", "read": "area_flags", "area": 1, "flags": [29]},
+    ]
+    await fake.replay(fake.recorded[:1], speed=0)
+    assert fake.flags_override == {1: {16, 25}}
+    assert fake.power_override is None  # its time hasn't come
+    await fake.replay(fake.recorded[1:], speed=0)
+    assert fake.power_override == bytes.fromhex("b0a4a60000")
+    assert fake.flags_override == {1: {29}}
+
+
 @pytest.mark.parametrize(
     ("log_type", "how"),
     [(59, "engineer programming at a keypad"), (54, "a Wintex session ending"), (100, "Wintex writing settings")],

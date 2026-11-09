@@ -346,6 +346,30 @@
     "read": "zone: zone 1, state ZoneState(raw=1, state='active', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
    }
   ],
+  "recent_reads": [
+   {
+    "at": "2026-11-02 14:15:28",
+    "read": "area_flags",
+    "area": 1,
+    "flags": [
+     29,
+     32,
+     67
+    ]
+   },
+   {
+    "at": "2026-11-02 14:15:32.295",
+    "read": "area_flags",
+    "area": 1,
+    "flags": [
+     19,
+     29,
+     31,
+     63,
+     67
+    ]
+   }
+  ],
   "expect": {
    "area_states": [
     "arming",

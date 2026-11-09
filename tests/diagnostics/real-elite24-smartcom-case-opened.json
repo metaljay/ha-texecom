@@ -111,6 +111,29 @@
     "read": "zone: zone 1, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
    }
   ],
+  "recent_reads": [
+   {
+    "at": "2026-11-02 14:41:19",
+    "read": "area_flags",
+    "area": 1,
+    "flags": [
+     16,
+     25,
+     29,
+     32,
+     67
+    ]
+   },
+   {
+    "at": "2026-11-02 14:41:26.961",
+    "read": "area_flags",
+    "area": 1,
+    "flags": [
+     29,
+     32
+    ]
+   }
+  ],
   "expect": {
    "area_states": [],
    "events": [

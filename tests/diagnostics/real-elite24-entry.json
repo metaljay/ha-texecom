@@ -221,6 +221,44 @@
     "read": "zone: zone 3, state ZoneState(raw=0, state='secure', fault=False, failed_test=False, alarmed=False, manual_bypass=False, auto_bypass=False, masked=False)"
    }
   ],
+  "recent_reads": [
+   {
+    "at": "2026-11-02 14:12:45",
+    "read": "area_flags",
+    "area": 1,
+    "flags": [
+     16,
+     25,
+     29,
+     32,
+     67
+    ]
+   },
+   {
+    "at": "2026-11-02 14:12:49.760",
+    "read": "area_flags",
+    "area": 1,
+    "flags": [
+     16,
+     19,
+     25,
+     29,
+     31,
+     63,
+     67
+    ]
+   },
+   {
+    "at": "2026-11-02 14:13:21.107",
+    "read": "area_flags",
+    "area": 1,
+    "flags": [
+     29,
+     32,
+     67
+    ]
+   }
+  ],
   "expect": {
    "area_states": [
     "arming",

@@ -155,6 +155,12 @@ class FakeConnectPanel:
         # The codes are fakes, used to check that Home Assistant never keeps or logs one.
         self.users: dict[int, tuple[str, str]] = dict(FAKE_USERS)
         self.recorded: list[dict] = []  # messages from a diagnostics file, for replay()
+        # What the real panel answered to readings while it was recorded (a diagnostics file's
+        # "recent_reads": {"at", "read": "area_flags", "area", "flags"} or {"at", "read": "power",
+        # "raw"}); replay() makes the panel answer the same from each time on.
+        self.recorded_reads: list[dict] = []
+        self.flags_override: dict[int, set[int]] = {}  # area -> flag numbers, in place of the model
+        self._replayed_to: datetime | None = None
         # The stored event log: a ring (500 entries on an Elite 24) that send_log writes to whether
         # or not anyone is connected, read with GET_LOG_POINTER and GET_LOG_EVENTS. stored_log
         # False: a panel that refuses both.
@@ -180,20 +186,41 @@ class FakeConnectPanel:
             fake.area_states[a["number"]] = AREA_STATE_INDEX.get(a["state"], 0)
             fake.part_arms[a["number"]] = a.get("part_arm")
         fake.recorded = panel.get("recent_messages", [])
+        fake.recorded_reads = panel.get("recent_reads", [])
         return fake
 
     async def replay(self, messages: list[dict] | None = None, speed: float = 1, longest: float = 5) -> int:
         """Sends recorded messages (a diagnostics file's "recent_messages")
         again, with their original gaps divided by speed (0: all at once) and
         no gap longer than longest seconds. Returns how many were sent."""
-        messages = self.recorded if messages is None else messages
+        if messages is None:
+            messages, self._replayed_to = self.recorded, None
+        # The panel's answers to readings join the messages on one timeline: from its time on,
+        # each reading is answered as the real panel answered it. A reading belongs to the
+        # first replay that reaches its time.
+        timeline = [(datetime.fromisoformat(m["at"]), 1, m) for m in messages]
+        if timeline:
+            # Up to the last message's time, or to the end when this replay reaches the recording's last.
+            last = datetime.max if self.recorded and messages[-1] is self.recorded[-1] else max(t[0] for t in timeline)
+            timeline += [
+                (at, 0, r)
+                for r in self.recorded_reads
+                if (at := datetime.fromisoformat(r["at"])) <= last
+                and (self._replayed_to is None or at > self._replayed_to)
+            ]
+            self._replayed_to = last
         previous = None
-        for m in messages:
-            at = datetime.fromisoformat(m["at"])
+        for at, is_message, item in sorted(timeline, key=lambda t: t[:2]):
             if speed and previous:
                 await asyncio.sleep(min((at - previous).total_seconds() / speed, longest))
             previous = at
-            body = bytes.fromhex(m["raw"])
+            if not is_message:
+                if item["read"] == "area_flags":
+                    self.flags_override[item["area"]] = set(item["flags"])
+                elif item["read"] == "power":
+                    self.power_override = bytes.fromhex(item["raw"])
+                continue
+            body = bytes.fromhex(item["raw"])
             if len(body) >= 3 and body[0] == P.MSG_ZONE:
                 self.zone_state[body[1]] = body[2]
             elif len(body) >= 3 and body[0] == P.MSG_AREA and body[1] in self.area_states:
@@ -488,6 +515,11 @@ class FakeConnectPanel:
             }.get(s, ())
             for flag in on:
                 flags[flag] |= bit
+            if area in self.flags_override:  # a recorded panel's own answer
+                for flag in range(len(flags)):
+                    flags[flag] &= ~bit
+                for flag in self.flags_override[area]:
+                    flags[flag] |= bit
         return flags
 
 
