@@ -5,10 +5,10 @@
         "default": "mdi:dialpad"
       },
       "battery_voltage": {
-        "default": "mdi:car-battery"
+        "default": "mdi:battery-heart-variant"
       },
       "battery_current": {
-        "default": "mdi:car-battery"
+        "default": "mdi:battery-heart-variant"
       }
     },
     "binary_sensor": {

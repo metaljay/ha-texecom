@@ -25,9 +25,8 @@ ARM_FAILED_WINDOW = 60.0  # zones reported within this of each other are one fai
 MAINS_NOTICE_AFTER = 120.0  # seconds on battery before the notice: power blips come and go sooner
 
 MAINS_MESSAGE = (
-    "The alarm panel has lost its mains power and is running on its battery. The alarm still works "
-    "for now. Check the panel's power supply (its fused spur), or whether there's a power cut. "
-    "The panel's *Battery voltage* shows how the battery is doing. This notice goes when the mains is back."
+    "The panel has lost its mains power and is running on its battery, so the alarm still works for now. "
+    "Check for a power cut, or the panel's power supply (its fused spur). This notice goes when the mains is back."
 )
 
 # What each tamper means, for the notice ("Panel Box Tamper" -> where to look).
@@ -65,10 +64,9 @@ def arm_failed_notifier(hass: HomeAssistant, entry: ConfigEntry) -> Callable[[di
             failed_zones.append(name)
         persistent_notification.async_create(
             hass,
-            f"The panel didn't arm: **{', '.join(failed_zones)}** "
-            f"{'was' if len(failed_zones) == 1 else 'were'} active when the exit time ended "
-            '(the panel sounds its "fail to set" warning). Close the door or keep out of the '
-            "sensor's view, then arm again.",
+            f"**{', '.join(failed_zones)}** {'was' if len(failed_zones) == 1 else 'were'} still active when "
+            "the exit time ended, so the alarm didn't arm. Close the door or keep out of the sensor's view, "
+            "then arm again.",
             title="Alarm not set",
             notification_id=f"{DOMAIN}_arm_failed_{entry.entry_id}",
         )

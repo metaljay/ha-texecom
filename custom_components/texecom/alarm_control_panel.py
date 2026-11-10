@@ -38,7 +38,7 @@ async def async_setup_entry(
 
 class TexecomAreaPanel(TexecomEntity, AlarmControlPanelEntity):
     _attr_name = None  # the area's device name, e.g. "House Alarm"
-    _attr_translation_key = "area"  # state names, e.g. "Off (disarmed)"
+    _attr_translation_key = "area"  # state names, e.g. "Armed night"
     _entity_domain = "alarm_control_panel"
 
     def __init__(self, hass: HomeAssistant, entry: TexecomConfigEntry, panel: TexecomPanel, number: int) -> None:

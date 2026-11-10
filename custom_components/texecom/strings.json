@@ -3,24 +3,24 @@
     "step": {
       "user": {
         "title": "How does Home Assistant reach your panel?",
-        "description": "Most people have a **SmartCom** (the box the Texecom app uses): choose **Texecom Connect**.\n\nChoose **Crestron** only if one of the panel's COM ports is set to *Crestron System* and you reach it through a serial-to-network adapter or a cable.",
+        "description": "Most people have a SmartCom, ComIP or ComWiFi (the module the Texecom app uses): choose **Texecom Connect**.",
         "menu_options": {
-          "connect": "Texecom Connect (SmartCom or ComIP) — recommended",
-          "crestron": "Crestron (COM port, adapter or cable)"
+          "connect": "Texecom Connect (SmartCom, ComIP or ComWiFi)",
+          "crestron": "Crestron (a spare COM port)"
         }
       },
       "connect": {
         "title": "Your SmartCom",
-        "description": "Your SmartCom's address is in your router's list of devices. Reserve it there, so it never changes.\n\nThe SmartCom takes one connection at a time: while Home Assistant is connected, the Texecom app can't be (your alarm and its notifications carry on as normal). Turn off Homebridge or texecom2mqtt first if they use it.\n\nNeed help? See the [setup guide]({help}).",
+        "description": "The SmartCom talks to one thing at a time: while Home Assistant is connected, the Texecom app can't connect (your alarm and its notifications carry on as normal). If you use Homebridge or texecom2mqtt, turn them off first.\n\nStuck? See the [setup guide]({help}).",
         "data": {
           "host": "IP address",
           "port": "Port",
           "udl": "UDL code"
         },
         "data_description": {
-          "host": "For example 192.168.1.50.",
+          "host": "In your router's list of devices, for example 192.168.1.50. Reserve it there so it never changes.",
           "port": "Leave at 10001 unless your installer changed it.",
-          "udl": "The panel's remote-access code (not your keypad code). Texecom's default is 1234, and most panels keep it."
+          "udl": "The panel's remote-access code, not your keypad code. Texecom's default is 1234, and most panels keep it."
         }
       },
       "crestron": {
@@ -66,29 +66,29 @@
       },
       "arm_modes": {
         "title": "Found your panel",
-        "description": "**Areas:** {areas}\n**Zones:** {zones}\n\n**'Away'** arms everything. **'Night'** and **'Home'** can each use one of the panel's **part arms**, which leave some zones off (upstairs at night, say). Choose one for each, or *'Not used'* to hide the button. You can change this, or add *Vacation* and *Custom bypass* buttons, later in the options.\n\nUnsure? Ask your installer, or see [part arms explained]({help}).",
+        "description": "**Areas:** {areas}\n**Zones:** {zones}\n\n**Away** arms everything. **Night** and **Home** can each use one of your panel's **part arms**, which leave some zones off (upstairs at night, say). Choose *Not used* to hide a button. You can change these later.\n\nNot sure? Ask your installer, or see [part arms explained]({help}).",
         "data": {
-          "night_part_arm": "'Night' uses",
-          "home_part_arm": "'Home' uses",
+          "night_part_arm": "Night button",
+          "home_part_arm": "Home button",
           "time_sync": "Keep the panel clock right",
-          "create_dashboard": "Add an 'Alarm' dashboard to the sidebar"
+          "create_dashboard": "Add an Alarm dashboard to the sidebar"
         },
         "data_description": {
-          "time_sync": "Sets the panel's clock if it's more than a minute out, when Home Assistant connects and once a day. This changes the panel's clock, so leave it off if your installer keeps the panel on a fixed time. You can change it later in the options.",
-          "create_dashboard": "Built from Home Assistant's own cards: the alarm with its arm buttons, recent activity, and every zone grouped by type. You can edit or delete it like any dashboard."
+          "time_sync": "Sets the panel's clock when it's more than a minute out, when Home Assistant connects and once a day. This writes to the panel, so leave it off if your installer keeps the panel on a fixed time. You can change it later.",
+          "create_dashboard": "The alarm with its arm buttons, every zone grouped by type, recent activity and the panel's health. You can edit or delete it like any dashboard."
         }
       },
       "arm_modes_crestron": {
         "title": "Arm modes",
-        "description": "**'Away'** always arms the whole alarm. Choose the part arm behind **'Night'** and **'Home'**, or *'Not used'* to hide that button. Over Crestron, part arms work for area 1 only. Unsure? See [part arms explained]({help}).\n\nCrestron doesn't say whether the panel was fully or part armed when it's set at the keypad: choose how that should show.",
+        "description": "**Away** always arms the whole alarm. Choose the part arm behind **Night** and **Home**, or *Not used* to hide that button. Over Crestron, part arms work for area 1 only. Not sure? See [part arms explained]({help}).\n\nCrestron doesn't say whether the panel was fully or part armed when it's set at the keypad: choose how that should show.",
         "data": {
-          "night_part_arm": "'Night' uses",
-          "home_part_arm": "'Home' uses",
+          "night_part_arm": "Night button",
+          "home_part_arm": "Home button",
           "keypad_arm_mode": "When armed at the keypad, show as",
-          "create_dashboard": "Add an 'Alarm' dashboard to the sidebar"
+          "create_dashboard": "Add an Alarm dashboard to the sidebar"
         },
         "data_description": {
-          "create_dashboard": "Built from Home Assistant's own cards: the alarm with its arm buttons, recent activity, and every zone grouped by type. You can edit or delete it like any dashboard."
+          "create_dashboard": "The alarm with its arm buttons, every zone grouped by type, recent activity and the panel's health. You can edit or delete it like any dashboard."
         }
       },
       "reauth_confirm": {
@@ -98,7 +98,7 @@
           "udl": "UDL code"
         },
         "data_description": {
-          "udl": "The panel's remote-access code (not your keypad code). Texecom's default is 1234, and most panels keep it."
+          "udl": "The panel's remote-access code, not your keypad code. Texecom's default is 1234, and most panels keep it."
         }
       },
       "reconfigure": {
@@ -165,33 +165,33 @@
         "menu_options": {
           "arm_modes": "Arm buttons",
           "alarm_code": "Home Assistant alarm code",
-          "user_names": "Names for keypad users",
+          "user_names": "Keypad user names",
           "notices": "Notifications",
           "clock": "Panel clock",
-          "status_poll": "Checking the panel",
-          "rediscover": "Read zones and areas from the panel again",
-          "dashboard": "Create or refresh the Alarm dashboard",
+          "status_poll": "How often to check the panel",
+          "rediscover": "Read zones and areas again",
+          "dashboard": "Rebuild the Alarm dashboard",
           "readings": "Power and event-log readings"
         }
       },
       "arm_modes": {
         "title": "Arm buttons",
-        "description": "**'Away'** always arms the whole alarm. Choose the part arm behind each of the other buttons, or *'Not used'* to hide it. Apple Home can't show *Custom bypass*, so with Apple Home use Night, Home and Vacation. Unsure? See [part arms explained]({help}).\n\nSaving reconnects to the panel, which can take up to a minute.",
+        "description": "**Away** always arms the whole alarm. Choose the part arm behind each of the other buttons, or *Not used* to hide it. Apple Home can't show *Custom bypass*, so with Apple Home use Night, Home and Vacation. Not sure? See [part arms explained]({help}).\n\nSaving reconnects to the panel, which can take up to a minute.",
         "data": {
-          "night_part_arm": "'Night' uses",
-          "home_part_arm": "'Home' uses",
-          "vacation_part_arm": "'Vacation' uses",
-          "custom_bypass_part_arm": "'Custom bypass' uses"
+          "night_part_arm": "Night button",
+          "home_part_arm": "Home button",
+          "vacation_part_arm": "Vacation button",
+          "custom_bypass_part_arm": "Custom bypass button"
         }
       },
       "arm_modes_crestron": {
         "title": "Arm buttons",
-        "description": "**'Away'** always arms the whole alarm. Choose the part arm behind each of the other buttons, or *'Not used'* to hide it. Apple Home can't show *Custom bypass*, so with Apple Home use Night, Home and Vacation. Over Crestron, part arms work for area 1 only. Unsure? See [part arms explained]({help}).\n\nCrestron doesn't say whether the panel was fully or part armed when it's set at the keypad: choose how that should show.",
+        "description": "**Away** always arms the whole alarm. Choose the part arm behind each of the other buttons, or *Not used* to hide it. Apple Home can't show *Custom bypass*, so with Apple Home use Night, Home and Vacation. Over Crestron, part arms work for area 1 only. Not sure? See [part arms explained]({help}).\n\nCrestron doesn't say whether the panel was fully or part armed when it's set at the keypad: choose how that should show.",
         "data": {
-          "night_part_arm": "'Night' uses",
-          "home_part_arm": "'Home' uses",
-          "vacation_part_arm": "'Vacation' uses",
-          "custom_bypass_part_arm": "'Custom bypass' uses",
+          "night_part_arm": "Night button",
+          "home_part_arm": "Home button",
+          "vacation_part_arm": "Vacation button",
+          "custom_bypass_part_arm": "Custom bypass button",
           "keypad_arm_mode": "When armed at the keypad, show as"
         }
       },
@@ -207,7 +207,7 @@
         }
       },
       "user_names": {
-        "title": "Names for keypad users",
+        "title": "Keypad user names",
         "description": "When someone uses a keypad, the alarm says who: *changed by Sam*, or *changed by User 3* for a user without a name.\n\nOne user per line, the number then the name, for example:\n`1 = Sam`\n`3 = Alex`\n\nThe numbers are the ones your installer gave each code. With a SmartCom or ComIP, the names stored in the panel are filled in the first time Home Assistant connects to it.",
         "data": {
           "user_names": "Names",
@@ -233,15 +233,15 @@
         }
       },
       "status_poll": {
-        "title": "Checking the panel",
+        "title": "How often to check the panel",
         "description": "How often Home Assistant asks the panel whether it's armed. It corrects missed events, and reconnects if the panel goes quiet. 0 turns it off.\n\nSaving reconnects to the panel.",
         "data": {
           "status_poll": "Check the panel every"
         }
       },
       "dashboard": {
-        "title": "Create or refresh the Alarm dashboard",
-        "description": "Builds the Alarm dashboard from the current zones and puts it in the sidebar. If you already have it, any changes you made to it are replaced."
+        "title": "Rebuild the Alarm dashboard",
+        "description": "Builds the Alarm dashboard again from the current zones and puts it in the sidebar. If you already have it, any changes you made to it are replaced."
       },
       "rediscover": {
         "title": "Reading the panel"
@@ -265,7 +265,7 @@
       "no_user_names": "The panel has no named users. Type the names in instead."
     },
     "abort": {
-      "rediscovered": "Read the panel again. Zones in use: {zones}. Areas: {areas}. Home Assistant reconnects to use them, which can take up to a minute. New zones join the Alarm dashboard when you refresh it (**Create or refresh the Alarm dashboard**).",
+      "rediscovered": "Read the panel again. Zones in use: {zones}. Areas: {areas}. Home Assistant reconnects to use them, which can take up to a minute. New zones join the Alarm dashboard when you refresh it (**Rebuild the Alarm dashboard**).",
       "rediscover_failed": "Couldn't read the panel just now (it may be busy, e.g. reporting an alarm). Try again in a minute.",
       "dashboard_created": "The Alarm dashboard is ready: it's in the sidebar.",
       "dashboard_failed": "Couldn't create the dashboard on this version of Home Assistant. [Build the dashboard yourself]({help}) has a version you can paste in."
@@ -274,7 +274,7 @@
   "selector": {
     "part_arm": {
       "options": {
-        "0": "'Not used'",
+        "0": "Not used",
         "1": "Part Arm 1",
         "2": "Part Arm 2",
         "3": "Part Arm 3"
@@ -333,16 +333,16 @@
     "alarm_control_panel": {
       "area": {
         "state": {
-          "disarmed": "Off (disarmed)",
-          "armed_away": "Armed: Away",
-          "armed_night": "Armed: Night",
-          "armed_home": "Armed: Home",
-          "arming": "Arming…",
+          "disarmed": "Disarmed",
+          "armed_away": "Armed away",
+          "armed_night": "Armed night",
+          "armed_home": "Armed home",
+          "arming": "Arming",
           "pending": "Entry delay",
-          "triggered": "Alarm!",
-          "disarming": "Disarming…",
-          "armed_custom_bypass": "Armed: Custom bypass",
-          "armed_vacation": "Armed: Vacation"
+          "triggered": "Alarm sounding",
+          "disarming": "Disarming",
+          "armed_custom_bypass": "Armed custom bypass",
+          "armed_vacation": "Armed vacation"
         }
       }
     }
