@@ -29,7 +29,7 @@ Then choose your arm modes, as for Texecom Connect.
 
 ## Options
 
-**Arm buttons**, **Home Assistant alarm code**, **Names for keypad users** and **Create or refresh the Alarm dashboard** work as for Texecom Connect ([Options](using.md#options)). Crestron has no notifications, panel clock or re-reading of zones, and adds:
+**Arm buttons**, **Home Assistant alarm code**, **Keypad user names** and **Rebuild the Alarm dashboard** work as for Texecom Connect ([Options](using.md#options)). Crestron has no notifications, panel clock or re-reading of zones, and adds:
 
 | Option | What it does |
 |---|---|

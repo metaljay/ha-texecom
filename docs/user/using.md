@@ -20,17 +20,17 @@ Home Assistant's own **Overview** picks the alarm up as well: its **Security** s
 
 | State | Means |
 |---|---|
-| **Off (disarmed)** | Not armed |
-| **Arming…** | The exit delay: leave now |
-| **Armed: Away** | Fully armed |
-| **Armed: Night** / **Armed: Home** | Part armed (see [Part arms explained](setup.md#part-arms-explained)) |
+| **Disarmed** | Not armed |
+| **Arming** | The exit delay: leave now |
+| **Armed away** | Fully armed |
+| **Armed night** / **Armed home** | Part armed (see [Part arms explained](setup.md#part-arms-explained)) |
 | **Entry delay** | Someone came in: disarm now |
-| **Alarm!** | The alarm is going off |
+| **Alarm sounding** | The alarm is going off |
 
 - **Changed by** (on the alarm's details) says who or what did it: *Home Assistant*, a keypad user (*User 3*, or their name if you [gave them one](#options)), or for an alarm, the zone that set it off (*Kitchen*).
 - **Arms and disarms at the keypad** show straight away.
-- **Switching mode** (for example Night to Away) shows *Arming…* while the panel switches over; you won't see *Off* in between, so automations that run on *Off* don't fire.
-- **Which mode it's arming to:** while it shows *Arming…*, the alarm's `arming_to` attribute says what it'll be (`armed_away`, `armed_night`, `armed_home`…), whether it was armed here or at a keypad. It's empty the rest of the time, and when the panel doesn't say (with [Crestron](crestron.md), it's only there when Home Assistant armed it).
+- **Switching mode** (for example Night to Away) shows *Arming* while the panel switches over; you won't see *Disarmed* in between, so automations that run on disarming don't fire.
+- **Which mode it's arming to:** while it shows *Arming*, the alarm's `arming_to` attribute says what it'll be (`armed_away`, `armed_night`, `armed_home`…), whether it was armed here or at a keypad. It's empty the rest of the time, and when the panel doesn't say (with [Crestron](crestron.md), it's only there when Home Assistant armed it).
 
 ## Ready to arm
 
@@ -43,29 +43,33 @@ It's the panel's own answer, checked a moment after doors and sensors change whi
 
 ## The Alarm dashboard
 
-<img src="../images/dashboard.png" width="760" alt="The Alarm dashboard: the alarm with its Away, Night and Off buttons, Ready to arm, recent activity, panel health, and every zone grouped by type">
+<img src="../images/dashboard.png" width="760" alt="The Alarm dashboard: the alarm with its Arm away and Arm night buttons, Ready to arm, every zone grouped by type, recent activity, and the panel's health">
 
-If you left the box ticked during setup, **Alarm** is in the sidebar: the arm buttons, **Ready to arm**, the last day's activity, panel health and every zone grouped by type. It's built from Home Assistant's own cards, so you can edit it like any dashboard.
+<img src="../images/dashboard-phone.png" width="300" alt="The Alarm dashboard on a phone: the alarm and its buttons first, then the zones">
 
-Its arm buttons follow **Configure → Arm buttons** by themselves. To build it again (for example after adding zones), use **Configure → Create or refresh the Alarm dashboard**. That replaces any changes you made to it.
+If you left the box ticked during setup, **Alarm** is in the sidebar: the alarm with buttons that say what they do (**Arm away**, **Arm night**…), **Ready to arm**, every zone grouped by type, the last day's activity, and the panel's health. Connection, Mains power and Ready to arm show green when all is well, and a line at the top says so if Home Assistant can't reach the panel. It's built from Home Assistant's own cards, so you can edit it like any dashboard.
+
+Its arm buttons follow **Configure → Arm buttons** by themselves. To build it again (for example after adding zones), use **Configure → Rebuild the Alarm dashboard**. That replaces any changes you made to it.
+
+If you set a [Home Assistant alarm code](#what-a-home-assistant-alarm-code-affects), the alarm's card shows a number pad for it.
 
 ## Options
 
 Open **Settings → Devices & services → Texecom**, then the **⚙️ cog** on your panel's row (Home Assistant calls it *Configure*; *Reconfigure*, in the ⋮ menu, only changes the connection), and pick what to change:
 
-<img src="../images/options.png" width="420" alt="The Texecom options menu: Arm buttons, Home Assistant alarm code, Names for keypad users, Notifications, Panel clock, Read zones and areas from the panel again, Create or refresh the Alarm dashboard">
+<img src="../images/options.png" width="420" alt="The Texecom options menu: Arm buttons, Home Assistant alarm code, Keypad user names, Notifications, Panel clock, Read zones and areas again, Rebuild the Alarm dashboard">
 
 | In the menu | What it does |
 |---|---|
-| **Arm buttons** | The part arm behind Night, Home, Vacation and Custom bypass. *'Not used'* hides the button. *Reconnects to the panel* |
+| **Arm buttons** | The part arm behind Night, Home, Vacation and Custom bypass. *Not used* hides the button. *Reconnects to the panel* |
 | **Home Assistant alarm code** | Optional. Home Assistant asks for it before disarming (and, if you tick the box, before arming). It's checked by Home Assistant, not the panel, and has nothing to do with your keypad codes. **It stops Apple Home and some automations working**: see [what a code affects](#what-a-home-assistant-alarm-code-affects) first |
-| **Names for keypad users** | One per line, like `3 = Sam`: the alarm then says *changed by Sam* instead of *User 3*, here and in the activity list. With a SmartCom or ComIP, they start as the names your installer stored in the panel: Home Assistant fills them in the first time it connects (the engineer code, user 0, as *Engineer*), unless you've already given names. After your installer changes them, tick *Fill in the names stored in the panel* to read them again. The panel sends each user's code with the name; Home Assistant drops the codes at once, without keeping or logging them |
+| **Keypad user names** | One per line, like `3 = Sam`: the alarm then says *changed by Sam* instead of *User 3*, here and in the activity list. With a SmartCom or ComIP, they start as the names your installer stored in the panel: Home Assistant fills them in the first time it connects (the engineer code, user 0, as *Engineer*), unless you've already given names. After your installer changes them, tick *Fill in the names stored in the panel* to read them again. The panel sends each user's code with the name; Home Assistant drops the codes at once, without keeping or logging them |
 | **Notifications** | Whether Home Assistant shows a notification while the panel is on battery (after 2 minutes), or while a tamper is open (both on to start with) |
 | **Panel clock** | **Keep the panel clock right** (off unless you ticked it at setup): once a day (and on connecting), sets the panel's clock if it's more than a minute out, in Home Assistant's time zone (so British Summer Time is handled). A clock that's already right (the Texecom Cloud can keep it right too) is left alone. *Reconnects to the panel* |
-| **Read zones and areas from the panel again** | After your installer adds, renames or moves zones. Over Texecom Connect it happens by itself when engineer programming at a keypad ends, or a few seconds after Wintex saves a page; after a full send from Wintex, use this option (once Wintex has disconnected) |
-| **Create or refresh the Alarm dashboard** | Builds the dashboard again from the current zones (it asks first, because any changes you made to it are replaced) |
+| **Read zones and areas again** | After your installer adds, renames or moves zones. Over Texecom Connect it happens by itself when engineer programming at a keypad ends, or a few seconds after Wintex saves a page; after a full send from Wintex, use this option (once Wintex has disconnected) |
+| **Rebuild the Alarm dashboard** | Builds the dashboard again from the current zones (it asks first, because any changes you made to it are replaced) |
 
-<img src="../images/keypad-names.png" width="420" alt="Names for keypad users: one per line, such as 3 = Sam, with the option to fill in the names stored in the panel">
+<img src="../images/keypad-names.png" width="420" alt="Keypad user names: one per line, such as 3 = Sam, with the option to fill in the names stored in the panel">
 
 To change the SmartCom's address or the UDL code, use **⋮ → Reconfigure** on the same page.
 
@@ -119,7 +123,7 @@ The Home app can't ask for a code, and HomeKit Bridge only passes one on if it's
 
 ## Good to know
 
-- 🚨 **When the alarm goes off**, the panel drops the connection for about a minute to send its own alarm report through the SmartCom. The alarm and zones **keep showing their last state** (e.g. *Alarm!*) meanwhile, so dashboards and the Home app don't go blank; **Panel connection** shows the link itself. Home Assistant reconnects and catches up by itself.
+- 🚨 **When the alarm goes off**, the panel drops the connection for about a minute to send its own alarm report through the SmartCom. The alarm and zones **keep showing their last state** (e.g. *Alarm sounding*) meanwhile, so dashboards and the Home app don't go blank; **Panel connection** shows the link itself. Home Assistant reconnects and catches up by itself.
 - 🔁 **It reconnects by itself** after a power cut, a router restart or a dropped connection, and reads the panel's state again so nothing is missed. After Home Assistant restarts, the SmartCom can take about a minute to let it back in.
 - 🔌 **Mains power** turns off as soon as the panel reports a mains failure, and **Problem** lists any fault the panel reports (e.g. *AC Fail*, *Low Battery*). A fault the panel pins on a zone names it: *Supervision Fault: Landing* is a wireless detector on the Landing that has stopped answering, which also stops the panel arming. The panel doesn't report the mains coming back, so Home Assistant checks the power readings every 30 seconds instead.
 - 🔧 **Tamper** turns on while the panel's lid, a keypad, the bell box or a detector is open, and says which. Most installs wire every detector's tamper switch to one shared circuit, so it can't say *which* detector: that shows as *Auxiliary Tamper*. A detector that reports its own tamper (a wireless one, say) shows on its zone's **Tamper** instead. The panel doesn't always report a tamper: if it sets off its internal sounders while the alarm is off and doesn't say why, Tamper shows *Internal Alarm* until a code is entered at the keypad.
@@ -144,19 +148,17 @@ views:
           - type: heading
             heading: Alarm
             icon: mdi:shield-home
-          - type: tile
+          - type: alarm-panel
             entity: alarm_control_panel.texecom_house
-            vertical: false
-            features_position: bottom
-            features:
-              - type: alarm-modes
-                modes: [armed_away, armed_night, armed_home, armed_vacation, armed_custom_bypass, disarmed]
+            states: [arm_away, arm_night]  # the buttons you use: also arm_home, arm_vacation, arm_custom_bypass
             grid_options:
               columns: full
-          - type: logbook
-            target:
-              entity_id: alarm_control_panel.texecom_house
-            hours_to_show: 24
+          - type: tile
+            entity: binary_sensor.texecom_house_ready_to_arm
+            name: Ready to arm
+            color: green
+            grid_options:
+              columns: full
       - type: grid
         cards:
           - type: heading
@@ -166,6 +168,15 @@ views:
             entity: binary_sensor.texecom_front_door
           - type: tile
             entity: binary_sensor.texecom_hallway
+      - type: grid
+        cards:
+          - type: heading
+            heading: Activity
+            icon: mdi:history
+          - type: logbook
+            target:
+              entity_id: alarm_control_panel.texecom_house
+            hours_to_show: 24
 ```
 
 ---

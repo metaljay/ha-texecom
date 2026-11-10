@@ -64,10 +64,10 @@ If it says **"Couldn't connect"** or **"The panel refused the UDL code"**, see [
 
 Home Assistant shows what it found: your **areas** (usually just one) and your **zones**.
 
-- **'Away'** always arms the whole alarm.
-- **'Night'** and **'Home'** each use one of the panel's **part arms**, which arm only some zones. Choose which part arm each uses, or *'Not used'* to hide that button. Not sure? See [Part arms explained](#part-arms-explained).
+- **Away** always arms the whole alarm.
+- **Night** and **Home** each use one of the panel's **part arms**, which arm only some zones. Choose which part arm each uses, or *Not used* to hide that button. Not sure? See [Part arms explained](#part-arms-explained).
 - **Keep the panel clock right** (Texecom Connect only, unticked to start with): tick it to let Home Assistant set the panel's clock when it's more than a minute out. Leave it off if your installer keeps the panel on a fixed time. You can change it later in the options.
-- Leave **Add an 'Alarm' dashboard to the sidebar** ticked.
+- Leave **Add an Alarm dashboard to the sidebar** ticked.
 
 Click **Submit**. Home Assistant then lists the devices it added (the panel, the alarm and each zone), where you can rename them or put them in rooms. Zones named after a room you already have are put there for you. Click **Finish**. That's it 🎉
 
@@ -77,7 +77,7 @@ Your area (named by your installer, e.g. *House*) is now **the alarm**: a device
 
 - 🏷️ **Rooms.** Zones whose names match a room you already have go in that room by themselves: a zone called *Kitchen* or *Kitchen PIR* goes in *Kitchen*, and *Lounge* goes in *Living Room* if that room has *Lounge* as an alias. Put the others in a room from their device page.
 - 🔁 **How a zone shows.** Doors (and anything named "contact" or "safe"), windows, smoke, gas and tamper loops (a bell, sounder, siren or keypad) are worked out from the zone's name and type (the panel can't tell a door contact from a motion detector, so the name is the only clue); everything else shows as motion. To change one, open it and use **⚙️ Settings → Show as**.
-- 👤 **Keypad users.** The first time Home Assistant connects, it fills in the names your installer stored in the panel, so the alarm says *changed by Sam* rather than *User 3*. The panel sends each user's code with the name; Home Assistant drops the codes at once. To change the names: **⚙️ → Names for keypad users** ([Options](using.md#options)).
+- 👤 **Keypad users.** The first time Home Assistant connects, it fills in the names your installer stored in the panel, so the alarm says *changed by Sam* rather than *User 3*. The panel sends each user's code with the name; Home Assistant drops the codes at once. To change the names: **⚙️ → Keypad user names** ([Options](using.md#options)).
 - 🍏 **Apple Home**: see [Apple Home](apple-home.md).
 - ⚡ **Arm automatically when everyone leaves**, and other ideas: see [Automations](automations.md).
 

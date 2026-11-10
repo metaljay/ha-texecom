@@ -14,7 +14,7 @@ Home Assistant's built-in **HomeKit Bridge** puts the alarm (and any zones you l
 | In the Home app | Comes from |
 |---|---|
 | **Away**, **Night**, **Home**, **Off** buttons | Away always; Night and Home only if you gave them a part arm |
-| **Arming…** | The exit delay. The alarm's own page shows *Off* until the panel has armed, because that's what it is until then |
+| **Arming** | The exit delay. The alarm's own page shows *Off* until the panel has armed, because that's what it is until then |
 | **Triggered**, with a critical alert | The alarm going off |
 | Arms and disarms made at the keypad | Show straight away (an arm once its exit delay is over) |
 

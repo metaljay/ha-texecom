@@ -8,22 +8,10 @@ Use your Texecom **Premier Elite** alarm from **Home Assistant** (and Apple Home
 
 > **Unofficial.** Not made or supported by Texecom. Tested on Premier Elite 12, 24, 64 and 168 panels ([which ones](https://github.com/metaljay/ha-texecom#tested-panels)). **Tried it on another panel? [Tell us how it went](https://github.com/metaljay/ha-texecom/issues/new?template=1-tested.yml)**, even if it all worked.
 
-## 📑 Contents
-
-- [✨&ensp;What you get](https://github.com/metaljay/ha-texecom#what-you-get)
-- [🧰&ensp;What you need](https://github.com/metaljay/ha-texecom#what-you-need)
-- [🚀&ensp;Install and set up](https://github.com/metaljay/ha-texecom#install-and-set-up)
-- [📚&ensp;Using it, and more help](https://github.com/metaljay/ha-texecom#using-it)
-- [✅&ensp;Tested panels](https://github.com/metaljay/ha-texecom#tested-panels) (and testers wanted)
-- [💬&ensp;Help and feedback](https://github.com/metaljay/ha-texecom#help-and-feedback)
-- [🧑‍💻&ensp;Working on the code](https://github.com/metaljay/ha-texecom#working-on-the-code)
-- [🙏&ensp;Credits](https://github.com/metaljay/ha-texecom#credits)
-- [⚖️&ensp;Legal](https://github.com/metaljay/ha-texecom#legal)
-
 <details open>
 <summary><h2 id="what-you-get">✨ What you get</h2></summary>
 
-<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/dashboard.png?v=3" width="760" alt="The Alarm dashboard: the alarm with its Away, Night and Off buttons, Ready to arm, recent activity, panel health, and every zone grouped by type">
+<img src="https://raw.githubusercontent.com/metaljay/ha-texecom/main/docs/images/dashboard.png?v=4" width="760" alt="The Alarm dashboard: the alarm with its Arm away and Arm night buttons, Ready to arm, every zone grouped by type, recent activity, and the panel's health">
 
 - 🛡️ **An alarm** you can set to **Away**, **Night** or **Home**, or turn off, and see when it's arming, waiting for you to come in, or going off, and whether it's **ready to arm**. Changes at the keypad show straight away.
 - 🚪 **A sensor for every zone**, named as on your panel: doors, windows, motion, smoke and gas.
