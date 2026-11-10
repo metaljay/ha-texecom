@@ -9,32 +9,102 @@ from homeassistant.config_entries import ConfigEntryState
 
 from custom_components.texecom.dashboard import async_create_dashboard, build_config
 
-from .common import ALARM, setup_connect
+from .common import ALARM, setup_connect, wait_for
 
 
 async def test_dashboard_layout(hass, fake):
+    """In the order a phone shows it: the alarm, the zones, activity, the panel."""
     entry = await setup_connect(hass, fake)
     config = build_config(hass, entry)
-    left, right = config["views"][0]["sections"]
-    alarm = next(c for c in left["cards"] if c.get("entity") == "alarm_control_panel.texecom_house")
-    # Every mode, in button order: Home Assistant shows only the ones the alarm
-    # offers, so the buttons follow Configure → Arm buttons without a rebuild.
-    assert alarm["features"][0]["modes"] == [
-        "armed_away",
-        "armed_night",
-        "armed_home",
-        "armed_vacation",
-        "armed_custom_bypass",
-        "disarmed",
-    ]
-    headings = [c["heading"] for c in right["cards"] if c["type"] == "heading"]
+    alarm, zones, activity, panel = (section["cards"] for section in config["views"][0]["sections"])
+    assert [c["heading"] for c in alarm + activity + panel if c["type"] == "heading"] == ["Alarm", "Activity", "Panel"]
+    card = next(c for c in alarm if c.get("entity") == ALARM)
+    # Buttons with words on them, only the ones this alarm offers (Night is
+    # mapped to a part arm in these tests, Home isn't).
+    assert card["type"] == "alarm-panel"
+    assert card["states"] == ["arm_away", "arm_night"]
+    headings = [c["heading"] for c in zones if c["type"] == "heading"]
     assert headings == ["Doors and windows", "Motion", "Fire and safety"]
-    tiles = [c["entity"] for c in right["cards"] if c["type"] == "tile"]
+    tiles = [c["entity"] for c in zones if c["type"] == "tile"]
     assert tiles[:2] == ["binary_sensor.texecom_front_door", "binary_sensor.texecom_patio_door"]
-    named_tiles = [c.get("name") for c in left["cards"] if c["type"] == "tile" and "name" in c]
-    assert named_tiles == ["Ready to arm", "Connection", "Mains", "Faults", "Tamper", "Keypad", "Battery"]
-    activity = next(c for c in left["cards"] if c["type"] == "logbook")
-    assert activity["target"]["entity_id"] == ["alarm_control_panel.texecom_house"]  # not every door opening
+    assert [c.get("name") for c in alarm if c["type"] == "tile"] == ["Ready to arm"]
+    names = [c.get("name") for c in panel if c["type"] == "tile"]
+    assert names == ["Connection", "Mains power", "Faults", "Tamper", "Battery", "Keypad shows"]
+    # Green when all is well (Home Assistant's amber reads as a warning).
+    green = [c["name"] for c in alarm + panel if c.get("color") == "green"]
+    assert green == ["Ready to arm", "Connection", "Mains power"]
+    logbook = next(c for c in activity if c["type"] == "logbook")
+    assert logbook["target"]["entity_id"] == [ALARM]  # not every door opening
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_dashboard_says_when_the_panel_cant_be_reached(hass, fake):
+    """Otherwise every tile just says Unavailable."""
+    entry = await setup_connect(hass, fake)
+    alarm = build_config(hass, entry)["views"][0]["sections"][0]["cards"]
+    notice = next(c for c in alarm if c["type"] == "conditional")
+    assert notice["conditions"] == [
+        {"condition": "state", "entity": "binary_sensor.texecom_panel_connection", "state": "off"}
+    ]
+    assert "can't reach the alarm panel" in notice["card"]["content"]
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_dashboard_buttons_follow_arm_buttons(hass, fake):
+    """The labelled card shows every button it's given, so saving Configure →
+    Arm buttons updates it; a list the user rearranged is left alone."""
+    from homeassistant.setup import async_setup_component
+
+    assert await async_setup_component(hass, "lovelace", {})
+    entry = await setup_connect(hass, fake)
+    url = await async_create_dashboard(hass, entry)
+    dashboard = hass.data["lovelace"].dashboards[url]
+
+    async def buttons() -> list[str]:
+        cards = (await dashboard.async_load(False))["views"][0]["sections"][0]["cards"]
+        return next(c for c in cards if c.get("entity") == ALARM)["states"]
+
+    assert await buttons() == ["arm_away", "arm_night"]
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "home_part_arm": 2})  # reloads
+    await hass.async_block_till_done()
+    await wait_for(lambda: entry.state is ConfigEntryState.LOADED)
+    assert await buttons() == ["arm_away", "arm_night", "arm_home"]
+
+    config = await dashboard.async_load(False)
+    card = next(c for c in config["views"][0]["sections"][0]["cards"] if c.get("entity") == ALARM)
+    card["states"] = ["arm_night", "arm_away"]  # the user's own order
+    await dashboard.async_save(config)
+    hass.config_entries.async_update_entry(entry, options={**entry.options, "home_part_arm": 0})
+    await hass.async_block_till_done()
+    await wait_for(lambda: entry.state is ConfigEntryState.LOADED)
+    assert await buttons() == ["arm_night", "arm_away"]
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_upgrading_gives_an_unedited_dashboard_the_new_layout(hass, fake):
+    """A dashboard exactly as 0.2.16 made it gets the new layout; one the
+    user changed is kept."""
+    from homeassistant.setup import async_setup_component
+
+    from custom_components.texecom.config_flow import TexecomConfigFlow
+    from custom_components.texecom.dashboard import _build_config_v1
+
+    assert await async_setup_component(hass, "lovelace", {})
+    entry = await setup_connect(hass, fake)
+    url = await async_create_dashboard(hass, entry)
+    dashboard = hass.data["lovelace"].dashboards[url]
+    for edit, sections in ((None, 4), ({"type": "markdown", "content": "Mine"}, 2)):
+        config = _build_config_v1(hass, entry)
+        if edit:
+            config["views"][0]["sections"][1]["cards"].append(edit)
+        await dashboard.async_save(config)
+        assert await hass.config_entries.async_unload(entry.entry_id)
+        hass.config_entries.async_update_entry(entry, minor_version=3)
+
+        assert await hass.config_entries.async_setup(entry.entry_id)  # upgrades first
+        await hass.async_block_till_done()
+        assert entry.minor_version == TexecomConfigFlow.MINOR_VERSION
+        assert len((await dashboard.async_load(False))["views"][0]["sections"]) == sections
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -101,13 +171,13 @@ async def test_upgrading_lets_an_older_dashboards_buttons_follow_arm_buttons(has
     from homeassistant.setup import async_setup_component
 
     from custom_components.texecom.config_flow import TexecomConfigFlow
-    from custom_components.texecom.dashboard import MODES
+    from custom_components.texecom.dashboard import MODES, _build_config_v1
 
     assert await async_setup_component(hass, "lovelace", {})
     entry = await setup_connect(hass, fake)
     url = await async_create_dashboard(hass, entry)
     dashboard = hass.data["lovelace"].dashboards[url]
-    config = await dashboard.async_load(False)
+    config = _build_config_v1(hass, entry)
     left, right = config["views"][0]["sections"]
     alarm = next(c for c in left["cards"] if c.get("entity") == "alarm_control_panel.texecom_house")
     alarm["features"][0]["modes"] = ["armed_away", "armed_night", "disarmed"]  # as 0.2.9 made it
@@ -152,12 +222,13 @@ async def test_whatever_goes_wrong_with_the_dashboard_upgrading_carries_on(hass,
     from homeassistant.setup import async_setup_component
 
     from custom_components.texecom.config_flow import TexecomConfigFlow
+    from custom_components.texecom.dashboard import _build_config_v1
 
     assert await async_setup_component(hass, "lovelace", {})
     entry = await setup_connect(hass, fake)
     url = await async_create_dashboard(hass, entry)
     dashboard = hass.data["lovelace"].dashboards[url]
-    config = await dashboard.async_load(False)
+    config = _build_config_v1(hass, entry)
     alarm = next(c for c in config["views"][0]["sections"][0]["cards"] if c.get("entity") == ALARM)
     alarm["features"][0]["modes"] = ["armed_away", "disarmed"]  # as 0.2.9 made it
     await dashboard.async_save(config)

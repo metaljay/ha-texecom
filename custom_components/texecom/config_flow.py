@@ -26,7 +26,9 @@ from .flows.validation import arm_mode_options, arm_modes_error, arm_modes_schem
 
 class TexecomConfigFlow(ConnectSteps, CrestronSteps, ReauthReconfigureSteps, ConfigFlow, domain=DOMAIN):
     VERSION = 1
-    MINOR_VERSION = 3  # 2: 0.2.11's defaults; 3: the dashboard's buttons follow Arm buttons (see async_migrate_entry)
+    # 2: 0.2.11's defaults; 3: the dashboard's buttons follow Arm buttons;
+    # 4: an unedited dashboard gets the new layout (see async_migrate_entry)
+    MINOR_VERSION = 4
 
     def __init__(self) -> None:
         self._data: dict[str, Any] = {}
