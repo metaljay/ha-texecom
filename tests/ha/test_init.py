@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import asyncio
 import sys
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
-from pytest_homeassistant_custom_component.common import MockConfigEntry
+from homeassistant.util import dt as dt_util
+from pytest_homeassistant_custom_component.common import MockConfigEntry, async_fire_time_changed
 
 from custom_components.texecom.const import DOMAIN
 from custom_components.texecom.crestron import protocol as CP
@@ -164,6 +166,37 @@ async def test_crestron_power_sensors_come_with_the_readings_option(hass, port):
     assert hass.states.get("sensor.texecom_panel_voltage").state == "unavailable"  # until the first reading
     assert entry.runtime_data.session_reads is True
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+async def test_the_event_log_carries_on_from_where_it_was_left_after_a_reload(hass, port, hass_storage):
+    """A reload (or restart) carries on reading the panel's event log from
+    where it was, instead of skipping what the panel logged in between."""
+    _fake, number = port
+    entry = await setup_crestron(hass, number)
+    assert entry.runtime_data.log_pointer is None
+    entry.runtime_data.resume_log_from(41)  # as a reading would leave it
+    entry.runtime_data.notify()
+    assert await hass.config_entries.async_reload(entry.entry_id)
+    await hass.async_block_till_done()
+    assert entry.runtime_data.log_pointer == 41
+    assert await hass.config_entries.async_unload(entry.entry_id)
+    await hass.async_block_till_done()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=30))
+    await hass.async_block_till_done()
+    assert hass_storage[f"texecom.{entry.entry_id}.log_position"]["data"] == {"pointer": 41}
+
+
+async def test_deleting_the_panel_deletes_its_log_position(hass, port, hass_storage):
+    _fake, number = port
+    entry = await setup_crestron(hass, number)
+    entry.runtime_data.resume_log_from(7)
+    entry.runtime_data.notify()
+    async_fire_time_changed(hass, dt_util.utcnow() + timedelta(seconds=30))
+    await hass.async_block_till_done()
+    assert f"texecom.{entry.entry_id}.log_position" in hass_storage
+    assert await hass.config_entries.async_remove(entry.entry_id)
+    await hass.async_block_till_done()
+    assert f"texecom.{entry.entry_id}.log_position" not in hass_storage
 
 
 async def test_crestron_has_no_power_sensors_without_the_option_or_the_udl_code(hass, port):
