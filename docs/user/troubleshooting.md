@@ -7,7 +7,7 @@
 | What you see | Try |
 |---|---|
 | **"Couldn't connect"** | Check the IP address, and that the port is **10001**. If the Texecom app, Homebridge or texecom2mqtt was connected a moment ago, wait a minute and try again: the SmartCom only lets one thing in at a time, and waits a while after the last one leaves |
-| **"The panel refused the UDL code"** | The UDL code is the panel's remote-access code, not your keypad code. Try **1234** (Texecom's default); if that fails, ask your installer |
+| **"The panel refused the UDL code"** | The UDL code is the panel's remote-access code, not your keypad code. Try **1234** (Texecom's default); if that fails, ask your installer. If the keypad shows **UDL Lockout**, the panel is turning every code away after too many wrong ones (from any app, Wintex or an old saved code), the right one too: don't change the code. Find what's sending the wrong one; powering the panel off and on cleared it for one user |
 | **"The UDL code is 4 to 8 digits"** | Digits only, no spaces |
 | **"Connected, but the panel reported no zones in use"** | Your installer may not have set the zones up yet, or this isn't the panel you expected |
 | **"This panel is already set up"** | It's already in **Settings → Devices & services → Texecom** |
