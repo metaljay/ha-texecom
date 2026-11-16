@@ -140,7 +140,7 @@
     "error": {
       "cannot_connect": "Couldn't connect. Check the address and port. If the Texecom app, Homebridge or texecom2mqtt was connected a moment ago, wait a minute and try again.",
       "invalid_auth": "The panel refused the UDL code. Check it with your installer: Texecom's default is 1234. If the keypad shows UDL Lockout, the panel is turning every code away for now.",
-      "invalid_udl": "The UDL code is 4 to 8 digits.",
+      "invalid_udl": "The UDL code is up to 16 letters, digits or symbols, as set on the panel.",
       "no_zones": "Connected, but the panel reported no zones in use.",
       "no_reply": "Connected, but the panel didn't answer. Check the COM port is set to Crestron System and the speed matches.",
       "same_part_arm": "Two buttons can't use the same part arm.",

@@ -56,7 +56,10 @@ CRESTRON_REPLY_TIMEOUT = 5.0  # seconds to wait for the panel to answer ASTATUS
 
 
 def udl_valid(udl: str) -> bool:
-    return udl.isdigit() and 4 <= len(udl) <= 8
+    """Letters, digits and symbols, up to 16 (#60: a Wintex-set code mixed
+    letters and digits). Both drivers send it as plain text; / and \\ are
+    refused because they would end or split Crestron's \\W<code>/ login."""
+    return udl.isascii() and udl.isprintable() and 1 <= len(udl) <= 16 and not set(udl) & {"/", "\\"}
 
 
 async def validate_connect(host: str, port: int, udl: str) -> tuple[dict[str, Any] | None, str | None]:

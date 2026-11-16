@@ -119,12 +119,25 @@ async def test_connect_then_corrected(hass, fake, no_setup):
     assert result["step_id"] == "arm_modes"
 
 
-async def test_connect_udl_must_be_digits(hass, fake, no_setup):
+async def test_connect_udl_may_have_letters(hass, fake, no_setup):
+    """A UDL code set in Wintex can mix letters and digits, up to 16 (#60)."""
+    fake.udl = "Ab3dE6g8Xy-21!q9"
     result = await start(hass, "connect")
     result = await hass.config_entries.flow.async_configure(
-        result["flow_id"], {"host": "127.0.0.1", "port": fake.port, "udl": "12a"}
+        result["flow_id"], {"host": "127.0.0.1", "port": fake.port, "udl": fake.udl}
     )
-    assert result["errors"] == {"udl": "invalid_udl"}
+    result = await after_progress(hass, result)
+    assert result["step_id"] == "arm_modes"
+
+
+async def test_connect_udl_too_long_or_not_plain_text(hass, fake, no_setup):
+    result = await start(hass, "connect")
+    # / and \ would end or split Crestron's text login (\W<code>/).
+    for udl in ("A" * 17, "1234£", "12\t34", "12/34", "12\\34"):
+        result = await hass.config_entries.flow.async_configure(
+            result["flow_id"], {"host": "127.0.0.1", "port": fake.port, "udl": udl}
+        )
+        assert result["errors"] == {"udl": "invalid_udl"}, udl
 
 
 async def test_connect_already_configured(hass, fake, no_setup):
