@@ -6,6 +6,8 @@ Use your Texecom **Premier Elite** alarm from **Home Assistant** (and Apple Home
 
 [![Open your Home Assistant and add this repository to HACS or the Marketplace](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=metaljay&repository=ha-texecom&category=integration)
 
+<a href="https://buymeacoffee.com/metaljay"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="40"></a>
+
 > **Unofficial.** Not made or supported by Texecom. Tested on Premier Elite 12, 24, 64 and 168 panels ([which ones](https://github.com/metaljay/ha-texecom#tested-panels)). **Tried it on another panel? [Tell us how it went](https://github.com/metaljay/ha-texecom/issues/new?template=1-tested.yml)**, even if it all worked.
 
 <details open>
@@ -99,6 +101,15 @@ These panels have run it. Each row links to what was reported.
 <summary><h2 id="working-on-the-code">🧑‍💻 Working on the code</h2></summary>
 
 The code is split into small compartments, each with one job and its own tests, so a fix or feature touches one place. Start with the [developer guide](https://github.com/metaljay/ha-texecom/blob/main/docs/development/README.md); AI coding agents should read [AGENTS.md](https://github.com/metaljay/ha-texecom/blob/main/AGENTS.md) first.
+
+</details>
+
+<details open>
+<summary><h2 id="support">☕ Support</h2></summary>
+
+This is made and looked after in spare time. If it's useful to you, you can [buy me a coffee](https://buymeacoffee.com/metaljay). Thank you!
+
+<a href="https://buymeacoffee.com/metaljay"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me a Coffee" height="40"></a>
 
 </details>
 
