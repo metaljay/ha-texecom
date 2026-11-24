@@ -607,6 +607,84 @@ async def test_astatus_corrects_missed_events_but_keeps_triggered(port):
         await panel.stop()
 
 
+async def test_a_code_at_the_keypad_ends_an_alarm_in_a_disarmed_area(port):
+    """A tamper alarm while disarmed (3 Nov 2026: a receiver dropped out) never
+    gets a "D": the sounders stop when someone enters a code. That code and the
+    next "not armed" end it, rather than Triggered lasting until a reconnect
+    (and holding up the log readings all that time)."""
+    fake, number = port
+    panel = await make_panel(number, status_poll=0.1)
+    try:
+        fake.send('"L0010')
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        await asyncio.sleep(0.3)  # "not armed" alone keeps it
+        assert panel.areas[1].state == TRIGGERED
+        fake.send('"U0010')
+        await wait_for(lambda: panel.areas[1].state == DISARMED)
+    finally:
+        await panel.stop()
+
+
+async def test_a_code_before_an_alarm_doesnt_end_it(port):
+    fake, number = port
+    panel = await make_panel(number, status_poll=0.1)
+    try:
+        fake.send('"U0010')
+        await asyncio.sleep(0.2)
+        fake.send('"L0010')
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        await asyncio.sleep(0.3)
+        assert panel.areas[1].state == TRIGGERED
+    finally:
+        await panel.stop()
+
+
+async def test_a_code_while_armed_leaves_the_alarm_to_the_disarm(port):
+    fake, number = port
+    panel = await make_panel(number, status_poll=0.1, keypad_arm_mode="night")
+    try:
+        fake.armed = True
+        await wait_for(lambda: panel.areas[1].state == ARMED_NIGHT)
+        fake.send('"L0010')
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        fake.send('"U0010')  # a wrong area, say: the panel still says armed
+        await asyncio.sleep(0.3)
+        assert panel.areas[1].state == TRIGGERED
+    finally:
+        await panel.stop()
+
+
+async def test_with_several_areas_a_code_doesnt_end_an_alarm(port):
+    """The "U" line doesn't say which area the code was for: it could be
+    another area's, so the alarm stays until its own disarm or a reconnect."""
+    fake, number = port
+    panel = await make_panel(number, status_poll=0.1)
+    await panel.stop()
+    panel = CrestronPanel(
+        areas=[PanelArea(1, "Area A"), PanelArea(2, "Area B")],
+        host="127.0.0.1",
+        port=number,
+        part_arms={"night": 1, "home": 0},
+        udl="1234",
+        status_poll=0.1,
+        reconnect_min=0.05,
+        blackout=0.1,
+        login_timeout=0.3,
+        read_login_wait=0.05,
+        zones=[PanelZone(n, f"Zone {n}") for n in range(1, 6)],
+    )
+    await panel.start()
+    try:
+        await wait_for(lambda: panel.connected and panel.areas[1].known)
+        fake.send('"L0010')
+        await wait_for(lambda: panel.areas[1].state == TRIGGERED)
+        fake.send('"U0010')
+        await asyncio.sleep(0.3)
+        assert panel.areas[1].state == TRIGGERED
+    finally:
+        await panel.stop()
+
+
 async def test_arming_without_udl_is_refused(port):
     _fake, number = port
     panel = await make_panel(number, udl=None)
@@ -892,6 +970,43 @@ async def test_the_regular_reading_catches_up_with_the_log():
         fake.add_log(42)
         await wait_for(lambda: len(logs(events)) == 2)
         assert logs(events) == [(3, 32), (4, 42)]
+    finally:
+        await panel.stop()
+        await fake.close()
+
+
+async def test_the_log_carries_on_from_where_it_was_left():
+    """Home Assistant hands back where the last run stopped reading: entries
+    logged while it was reloading or restarting are read, not skipped."""
+    fake = FakeCrestronPort(elite168=True)
+    for log_type in (42, 32, 42):
+        fake.add_log(log_type)
+    number = await fake.start()
+    events: list[tuple[str, dict]] = []
+    panel = CrestronPanel(
+        areas=[PanelArea(1, "Area A")],
+        host="127.0.0.1",
+        port=number,
+        part_arms={"night": 1, "home": 0},
+        udl="1234",
+        status_poll=0,
+        reconnect_min=0.05,
+        blackout=0.1,
+        login_timeout=0.3,
+        read_login_wait=0.05,
+        session_reads=True,
+        zones=ZONES_168,
+        power_poll=0.2,
+        power_first_delay=0.05,
+        on_event=lambda t, d: events.append((t, d)),
+    )
+    assert panel.log_pointer is None
+    panel.resume_log_from(1)
+    await panel.start()
+    try:
+        await wait_for(lambda: len(logs(events)) == 2)
+        assert logs(events) == [(1, 32), (2, 42)]
+        assert panel.log_pointer == 3
     finally:
         await panel.stop()
         await fake.close()

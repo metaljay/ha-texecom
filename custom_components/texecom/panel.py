@@ -138,6 +138,23 @@ class TexecomPanel(ABC):
         # Arm mode last requested per area, used when the panel's report
         # doesn't say which mode it armed in.
         self._requested_mode: dict[int, str] = {}
+        # Where the next read of the panel's stored event log starts; None
+        # until the first reading, which then only notes where the log ends.
+        self._log_pointer: int | None = None
+
+    # ─── The stored event log ───────────────────────────────────────────────
+
+    @property
+    def log_pointer(self) -> int | None:
+        """Where the next read of the stored event log starts (None until the
+        first reading)."""
+        return self._log_pointer
+
+    def resume_log_from(self, pointer: int | None) -> None:
+        """Before start(): carry on reading the stored log from where the last
+        run left it, so entries logged in between (a reload, a restart) are
+        read rather than skipped."""
+        self._log_pointer = pointer
 
     # ─── Listeners ──────────────────────────────────────────────────────────
 
